@@ -84,7 +84,7 @@
     "github-username-regex": "1.0.0",
     "hsts": "2.2.0",
     "jsonwebtoken": "8.5.1",
-    "jwks-rsa": "2.0.4",
+    "jwks-rsa": "2.1.0",
     "language-map": "1.4.0",
     "lodash": "4.17.21",
     "luxon": "2.0.2",
