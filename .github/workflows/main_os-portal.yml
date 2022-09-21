@@ -25,7 +25,7 @@ jobs:
         run: |
           npm install
           npm run build --if-present
-          cd /default-assets-package
+          cd ./default-assets-package
           npm install
           npm run build
           cd ..
