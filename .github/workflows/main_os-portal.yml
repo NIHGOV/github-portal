@@ -25,6 +25,10 @@ jobs:
         run: |
           npm install
           npm run build --if-present
+          cd /default-assets-package
+          npm install
+          npm run build
+          cd ..
           npm run test --if-present
 
       - name: Upload artifact for deployment job
