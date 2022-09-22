@@ -30,13 +30,13 @@ jobs:
 
       - name: zip application folders
         run: |
-          tar -czf output.tar.gz ./dist ./default-assets-package
+          tar -czf /output.tar.gz ${GITHUB_WORKSPACE}
           
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v2
         with:
           name: node-app
-          path: output.tar.gz
+          path: /output.tar.gz
 
   deploy:
     runs-on: ubuntu-latest
@@ -55,8 +55,6 @@ jobs:
         run: |
           tar -xf output.tar.gz
           ls -lah
-          ls -lah ./dist
-          ls -lah ./default-assets-package
 
       - name: 'Deploy to Azure Web App'
         id: deploy-to-webapp
