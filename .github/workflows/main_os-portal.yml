@@ -30,13 +30,14 @@ jobs:
 
       - name: zip application folders
         run: |
-          tar -czf /output.tar.gz ${GITHUB_WORKSPACE}
+          cd /home/runner/work
+          tar -czf output.tar.gz ./opensource-management-portal/opensource-management-portal
           
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v2
         with:
           name: node-app
-          path: /output.tar.gz
+          path: output.tar.gz
 
   deploy:
     runs-on: ubuntu-latest
