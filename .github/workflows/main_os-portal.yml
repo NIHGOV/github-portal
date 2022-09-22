@@ -30,8 +30,11 @@ jobs:
 
       - name: zip application folders
         run: |
-          cd /home/runner/work
-          tar -czf output.tar.gz ./opensource-management-portal/opensource-management-portal
+          ls -lah
+          cd ..
+          ls -lah
+          tar -czf output.tar.gz ./opensource-management-portal
+          ls -lah
           
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v2
