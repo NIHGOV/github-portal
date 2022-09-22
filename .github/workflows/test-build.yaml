@@ -28,6 +28,8 @@ jobs:
           cd ..
           npm run test --if-present
           ls -lah
+          cd ./dist 
+          ls -lah
           
       - name: zip application folders
         run: |
