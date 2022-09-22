@@ -42,7 +42,7 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: node-app
-          path: output.tar.gz
+          path: /home/runner/work/opensource-management-portal/output.tar.gz
 
   deploy:
     runs-on: ubuntu-latest
