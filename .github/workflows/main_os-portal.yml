@@ -30,8 +30,10 @@ jobs:
 
       - name: zip application folders
         run: |
+          echo $PWD
           ls -lah
           cd ..
+          echo $PWD
           ls -lah
           tar -czf output.tar.gz ./opensource-management-portal
           ls -lah
