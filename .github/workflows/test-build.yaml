@@ -1,9 +1,6 @@
 name: Test build and upload optimizations
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:
