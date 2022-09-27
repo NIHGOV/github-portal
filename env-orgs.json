@@ -1,7 +1,9 @@
+[  
   {
-    "name": "ASampleOrg",
-    "id": 105976989,
-    "type": "public",
-    "description": "This is a sample org",
-    "templates": ["mit"]
+      "name": "ASampleOrg",
+      "id": 105976989,
+      "type": "public",
+      "description": "This is a sample org",
+      "templates": ["mit"]
   }
+]
