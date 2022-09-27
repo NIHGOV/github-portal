@@ -5,5 +5,12 @@
       "type": "public",
       "description": "This is a sample org",
       "templates": ["mit"]
+  },
+  {
+      "name": "ASampleOrg-deux",
+      "id": 114497690,
+      "type": "public",
+      "description": "This is a sample org 2",
+      "templates": ["mit"]
   }
 ]
