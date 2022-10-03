@@ -107,7 +107,7 @@
     "passport-github": "1.1.0",
     "passport-strategy": "1.x.x",
     "passport-vso": "0.0.3",
-    "pg": "8.7.3",
+    "pg": "8.8.0",
     "pg-escape": "0.2.0",
     "pug": "3.0.2",
     "recursive-readdir": "2.2.2",
