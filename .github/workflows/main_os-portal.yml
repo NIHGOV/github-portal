@@ -77,4 +77,4 @@ jobs:
           app-name: 'os-portal'
           slot-name: 'Production'
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_B506880B08E44393A4AD2D077960733D }}
-          package: ./dist ./default-assets-package ./node-modules
+          package: /home/runner/work/app
