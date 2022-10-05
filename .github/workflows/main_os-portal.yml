@@ -61,13 +61,13 @@ jobs:
         run: |
           tar -xf output.tar.gz
           ls -lah
-          mkdir /app
+          mkdir /home/runner/work/app
           cd opensource-management-portal
           ls -lah
-          cp -R dist /app/dist
-          cp -R default-assets-package /app/default-assets-package
-          cp -R node-modules /app/node-modules
-          cd /app
+          cp -R dist /home/runner/work/app/dist
+          cp -R default-assets-package /home/runner/work/app/default-assets-package
+          cp -R node-modules /home/runner/work/app/node-modules
+          cd /home/runner/work/app
           ls -lah
 
       - name: 'Deploy to Azure Web App'
