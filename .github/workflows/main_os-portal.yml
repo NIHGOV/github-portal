@@ -62,9 +62,9 @@ jobs:
           tar -xf output.tar.gz
           ls -lah
           mkdir app
-          cp -R ./opensource-management-portal/dist/ ./app/dist
-          cp -R ./opensource-management-portal/default-assets-package ./app/default-assets-package
-          cp -R ./opensource-management-portal/node-modules ./app/node-modules
+          cp -R opensource-management-portal/dist/ app/dist
+          cp -R opensource-management-portal/default-assets-package app/default-assets-package
+          cp -R opensource-management-portal/node-modules app/node-modules
           cd app
           ls -lah
 
