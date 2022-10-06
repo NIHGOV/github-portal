@@ -67,6 +67,8 @@ jobs:
           cp -R dist /home/runner/work/app/dist
           cp -R default-assets-package /home/runner/work/app/default-assets-package
           cp -R node_modules /home/runner/work/app/node_modules
+          mkdir /home/runner/work/app/data
+          cp env-orgs.json /home/runner/work/app/env-orgs.json
           cd /home/runner/work/app
           ls -lah
 
