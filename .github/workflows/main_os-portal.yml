@@ -1,3 +1,4 @@
+
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 
@@ -27,7 +28,6 @@ jobs:
           npm run build
           cd ..
           npm run test --if-present
-
       - name: zip application folders
         run: |
           echo $PWD
@@ -61,17 +61,6 @@ jobs:
         run: |
           tar -xf output.tar.gz
           ls -lah
-          mkdir /home/runner/work/app
-          cd opensource-management-portal
-          ls -lah
-          cp -R dist /home/runner/work/app/dist
-          cp -R default-assets-package /home/runner/work/app/default-assets-package
-          cp -R node_modules /home/runner/work/app/node_modules
-          mkdir /home/runner/work/app/data
-          cp env-orgs.json /home/runner/work/app/env-orgs.json
-          cd /home/runner/work/app
-          ls -lah
-
       - name: 'Deploy to Azure Web App'
         id: deploy-to-webapp
         uses: azure/webapps-deploy@v2
@@ -79,4 +68,4 @@ jobs:
           app-name: 'os-portal'
           slot-name: 'Production'
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_B506880B08E44393A4AD2D077960733D }}
-          package: /home/runner/work/app
+          package: .
