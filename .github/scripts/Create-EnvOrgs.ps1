@@ -1,7 +1,7 @@
-$ouput = Get-Content ./raw.json | ConvertFrom-Json
+$output = Get-Content ./raw.json | ConvertFrom-Json
 
 Write-Output $output.data.enterprise.organizations.nodes
-Write-Host $output.data.enterprise.organizations.nodes
+
 
 $orgsArry = @()
 
