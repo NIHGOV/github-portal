@@ -40,4 +40,9 @@ jobs:
          cat orgs.json
          ls 
        shell: pwsh
+       
+     - name: check file
+       run: |
+         cat orgs.json
+         ls -lah
       
