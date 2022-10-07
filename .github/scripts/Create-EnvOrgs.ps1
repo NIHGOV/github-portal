@@ -1,4 +1,4 @@
-$ouput = Get-Content ./orgs.json | ConvertFrom-Json
+$ouput = Get-Content ./raw.json | ConvertFrom-Json
 
 Write-Output $output.data.enterprise.organizations.nodes
 
