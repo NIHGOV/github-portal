@@ -36,7 +36,7 @@ jobs:
          
      - name: run powershell script to create env orgs json
        run: |
-         pwsh ./github/scripts/Create-EnvOrgs.ps1
+         pwsh ./.github/scripts/Create-EnvOrgs.ps1
          cat orgs.json
      
       
