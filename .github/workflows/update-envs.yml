@@ -1,1 +1,15 @@
-# Placeholder
+name: Generate and env-orgs.json file and upload to Azure
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+     - uses: actions/checkout@v2
+     
+     - name: echo
+       run: |
+         ls -lah
