@@ -13,3 +13,21 @@ jobs:
      - name: echo
        run: |
          ls -lah
+         
+     - name: get orgs from graphql
+       run: |
+         gh api graphql -f ent=ASampleEnterprise -f query='query($ent: String!) {
+          enterprise(slug: $ent) {
+            organizations(first: 100) {
+              nodes {
+                description
+                databaseId
+                id
+                name
+              }
+            }
+          }
+         }' >> raw.json
+         cat raw.json
+       env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
