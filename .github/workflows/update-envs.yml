@@ -29,6 +29,14 @@ jobs:
           }
          }' >> raw.json
          cat raw.json
+         
        env:
          GITHUB_TOKEN: ${{ secrets.ENT_READ_PAT}}
          GH_TOKEN: ${{ secrets.ENT_READ_PAT }}
+         
+     - name: run powershell script to create env orgs json
+       run: |
+         pwsh ./github/scripts/Create-EnvOrgs.ps1
+         cat orgs.json
+     
+      
