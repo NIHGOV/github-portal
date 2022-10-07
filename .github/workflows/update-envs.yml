@@ -30,4 +30,5 @@ jobs:
          }' >> raw.json
          cat raw.json
        env:
-         GITHUB_TOKEN: ${{ secrets.ENT_READ_TOKEN }}
+         GITHUB_TOKEN: ${{ secrets.ENT_READ_PAT}}
+         GH_TOKEN: ${{ secrets.ENT_READ_PAT }}
