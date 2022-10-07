@@ -45,4 +45,21 @@ jobs:
        run: |
          cat orgs.json
          ls -lah
+         rm env-orgs.json
+         cat orgs.json >> env-orgs.json
+         cat env-orgs.json
+         
+     - name: upload to Azure files
+       # You may pin to the exact commit or the version.
+  # uses: rnakamine/azure-files-upload@5c1081adbe0d65b9c0a8be234f0e17ae93c8b741
+       uses: rnakamine/azure-files-upload@v1.0.0
+       with:
+        # The connection string for the storage account.
+        connection_string: ${{ secrets.AZURE_STORAGE_CONN }}
+        # The directory to upload files from.
+        source: ./env-orgs.json
+        # The destination of the upload operation.
+        destination: env-orgs
+
+     
       
