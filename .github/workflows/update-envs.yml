@@ -1,4 +1,4 @@
-name: Generate and env-orgs.json file and upload to Azure
+name: Generate an env-orgs.json file and upload to Azure
 
 on:
   workflow_dispatch:
