@@ -55,6 +55,6 @@ jobs:
         # Specify the script here
         inlineScript: az storage file upload -s env-orgs --source env-orgs.json --connection-string $CONN 
        env:
-         CONN: $ {{secrets.AZURE_STORAGE_CONN }}
+         CONN: ${{secrets.AZURE_STORAGE_CONN }}
 
       
