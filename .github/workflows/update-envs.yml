@@ -14,6 +14,12 @@ jobs:
        run: |
          ls -lah
          
+     - name: auth GH CLI for enterprise:read
+       run: |
+         gh auth login --with-token 
+       env: 
+         GH_TOKEN: ${{ secrets.ENT_READ_PAT }}
+         
      - name: get orgs from graphql
        run: |
          gh api graphql -f ent=ASampleEnterprise -f query='query($ent: String!) {
@@ -29,5 +35,3 @@ jobs:
           }
          }' >> raw.json
          cat raw.json
-       env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
