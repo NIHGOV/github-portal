@@ -56,5 +56,17 @@ jobs:
         inlineScript: az storage file upload -s env-orgs --source env-orgs.json --connection-string $CONN 
        env:
          CONN: ${{secrets.AZURE_STORAGE_CONN }}
+         
+     
+     - name: Azure Login
+       uses: Azure/login@v1.4.6
+       with:
+         creds: '{"clientId":"${{ secrets.CLIENT_ID }}","clientSecret":"${{ secrets.CLIENT_SECRET }}","subscriptionId":"${{ secrets.SUBSCRIPTION_ID }}","tenantId":"${{ secrets.TENANT_ID }}"}'
+         
+     - name: Azure CLI Action
+       uses: Azure/cli@v1
+       with:
+        # Specify the script here
+        inlineScript: az webapp restart --name os-portal --resource-group rg-nih-portal-prototype
 
       
