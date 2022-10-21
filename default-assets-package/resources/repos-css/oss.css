@@ -76,6 +76,11 @@ div.flex-center {
 }
 */
 
+.navbar-inverse {
+  background-color: #20558a;
+  border-color: #333;
+}
+
 .invisible {
   visibility: hidden;
 }
@@ -304,7 +309,7 @@ div.link-box {
 
 /* Brand box coloring v1 */
 .metro-blue {
-  background: #0072c6;
+  background: #20558a;
 }
 
 .metro-purple {
@@ -328,7 +333,7 @@ div.link-box {
 
 .ms-blue-border-top {
   border-style: solid;
-  border-top-color: #0078d7;
+  border-top-color: #20558a;
   border-width: 4px 0 0;
 }
 
@@ -358,7 +363,7 @@ div.link-box {
 }
 
 .ms-blue {
-  background: #0078d7;
+  background: #20558a;
 }
 
 .ms-teal {
@@ -383,7 +388,7 @@ div.link-box {
 }
 
 .ms-light-blue {
-  background: #00bcf2;
+  background: #20558a;
 }
 
 .ms-light-teal {
