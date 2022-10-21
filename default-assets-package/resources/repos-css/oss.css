@@ -76,9 +76,28 @@ div.flex-center {
 }
 */
 
+.navbar-default .navbar-nav>.active>a {
+  color: #fff;
+  background-color: #20558a;
+}
+
 .navbar-inverse {
   background-color: #20558a;
   border-color: #333;
+}
+
+.navbar-inverse .navbar-nav>.active>a {
+  color: #fff;
+  background-color: #456483;
+}
+
+.nav-pills>li.active>a {
+  color: #fff;
+  background-color: #20558a;
+}
+
+.nav>li>a {
+  color: #20558a;
 }
 
 .invisible {
