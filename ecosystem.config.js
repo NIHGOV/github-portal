@@ -6,6 +6,6 @@ module.exports = {
   },{
     "name"       : "cache-builder",
     "script"     : "./opensource-management-portal/dist/jobs/refreshQueryCache/index.js",
-    "autorestart": "false"
+    "autorestart": false
   }]
 }
