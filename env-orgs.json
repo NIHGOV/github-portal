@@ -1,16 +1,23 @@
-[  
+[
   {
-      "name": "ASampleOrg",
-      "id": 105976989,
-      "type": "public",
-      "description": "This is a sample org",
-      "templates": ["mit"]
+    "name": "ASampleOrg",
+    "id": "105976989",
+	"ownerToken": "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",
+    "type": ["public", "private", "internal"],
+    "description": "This is a sample org"
   },
   {
-      "name": "ASampleOrg-deux",
-      "id": 114497690,
-      "type": "public",
-      "description": "This is a sample org 2",
-      "templates": ["mit"]
+    "name": "ASampleOrg-deux",
+    "id": "114497690",
+	"ownerToken": "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",
+    "type": ["public", "private", "internal"],
+    "description": ""
+  },
+  {
+    "name": "ASampleOrg-trees",
+    "id": "115248752",
+	"ownerToken": "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",
+    "type": ["public", "private", "internal"],
+    "description": ""
   }
 ]
