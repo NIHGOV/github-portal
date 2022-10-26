@@ -1,0 +1,23 @@
+[
+  {
+    "name": "ASampleOrg",
+    "id": "105976989",
+	"ownerToken": "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",
+    "type": ["public", "private", "internal"],
+    "description": "This is a sample org"
+  },
+  {
+    "name": "ASampleOrg-deux",
+    "id": "114497690",
+	"ownerToken": "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",
+    "type": ["public", "private", "internal"],
+    "description": ""
+  },
+  {
+    "name": "ASampleOrg-trees",
+    "id": "115248752",
+	"ownerToken": "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",
+    "type": ["public", "private", "internal"],
+    "description": ""
+  }
+]
