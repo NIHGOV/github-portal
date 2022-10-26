@@ -1,4 +1,5 @@
-{
+
+module.exports = {
   "apps" : [{
     "name"        : "portal",
     "script"      : "./opensource-management-portal/dist/bin/www.js",
