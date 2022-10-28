@@ -11,7 +11,8 @@
               "delivery": "@coalesce(triggerOutputs()['headers']['X-GitHub-Delivery'])",
               "event": "@coalesce(triggerOutputs()['headers']['X-GitHub-Event'])",
               "signature": "@coalesce(triggerOutputs()['headers']['X-Hub-Signature'])",
-              "signature256": "@coalesce(triggerOutputs()['headers']['X-Hub-Signature-256'])"
+              "signature256": "@coalesce(triggerOutputs()['headers']['X-Hub-Signature-256'])",
+              "started": "@utcNow()"
             }
           },
           "host": {
