@@ -4,7 +4,7 @@
     {
       "type": "node",
       "request": "launch",
-      "name": "Launch site 3000",
+      "name": "Attach site 3000",
       "program": "${workspaceFolder}/dist/bin/www.js",
       "cwd": "${workspaceFolder}/dist",
       "preLaunchTask": "tsbuild",
@@ -13,7 +13,8 @@
       "env": {
         "NODE_ENV": "development",
         "DEBUG": "startup,cosmosdb,g:server,context,cache,restapi,redis-cross-org",
-        "MORE_DEBUG": "appinsights,cache,restapi,pg,querycache,user,redis-cross-org"
+        "MORE_DEBUG": "appinsights,cache,restapi,pg,querycache,user,redis-cross-org",
+        "DEBUG_ALLOW_HTTP": 1
       }
     },
     {
