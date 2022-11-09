@@ -5,6 +5,7 @@
 
 import MockMailService from './mockMailService';
 import SmtpMailService from './smtpMailService';
+import AzureServiceBus from './azureServiceBus';
 import getCompanySpecificDeployment from '../../middleware/companySpecificDeployment';
 
 export interface IMail {
@@ -88,6 +89,10 @@ export function createMailProviderInstance(config): IMailProvider {
     return;
   }
   switch (provider) {
+    case 'azureServiceBus': {
+      mailProvider = new AzureServiceBus(mailConfig);
+      break;
+    }
     case 'smtpMailService': {
       mailProvider = new SmtpMailService(mailConfig);
       break;

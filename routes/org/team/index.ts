@@ -291,7 +291,7 @@ export async function submitTeamJoinRequest(
     };
   }
   const justification = optionalJustification || 'N/A';
-  const approvalTypesValues = config.github.approvalTypes.repo;
+  const approvalTypesValues = config.github.approvalTypes.teamJoin;
   if (approvalTypesValues.length === 0) {
     return { error: new Error('No team join approval providers configured.') };
   }
