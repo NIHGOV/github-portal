@@ -70,7 +70,7 @@ div.navbar.navbar-default(style=reposContext ? 'margin-bottom:0' : undefined)
     div.collapse.navbar-collapse#bs-example-navbar-collapse-1
       ul.nav.navbar-nav
         if config && config.urls
-          li(class={ active: site === 'explore' }): a(href=config.urls.explore) NIH GitHub
+          li(class={ active: site === 'explore' }): a(href='https://github.com') NIH GitHub
           if config.urls.docs
             li: a(href=config.urls.docs) Docs
           if config.urls.use
