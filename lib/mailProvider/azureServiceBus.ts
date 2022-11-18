@@ -12,8 +12,8 @@ export default class AzureServiceBus implements IMailProvider {
   html: true;
   info: 'Azure Service Bus';
 
-  constructor(mailConfig: any) {
-    this._config = mailConfig;
+  constructor(config: any) {
+    this._config = config;
   }
 
   getSentMessages() {
@@ -23,16 +23,27 @@ export default class AzureServiceBus implements IMailProvider {
   async initialize() {}
 
   async sendMail(mail: IMail): Promise<any> {
-    if (!this._config.azureServiceBus) {
+    const {
+      mail: { azureServiceBus: config },
+      brand: { supportMail },
+    } = this._config;
+
+    if (!config) {
       throw new Error('Azure Service bus configuration not provided, mail sending failed');
     }
 
-    if (!mail.to) {
-      throw new Error('No email recipient provided');
+    // If the "to" address is empty send the email to enable admins to process.
+    // Note: This functionality is not implemented in other mail providers
+    if (!mail.to || (mail.to && !mail.to.length)) {
+      if (supportMail) {
+        mail.to = [supportMail];
+      } else {
+        throw new Error('No email recipient provided');
+      }
     }
 
-    const client = new ServiceBusClient(this._config.azureServiceBus.connectionString);
-    const sender = client.createSender(this._config.azureServiceBus.queueName);
+    const client = new ServiceBusClient(config.connectionString);
+    const sender = client.createSender(config.queueName);
 
     const message: ServiceBusMessage = {
       contentType: 'application/json',
