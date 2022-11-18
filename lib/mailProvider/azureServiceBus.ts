@@ -20,6 +20,28 @@ export default class AzureServiceBus implements IMailProvider {
     return []; // this provider does not support mocks
   }
 
+  flatten(stringOrArray) {
+    // the logic app expects a string of emails separated by ';'
+    if (typeof stringOrArray === 'string' && stringOrArray.length) {
+      return stringOrArray;
+    }
+
+    if (Array.isArray(stringOrArray)) {
+      // replace empty arrays with undefined
+      return stringOrArray.length ? stringOrArray.join('; ') : undefined;
+    }
+
+    return undefined;
+  }
+
+  transform(mail: IMail): IMail {
+    mail.to = this.flatten(mail.to);
+    mail.cc = this.flatten(mail.cc);
+    mail.bcc = this.flatten(mail.bcc);
+
+    return mail;
+  }
+
   async initialize() {}
 
   async sendMail(mail: IMail): Promise<any> {
@@ -32,11 +54,11 @@ export default class AzureServiceBus implements IMailProvider {
       throw new Error('Azure Service bus configuration not provided, mail sending failed');
     }
 
-    // If the "to" address is empty send the email to enable admins to process.
-    // Note: This functionality is not implemented in other mail providers
-    if (!mail.to || (mail.to && !mail.to.length)) {
+    mail = this.transform(mail);
+
+    if (!mail.to) {
       if (supportMail) {
-        mail.to = [supportMail];
+        mail.to = supportMail;
       } else {
         throw new Error('No email recipient provided');
       }
