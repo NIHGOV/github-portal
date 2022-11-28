@@ -12,7 +12,6 @@ foreach ($org in $output.data.enterprise.organizations.nodes) {
             type = @("public", "private")
             description = "$($org.description)"
             locked = $True
-            hidden = $False
         }
     Write-Output "This is the object: "
     Write-Output $envObj
