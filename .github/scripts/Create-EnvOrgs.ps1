@@ -9,7 +9,7 @@ foreach ($org in $output.data.enterprise.organizations.nodes) {
     $envObj = [PSCustomObject]@{
             name = "$($org.login)"
             id = $($org.databaseId)
-            type = @("public", "private")
+            type = @("public", "private", "internal)
             description = "$($org.description)"
             locked = $True
         }
