@@ -41,7 +41,7 @@ router.use(function (req: ReposAppRequest, res, next) {
     const { allowUsersToViewLockedOrgDetails } = getProviders(req).config.features;
 
     if (allowUsersToViewLockedOrgDetails) {
-      return next();
+      return showOrgJoinDetails(req);
     }
 
     console.error(
@@ -51,12 +51,13 @@ router.use(function (req: ReposAppRequest, res, next) {
     err = new Error('This organization is locked to new members.');
     err.detailed = `At this time, the maintainers of the ${organization.name} organization have decided to not enable onboarding through this portal.`;
     err.skipLog = true;
+    return next(err);
   }
 
-  next(err);
+  next();
 });
 
-router.use(showOrgJoinDetails);
+router.use(RequireActiveGitHubSession);
 
 router.use(
   asyncHandler(async function (req: ReposAppRequest, res: Response, next: NextFunction) {
@@ -80,7 +81,6 @@ router.use(
 );
 
 //-------------
-router.use(RequireActiveGitHubSession);
 
 async function showOrgJoinDetails(req: ReposAppRequest) {
   // Present user with a sanitized version of the organization detail page for users attempting to join a locked
