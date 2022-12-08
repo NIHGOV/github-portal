@@ -10,6 +10,7 @@ import asyncHandler from 'express-async-handler';
 const router: Router = Router();
 
 import querystring from 'querystring';
+import { IAggregateUserSummary } from '../../user/aggregate';
 
 import { CreateError, getProviders } from '../../transitional';
 import { IndividualContext } from '../../user';
@@ -25,6 +26,7 @@ import {
   NoCacheNoBackground,
   ITeamMembershipRoleState,
   IOrganizationMembership,
+  OrganizationMembershipRoleQuery,
 } from '../../interfaces';
 import getCompanySpecificDeployment from '../../middleware/companySpecificDeployment';
 
@@ -32,15 +34,29 @@ import getCompanySpecificDeployment from '../../middleware/companySpecificDeploy
 // Join checks
 //-------------
 router.use(function (req: ReposAppRequest, res, next) {
-  const organization = req.organization;
+  const { organization } = req;
   let err = null;
+
   if (organization.locked) {
+    const { allowUsersToViewLockedOrgDetails } = getProviders(req).config.features;
+
+    if (allowUsersToViewLockedOrgDetails) {
+      return next();
+    }
+
+    console.error(
+      `Default functionality does not allow users to access the join page of a locked organization.  To override this set the feature flag 'FEATURE_FLAG_ALLOW_USERS_TO_VIEW_LOCKED_ORG_DETAILS=1'`
+    );
+
     err = new Error('This organization is locked to new members.');
     err.detailed = `At this time, the maintainers of the ${organization.name} organization have decided to not enable onboarding through this portal.`;
     err.skipLog = true;
   }
+
   next(err);
 });
+
+router.use(showOrgJoinDetails);
 
 router.use(
   asyncHandler(async function (req: ReposAppRequest, res: Response, next: NextFunction) {
@@ -64,8 +80,35 @@ router.use(
 );
 
 //-------------
-
 router.use(RequireActiveGitHubSession);
+
+async function showOrgJoinDetails(req: ReposAppRequest) {
+  // Present user with a sanitized version of the organization detail page for users attempting to join a locked
+  // organization when the ALLOW_USERS_TO_VIEW_LOCKED_ORG_DETAILS feature flag is enabled.  Attempting to keep
+  // this implementation as close to the default org get route as possible
+  const { individualContext, organization } = req;
+
+  const results = {
+    orgUser: organization.memberFromEntity(await organization.getDetails()),
+    orgDetails: await organization.getDetails(), //org details from GitHub
+    organizationOverview: null as IAggregateUserSummary,
+    organizationAdmins: await organization.getMembers({ role: OrganizationMembershipRoleQuery.Admin }),
+  };
+
+  results.organizationOverview = await individualContext.aggregations.getAggregatedOrganizationOverview(
+    organization
+  );
+
+  req.individualContext.webContext.render({
+    view: 'org/public_view',
+    title: organization.name,
+    state: {
+      accountInfo: results,
+      organization,
+      organizationEntity: organization.getEntity(),
+    },
+  });
+}
 
 function clearAuditListAndRedirect(
   res: Response,
