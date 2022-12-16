@@ -10,6 +10,8 @@ jobs:
     steps:
      - uses: actions/checkout@v2
      - uses: ruby/setup-ruby@v1.127.0
+       with:
+        ruby-version: '3.0' # Not needed with a .ruby-version file
      
      - name: update ruby reqs
        run: |
