@@ -34,6 +34,7 @@ jobs:
      - name: run powershell script to build sql
        run: | 
           .github/scripts/Create-PSQLUpdate.ps1
+       shell: pwsh
           
        env:
         PAT: ${{ secrets.ENT_READ_PAT }}
