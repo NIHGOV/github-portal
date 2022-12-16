@@ -9,3 +9,33 @@ jobs:
     
     steps:
      - uses: actions/checkout@v2
+     
+     - name: update ruby reqs
+       run: |
+        gem install jwt
+        
+     - name: run jwt generator
+       run: |
+         ruby .github/scripts/jwt.rb >> token
+       
+       env:
+         PEM: ${{ secrets.APP_PEM}}
+         
+     - name: run gh api cli to getch app data
+       run: |
+         gh api \
+          -H "Authorization: Bearer $(cat token)" \
+          -H "Accept: application/vnd.github+json" \
+          /app/installations | jq >> app_output.json
+          
+     - name: run powershell script to build sql
+       run: | 
+          .github/scripts/Create-PSQLUpdate.ps1
+          
+       env:
+        PAT: ${{ secrets.ENT_READ_PAT }}
+        
+     - name: output sql
+       run: |
+        cat ./update.sql
+        
