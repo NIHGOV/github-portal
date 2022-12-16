@@ -1,0 +1,11 @@
+name: Update organizationsettings table
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+     - uses: actions/checkout@v2
