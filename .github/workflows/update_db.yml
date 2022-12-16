@@ -24,16 +24,10 @@ jobs:
        
        env:
          PEM: ${{ secrets.APP_PEM}}
-         
-     - name: run gh api cli to getch app data
-       run: |
-         gh api \
-          -H "Authorization: Bearer $(cat token)" \
-          -H "Accept: application/vnd.github+json" \
-          /app/installations | jq >> app_output.json
           
      - name: run powershell script to build sql
        run: | 
+          .github/scripts/Run-GHCLI.ps1
           .github/scripts/Create-PSQLUpdate.ps1
        shell: pwsh
           
