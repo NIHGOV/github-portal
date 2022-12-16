@@ -16,7 +16,7 @@ function Get-OrgData {
     return $orgData
 }
 
-$data = Get-Content ./app_output.json -Raw | ConvertFrom-Json
+$data = Get-Content /home/runner/work/opensource-management-portal/opensource-management-portal/app_output.json -Raw | ConvertFrom-Json
 
 $insertData = @()
 
