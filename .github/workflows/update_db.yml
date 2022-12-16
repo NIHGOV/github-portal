@@ -17,17 +17,24 @@ jobs:
        run: |
         gem install jwt
         
-     - name: run jwt generator
+     - name: my-app-install token
+       id: os-portal
+       uses: getsentry/action-github-app-token@v1
+       with:
+        app_id: ${{ secrets.APP_ID }}
+        private_key: ${{ secrets.APP_PEM }}
+        
+     - name: run gh cli to get app install info
        run: |
-         ruby .github/scripts/jwt.rb >> token
-         ls -lah
-       
+          gh api \
+          -H "Accept: application/vnd.github+json" \
+          /app/installations | jq >> app_output.json
        env:
-         PEM: ${{ secrets.APP_PEM}}
-          
+         GITHUB_TOKEN: ${{ steps.os-portal.outputs.token }}
+        
+
      - name: run powershell script to build sql
        run: | 
-          .github/scripts/Run-GHCLI.ps1
           .github/scripts/Create-PSQLUpdate.ps1
        shell: pwsh
           
