@@ -49,3 +49,15 @@ jobs:
         cat ./app_output.json
         cat ./update.sql
         
+     - name: Azure Login 
+       uses: Azure/login@v1.4.6
+       with:
+         creds: '{"clientId":"${{ secrets.CLIENT_ID }}","clientSecret":"${{ secrets.CLIENT_SECRET }}","subscriptionId":"${{ secrets.SUBSCRIPTION_ID }}","tenantId":"${{ secrets.TENANT_ID }}"}'
+         
+     - name: PSQL update
+       uses: azure/postgresql@v1
+       with:
+        connection-string: ${{ secrets.PSQL_CONN }}
+        server-name: nih-portaldb.postgres.database.azure.com
+        plsql-file: ./update.sql
+        
