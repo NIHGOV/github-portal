@@ -61,3 +61,9 @@ jobs:
         server-name: nih-portaldb.postgres.database.azure.com
         plsql-file: ./update.sql
         
+     - name: Azure CLI Action
+       uses: Azure/cli@v1
+       with:
+        # Specify the script here
+        inlineScript: az webapp restart --name os-portal --resource-group rg-nih-portal-prototype   
+        
