@@ -66,7 +66,7 @@
     "MAIL_AZURESERVICEBUS_QUEUENAME": "${localEnv:MAIL_AZURESERVICEBUS_QUEUENAME}",
     "MAIL_FROM": "${localEnv:MAIL_FROM}",
     "PORTAL_ADMIN_EMAIL": "${localEnv:PORTAL_ADMIN_EMAIL}",
-    "REDIS_TLS_HOST": "${localEnv:REDIS_TLS_HOST}",
+    "REDIS_TLS_HOST": "${localEnv:REDIS_TLS_HOST:redis}",
     "REDIS_PORT": "${localEnv:REDIS_PORT}",
     "REDIS_KEY": "${localEnv:REDIS_KEY}",
     "REPOS_LINKS_PROVIDER_NAME": "${localEnv:REPOS_LINKS_PROVIDER_NAME:postgres}",
