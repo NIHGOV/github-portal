@@ -22,6 +22,13 @@ FILTER="KEY_FILE\|REPOS_*\|^DEBUG"
 # Get list of application environment variables from the devcontainer.json file
 ENV_VARS=($(cat devcontainer.json | sed 's/^ *\/\/.*//' | jq -r ".remoteEnv | keys[]" | grep -v $FILTER))
 
+FLAG="--no-store"
+
+# Remove no store flag if not in dry-run
+if [ "$WRITE" -eq "1" ]; then
+  FLAG=""
+fi
+
 # Loop through each variable and create a secret if the variable is set
 for VAR in "${ENV_VARS[@]}"
 do
@@ -33,10 +40,7 @@ do
 
       # If in dry-run mode print the encrypted, base64-encoded value instead of
       # storing it on Github with the --no-store flag
-      if [ "$WRITE" -eq "1" ]; then
-        FLAG=""
-      else
-        FLAG="--no-store"
+      if [ "$WRITE" -eq "0" ]; then
         printf "\033[0;32m$CLEANED_VAR: \033[0m"
       fi
 
