@@ -17,7 +17,7 @@ fi
 
 # Filter to remove variables that have default values in the devcontainer.json
 # to reduce unneeded secrets from being created.
-FILTER="KEY_FILE\|REPOS_*\|^DEBUG"
+FILTER="KEY_FILE\|REPOS_*\|^DEBUG|SESSION_COOKIE_DOMAIN"
 
 # Get list of application environment variables from the devcontainer.json file
 ENV_VARS=($(cat devcontainer.json | sed 's/^ *\/\/.*//' | jq -r ".remoteEnv | keys[]" | grep -v $FILTER))
