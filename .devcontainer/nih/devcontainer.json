@@ -69,7 +69,7 @@
     "REDIS_HOST": "${localEnv:REDIS_HOST:redis}",
     "REDIS_TLS_HOST": "${localEnv:REDIS_TLS_HOST}",
     "REDIS_PORT": "${localEnv:REDIS_PORT}",
-    "REDIS_KEY": "${localEnv:REDIS_KEY}",
+    "REDIS_KEY": "${localEnv:REDIS_KEY:redispw}",
     "REPOS_LINKS_PROVIDER_NAME": "${localEnv:REPOS_LINKS_PROVIDER_NAME:postgres}",
     "REPOS_POSTGRES_DATABASE": "${localEnv:REPOS_POSTGRES_DATABASE:postgres}",
     "REPOS_POSTGRES_HOST": "${localEnv:REPOS_POSTGRES_HOST:localhost}",

@@ -8,6 +8,7 @@ services:
     network_mode: service:db
   redis:
     image: 'redis:alpine'
+    command: redis-server --requirepass redispw
   db:
     image: 'postgres:alpine'
     restart: unless-stopped
