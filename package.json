@@ -115,7 +115,7 @@
     "redis": "3.1.2",
     "redis-mock": "0.56.3",
     "secure-compare": "3.0.1",
-    "semver": "7.3.5",
+    "semver": "7.5.2",
     "serve-favicon": "2.5.0",
     "simple-oauth2": "4.3.0",
     "throat": "6.0.1",
