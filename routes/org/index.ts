@@ -6,7 +6,7 @@
 import express, { Router } from 'express';
 import asyncHandler from 'express-async-handler';
 const router: Router = Router();
-
+import { GetOrgOwnerCardData } from './join';
 import { getProviders } from '../../transitional';
 import { IAggregateUserSummary } from '../../business/user/aggregate';
 import { TeamJoinApprovalEntity } from '../../entities/teamJoinApproval/teamJoinApproval';
@@ -97,6 +97,9 @@ router.get(
     const organization = req.organization;
     const username = req.individualContext.getGitHubIdentity().username;
     const individualContext = req.individualContext;
+
+    const organizationAdmins = await GetOrgOwnerCardData(organization);
+
     const results = {
       orgUser: organization.memberFromEntity(await organization.getDetails()),
       isMembershipPublic: await organization.checkPublicMembership(username),
@@ -105,6 +108,7 @@ router.get(
       isSudoer: false, // if (results.isAdministrator && results.isAdministrator === true) { results.isSudoer = true;
       teamsMaintainedHash: null,
       pendingApprovals: null as TeamJoinApprovalEntity[],
+      organizationAdmins,
     };
     results.organizationOverview = await individualContext.aggregations.getAggregatedOrganizationOverview(
       organization

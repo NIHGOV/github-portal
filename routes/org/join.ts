@@ -14,6 +14,7 @@ import { CreateError, getProviders } from '../../transitional';
 import { IndividualContext } from '../../business/user';
 import { sleep, storeOriginalUrlAsReferrer, wrapError } from '../../utils';
 import RequireActiveGitHubSession from '../../middleware/github/requireActiveSession';
+
 import { jsonError } from '../../middleware/jsonError';
 import { Organization, Team } from '../../business';
 import QueryCache from '../../business/queryCache';
@@ -80,17 +81,10 @@ router.use(
 
 router.use(RequireActiveGitHubSession);
 
-async function showOrgJoinDetails(req: ReposAppRequest) {
-  // Present user with a sanitized version of the organization detail page for users attempting to join a locked
-  // organization when the ALLOW_USERS_TO_VIEW_LOCKED_ORG_DETAILS feature flag is enabled.  Attempting to keep
-  // this implementation as close to the default org get route as possible
-  const { individualContext, organization } = req;
-
-  const [linkedOrgAdmins, unlinkedOrgAdmins, orgDetails, organizationOverview] = await Promise.all([
+export async function GetOrgOwnerCardData(organization: Organization) {
+  const [linkedOrgAdmins, unlinkedOrgAdmins] = await Promise.all([
     organization.getLinkedMembers({ role: OrganizationMembershipRoleQuery.Admin }),
     organization.getUnlinkedMembers({ role: OrganizationMembershipRoleQuery.Admin }),
-    organization.getDetails(),
-    individualContext.aggregations.getAggregatedOrganizationOverview(organization),
   ]);
 
   // clean up admin data for the front end
@@ -115,6 +109,21 @@ async function showOrgJoinDetails(req: ReposAppRequest) {
 
       return acc;
     }, []);
+
+  return organizationAdmins;
+}
+
+async function showOrgJoinDetails(req: ReposAppRequest) {
+  // Present user with a sanitized version of the organization detail page for users attempting to join a locked
+  // organization when the ALLOW_USERS_TO_VIEW_LOCKED_ORG_DETAILS feature flag is enabled.  Attempting to keep
+  // this implementation as close to the default org get route as possible
+  const { individualContext, organization } = req;
+
+  const [orgDetails, organizationOverview, organizationAdmins] = await Promise.all([
+    organization.getDetails(),
+    individualContext.aggregations.getAggregatedOrganizationOverview(organization),
+    GetOrgOwnerCardData(organization),
+  ]);
 
   const results = {
     orgUser: organization.memberFromEntity(orgDetails),
