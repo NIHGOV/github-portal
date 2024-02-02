@@ -232,6 +232,10 @@ block content
                       ul.list-unstyled: li.text-danger Not required
 
               div.col-md-6.col-lg-h6
+                h3 Owners
+                +orgAdminCards(accountInfo.organizationAdmins, 5)
+                hr
+
                 h6 Repositories
                 if orgUser.public_repos
                   h2
@@ -260,9 +264,6 @@ block content
                   h2
                     | &infin;&nbsp;
                     small Public
-                hr
-                h3 Owners
-                +orgAdminCards(accountInfo.organizationAdmins, 5)
 
       hr
       p
