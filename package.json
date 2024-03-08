@@ -111,7 +111,7 @@
     "nodemailer": "6.9.4",
     "object-path": "0.11.8",
     "octicons": "5.0.1",
-    "passport": "0.6.0",
+    "passport": "0.7.0",
     "passport-azure-ad": "4.3.5",
     "passport-github": "1.1.0",
     "pg": "8.11.0",
