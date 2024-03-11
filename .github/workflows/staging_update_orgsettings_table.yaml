@@ -59,7 +59,7 @@ jobs:
         plsql-file: ./update.sql
         
      - name: Azure CLI Action
-       uses: Azure/cli@v1
+       uses: Azure/cli@v2
        with:
         # Needs the azure webapp name and resource group - unique in each branch
         inlineScript: az webapp restart --name ${{ secrets.DEV_AAS }} --resource-group ${{ secrets.DEV_RG }}  
