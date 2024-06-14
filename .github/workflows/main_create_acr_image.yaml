@@ -40,7 +40,7 @@ jobs:
         rm env-orgs.json
         cat orgs.json >> env-orgs.json
         cat env-orgs.json
-    - uses: azure/docker-login@v1
+    - uses: azure/docker-login@v2
       with:
         login-server: ${{ secrets.PROD_REGISTRY_SERVER }}
         username: ${{ secrets.PROD_REGISTRY_USER }}
