@@ -3,21 +3,24 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response, Router } from 'express';
+import { Router } from 'express';
 import asyncHandler from 'express-async-handler';
 
 import { jsonError } from '../../../../middleware';
 import { getRepositoryMetadataProvider, ReposAppRequest } from '../../../../interfaces';
 import { Organization } from '../../../../business';
-import { getContextualRepository } from '../../../../middleware/github/repoPermissions';
+import {
+  getContextualRepository,
+  getContextualRepositoryPermissions,
+} from '../../../../middleware/github/repoPermissions';
 import { IndividualContext } from '../../../../business/user';
-import { ErrorHelper, getProviders } from '../../../../lib/transitional';
-import NewRepositoryLockdownSystem from '../../../../business/features/newRepositories/newRepositoryLockdown';
+import { ErrorHelper, getProviders } from '../../../../transitional';
+import NewRepositoryLockdownSystem from '../../../../features/newRepositories/newRepositoryLockdown';
 
 const router: Router = Router();
 
 router.use(
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: ReposAppRequest, res, next) => {
     const organization = req.organization as Organization;
     if (!organization.isNewRepositoryLockdownSystemEnabled()) {
       return next(jsonError('This endpoint is not available as configured for the organization', 400));
@@ -39,13 +42,12 @@ router.use(
 
 router.post(
   '/approve',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
-    const { insights, operations } = getProviders(req);
+  asyncHandler(async (req: ReposAppRequest, res, next) => {
+    const { operations } = getProviders(req);
     const repository = getContextualRepository(req);
     const repositoryMetadataProvider = getRepositoryMetadataProvider(operations);
     const organization = repository.organization;
     const lockdownSystem = new NewRepositoryLockdownSystem({
-      insights,
       operations,
       organization,
       repository,
@@ -56,7 +58,7 @@ router.post(
       return res.json({
         message: `Unlocked the ${repository.name} repo in the ${organization.name} org`,
         unlocked: true,
-      }) as unknown as void;
+      });
     } catch (error) {
       return next(
         jsonError(
@@ -68,7 +70,7 @@ router.post(
   })
 );
 
-router.use('*', (req, res: Response, next: NextFunction) => {
+router.use('*', (req, res, next) => {
   return next(jsonError(`no API or ${req.method} function available for repo fork unlock`, 404));
 });
 

@@ -3,17 +3,15 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response, Router } from 'express';
+import { Router } from 'express';
 import asyncHandler from 'express-async-handler';
-
 import { Organization } from '../../../../business/organization';
 import { ReposAppRequest } from '../../../../interfaces';
 import { getIsCorporateAdministrator, jsonError } from '../../../../middleware';
 import getCompanySpecificDeployment from '../../../../middleware/companySpecificDeployment';
-import { ErrorHelper, getProviders } from '../../../../lib/transitional';
+import { ErrorHelper, getProviders } from '../../../../transitional';
 
 import routeIndividualOrganization from './organization';
-import routeApps from './apps';
 
 const router: Router = Router();
 
@@ -22,7 +20,7 @@ interface IRequestWithAdministration extends ReposAppRequest {
 }
 
 router.use(
-  asyncHandler(async (req: IRequestWithAdministration, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: IRequestWithAdministration, res, next) => {
     req.isSystemAdministrator = await getIsCorporateAdministrator(req);
     return next();
   })
@@ -30,31 +28,29 @@ router.use(
 
 router.get(
   '/',
-  asyncHandler(async (req: IRequestWithAdministration, res: Response) => {
+  asyncHandler(async (req: IRequestWithAdministration, res, next) => {
     const { operations } = getProviders(req);
     const isAdministrator = req.isSystemAdministrator;
     if (!isAdministrator) {
       return res.json({
         isAdministrator,
-      }) as unknown as void;
+      });
     }
     const organizations = operations.getOrganizations().map((org) => org.asClientJson());
     return res.json({
       isAdministrator,
       organizations,
-    }) as unknown as void;
+    });
   })
 );
 
-router.use((req: IRequestWithAdministration, res: Response, next: NextFunction) => {
+router.use((req: IRequestWithAdministration, res, next) => {
   return req.isSystemAdministrator ? next() : next(jsonError('Not authorized', 403));
 });
 
-router.use('/apps', routeApps);
-
 router.use(
   '/organization/:orgName',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: ReposAppRequest, res, next) => {
     const { orgName } = req.params;
     const { operations } = getProviders(req);
     let organization: Organization = null;
@@ -65,8 +61,7 @@ router.use(
     } catch (noOrgError) {
       if (ErrorHelper.IsNotFound(noOrgError)) {
         res.status(404);
-        res.end();
-        return;
+        return res.end();
       }
       return next(jsonError(noOrgError, 500));
     }
@@ -79,7 +74,7 @@ const deployment = getCompanySpecificDeployment();
 deployment?.routes?.api?.context?.administration?.index &&
   deployment?.routes?.api?.context.administration.index(router);
 
-router.use('*', (req, res: Response, next: NextFunction) => {
+router.use('*', (req, res, next) => {
   return next(jsonError('no API or function available: context/administration', 404));
 });
 

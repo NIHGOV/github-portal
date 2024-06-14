@@ -9,10 +9,10 @@ const debug = Debug.debug('startup');
 import { AuthorizationCode } from 'simple-oauth2';
 import { OIDCStrategy } from 'passport-azure-ad';
 
-import type { IProviders, IReposApplication, SiteConfiguration } from '../../interfaces';
+import { IProviders } from '../../interfaces';
 
 import { GraphUserType } from '../../lib/graphProvider';
-import { getCodespacesHostname, isCodespacesAuthenticating } from '../../lib/utils';
+import { getCodespacesHostname, isCodespacesAuthenticating } from '../../utils';
 
 export const aadStrategyName = 'azure-active-directory';
 export const aadStrategyUserPropertyName = 'azure';
@@ -25,64 +25,19 @@ interface IAADUser {
   displayName: string;
   oid: string;
   username: string;
-  // oauthToken?: string; // we aren't using this, no need to store these
+  oauthToken?: string;
 }
 
-/* cSpell:disable */
-type AadJwtJson = {
-  aio: string;
-  amr: string;
-  family_name: string;
-  given_name: string;
-  ipaddr: string;
-  name: string;
-  oid: string;
-  onprem_sid: string;
-  rh: string;
-  sub: string;
-  tid: string;
-  unique_name: string;
-  upn: string;
-  uti: string;
-  ver: string;
-};
-/* cSpell:enable */
-
-type AadResponseProfile = {
-  _json: AadJwtJson;
-  _raw: string;
-  displayName: string;
-  emails: undefined;
-  name: {
-    familyName: string;
-    givenName: string;
-    middleName: string;
-  };
-  oid: string;
-  sub: string;
-  upn: string;
-};
-
-type AadBearerToken = {
-  access_token: string;
-  expireS_in: string;
-  expires_on: string;
-  ext_expires_in: string;
-  id_token: string;
-  refresh_token: string;
-  token_type: 'Bearer';
-};
-
 async function login(
-  app: IReposApplication,
-  config: SiteConfiguration,
+  app,
+  config,
   client: AuthorizationCode,
-  iss: string,
-  sub: string,
-  profile: AadResponseProfile,
+  iss,
+  sub,
+  profile,
   accessToken: string,
   refreshToken: string,
-  params: AadBearerToken
+  params
 ): Promise<IPassportUserWithAAD> {
   const { graphProvider, insights } = app.settings.providers as IProviders;
   const oauthToken = JSON.stringify(params);
@@ -100,7 +55,7 @@ async function login(
         displayName: impersonationResult.displayName,
         oid: impersonationResult.id,
         username: impersonationResult.userPrincipalName,
-        // oauthToken,
+        oauthToken,
       },
     };
   }
@@ -120,21 +75,21 @@ async function login(
       displayName: profile.displayName,
       oid: profile.oid,
       username: profile.upn,
-      // oauthToken,
+      oauthToken,
     },
   };
 }
 
 function activeDirectorySubset(
-  app: IReposApplication,
-  config: SiteConfiguration,
+  app,
+  config,
   client: AuthorizationCode,
-  iss: string,
-  sub: string,
-  profile: AadResponseProfile,
+  iss,
+  sub,
+  profile,
   accessToken: string,
   refreshToken: string,
-  params: AadBearerToken,
+  params,
   done
 ) {
   login(app, config, client, iss, sub, profile, accessToken, refreshToken, params)
@@ -146,9 +101,9 @@ function activeDirectorySubset(
     });
 }
 
-export default function createAADStrategy(app: IReposApplication, config: SiteConfiguration) {
+export default function createAADStrategy(app, config) {
   const { redirectUrl, tenantId, clientId, clientSecret } = config.activeDirectory;
-  const codespaces = config?.github?.codespaces;
+  const codespaces = config?.github?.codespaces || {};
   if (!clientId) {
     debug('No Azure Active Directory clientID configured, corporate authentication will be unavailable.');
     return {};

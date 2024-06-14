@@ -9,7 +9,6 @@ import { IProviders, ReposAppRequest } from '../../interfaces';
 import { IndividualContext } from '../../business/user';
 import { IRequestTeamPermissions } from '../../middleware/github/teamPermissions';
 import type { ApiClientGroupDisplay } from '../api';
-import { ITeamJoinRequestSubmitOutcome } from '../../routes/org/team';
 
 export interface ICompanySpecificRepoPermissionsMiddlewareCalls {
   afterPermissionsInitialized?: (
@@ -37,11 +36,6 @@ export interface ICompanySpecificTeamPermissionsMiddlewareCalls {
     activeContext: IndividualContext,
     team: Team
   ) => Promise<void>;
-  beforeJoinRequest?: (
-    providers: IProviders,
-    activeContext: IndividualContext,
-    team: Team
-  ) => Promise<ITeamJoinRequestSubmitOutcome | void>;
 }
 
 export interface ICompanySpecificAuthenticationCalls {
@@ -52,8 +46,8 @@ export interface ICompanySpecificAuthenticationCalls {
 export interface IAadAuthenticationValidator {
   isAuthorizedTenant(tenantId: string): Promise<boolean>;
   getAudienceIdentities(): Promise<string[]>;
-  getAuthorizedClientIdToken(clientId: string): Promise<unknown>;
-  getAuthorizedObjectIdToken(objectId: string): Promise<unknown>;
+  getAuthorizedClientIdToken(clientId: string): Promise<any>;
+  getAuthorizedObjectIdToken(objectId: string): Promise<any>;
   getScopes(tokenRepresentation: any): Promise<string[]>;
   getDisplayValues(tokenRepresentation: any): Promise<ApiClientGroupDisplay>;
 }

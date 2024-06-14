@@ -147,7 +147,7 @@ This API will retrieve information about a specific user. The first API version 
 
 Where `login` is a GitHub username, case insensitive.
 
-##### Response: by GitHub username
+##### Response
 
 If a link is not found for the GitHub user
 
@@ -188,7 +188,7 @@ This API returns an array if there is at least one matching account or accounts.
 
 Where `id` is an AAD ID.
 
-##### Response: by AAD ID
+##### Response
 
 If a link is not registered for this user
 
@@ -233,7 +233,7 @@ Required API scope: `link`
 
 > POST /api/people/links
 
-#### Request: create a link
+#### Request
 
 ```text
 BODY
@@ -249,7 +249,7 @@ BODY
 
 > If the account is a Service Account, the `corporate` object should also include a field called `serviceAccountMail` that points to a contact for the service account.
 
-#### Response: create a link
+#### Response
 
 ```http
 Status: 201 OK
@@ -261,7 +261,7 @@ Status: 201 OK
 
 ### Create a repo
 
-> This API requires that your API key be authorized for the `repo/create` scope
+> This API requires that your API key be authorized for the `createRepo` scope
 
 This example uses a pure POST request plus headers for authorization:
 

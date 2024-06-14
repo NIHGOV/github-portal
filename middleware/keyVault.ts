@@ -4,7 +4,7 @@
 //
 
 import { ClientSecretCredential } from '@azure/identity';
-import { SecretClient } from '@azure/keyvault-secrets';
+import { KeyVaultSecret, SecretClient } from '@azure/keyvault-secrets';
 
 export interface IKeyVaultConfigurationOptions {
   tenantId: string;

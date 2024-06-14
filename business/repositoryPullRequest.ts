@@ -4,26 +4,26 @@
 //
 
 import { Repository } from './repository';
-import { wrapError } from '../lib/utils';
-import { AppPurpose } from '../lib/github/appPurposes';
+import { wrapError } from '../utils';
+import { AppPurpose } from './githubApps';
 import { CacheDefault, getMaxAgeSeconds } from '.';
 import {
   IOperationsInstance,
-  PurposefulGetAuthorizationHeader,
+  IPurposefulGetAuthorizationHeader,
   GitHubIssueState,
   IIssueLabel,
   throwIfNotGitHubCapable,
   ICacheOptions,
-  GetAuthorizationHeader,
+  IGetAuthorizationHeader,
 } from '../interfaces';
-import { ErrorHelper } from '../lib/transitional';
+import { ErrorHelper } from '../transitional';
 
 // Pull requests are issues but not all issues are pull requests. So this is mostly a clone of repositoryIssue.ts
 // right now, with slightly different endpoints.
 
 export class RepositoryPullRequest {
   private _operations: IOperationsInstance;
-  private _getAuthorizationHeader: PurposefulGetAuthorizationHeader;
+  private _getAuthorizationHeader: IPurposefulGetAuthorizationHeader;
 
   private _number: number;
   private _repository: Repository;
@@ -34,7 +34,7 @@ export class RepositoryPullRequest {
     repository: Repository,
     pullRequestNumber: number,
     operations: IOperationsInstance,
-    getAuthorizationHeader: PurposefulGetAuthorizationHeader,
+    getAuthorizationHeader: IPurposefulGetAuthorizationHeader,
     entity?: any
   ) {
     this._getAuthorizationHeader = getAuthorizationHeader;
@@ -219,8 +219,11 @@ export class RepositoryPullRequest {
     return false;
   }
 
-  private authorize(purpose: AppPurpose): GetAuthorizationHeader | string {
-    const getAuthorizationHeader = this._getAuthorizationHeader.bind(this, purpose) as GetAuthorizationHeader;
+  private authorize(purpose: AppPurpose): IGetAuthorizationHeader | string {
+    const getAuthorizationHeader = this._getAuthorizationHeader.bind(
+      this,
+      purpose
+    ) as IGetAuthorizationHeader;
     return getAuthorizationHeader;
   }
 }

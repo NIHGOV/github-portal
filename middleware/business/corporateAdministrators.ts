@@ -6,19 +6,17 @@
 // This route does not use GitHub as a source of truth but instead falls back to
 // corporate assigned usernames or security group membership.
 
-import { NextFunction, Response } from 'express';
-
 import { ReposAppRequest } from '../../interfaces';
-import { getProviders } from '../../lib/transitional';
+import { getProviders } from '../../transitional';
 import { IndividualContext } from '../../business/user';
-import { wrapError } from '../../lib/utils';
+import { wrapError } from '../../utils';
 import { jsonError } from '../jsonError';
 
 export interface IReposAppRequestWithSystemAdministration extends ReposAppRequest {
   isSystemAdministrator: boolean;
 }
 
-function denyRoute(next: NextFunction, isApi: boolean) {
+function denyRoute(next, isApi: boolean) {
   if (isApi) {
     return next(jsonError('This API is unavailable for you', 403));
   }
@@ -31,11 +29,7 @@ function denyRoute(next: NextFunction, isApi: boolean) {
   );
 }
 
-export async function AuthorizeOnlyCorporateAdministrators(
-  req: ReposAppRequest,
-  res: Response,
-  next: NextFunction
-) {
+export async function AuthorizeOnlyCorporateAdministrators(req: ReposAppRequest, res, next) {
   const { operations } = getProviders(req);
   const activeContext = (req.individualContext || req.apiContext) as IndividualContext;
   const corporateId = activeContext.corporateIdentity?.id;
@@ -48,8 +42,8 @@ export async function AuthorizeOnlyCorporateAdministrators(
 
 export async function checkIsCorporateAdministrator(
   req: IReposAppRequestWithSystemAdministration,
-  res: Response,
-  next: NextFunction
+  res,
+  next
 ) {
   await getIsCorporateAdministrator(req);
   return next();

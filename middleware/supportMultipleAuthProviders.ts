@@ -3,11 +3,9 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response } from 'express';
-
 import { jsonError } from './jsonError';
 import { IApiRequest } from './apiReposAuth';
-import { getProviders } from '../lib/transitional';
+import { getProviders } from '../transitional';
 
 // We have made a decision to not use Passport for the API routes, which is why this
 // performs some passport-like functionality...
@@ -26,7 +24,7 @@ export default function returnCombinedMiddleware(supportedProviders) {
   if (totalProviders <= 0) {
     throw new Error('supportedProviders must provide at least one provider to use for auth');
   }
-  return function middleware(req: IApiRequest, res: Response, next: NextFunction) {
+  return function middleware(req: IApiRequest, res, next) {
     const { insights } = getProviders(req);
     let i = 0;
     let currentProvider = supportedProviders[i];

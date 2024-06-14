@@ -5,11 +5,11 @@
 
 import _ from 'lodash';
 
-import { NextFunction, Response, Router } from 'express';
+import { Router } from 'express';
 import asyncHandler from 'express-async-handler';
 const router: Router = Router();
 
-import { hasStaticReactClientApp, getProviders } from '../lib/transitional';
+import { hasStaticReactClientApp, getProviders } from '../transitional';
 
 import { Organization } from '../business/organization';
 
@@ -27,17 +27,15 @@ import linkRoute from './link';
 import linkedUserRoute from './index-linked';
 import linkCleanupRoute from './link-cleanup';
 
-import routeSettings from './settings';
+import SettingsRoute from './settings';
 import getCompanySpecificDeployment from '../middleware/companySpecificDeployment';
 
 const hasReactApp = hasStaticReactClientApp();
 const reactRoute = hasReactApp ? injectReactClient() : undefined;
 
-import routePlaceholders from './placeholders';
-import routeReleasesSpa from './releasesSpa';
-
+import RoutePlaceholders from './placeholders';
+import RouteReleasesSpa from './releasesSpa';
 import { ReposAppRequest, UserAlertType } from '../interfaces';
-import { Repository } from '../business';
 
 // - - - Middleware: require that they have a passport - - -
 router.use(asyncHandler(requireAuthenticatedUserOrSignIn));
@@ -50,10 +48,10 @@ router.use(asyncHandler(AddLinkToRequest));
 
 router.use(asyncHandler(blockEnterpriseManagedUsersAuthentication));
 
-router.use('/placeholder', routePlaceholders);
+router.use('/placeholder', RoutePlaceholders);
 router.use('/link/cleanup', reactRoute || linkCleanupRoute);
 router.use('/link', reactRoute || linkRoute);
-router.use('/releases', reactRoute || routeReleasesSpa);
+router.use('/releases', reactRoute || RouteReleasesSpa);
 
 if (reactRoute) {
   // client-only routes
@@ -69,9 +67,9 @@ const dynamicStartupInstance = getCompanySpecificDeployment();
 dynamicStartupInstance?.routes?.connectAuthenticatedRoutes &&
   dynamicStartupInstance.routes.connectAuthenticatedRoutes(router, reactRoute);
 
-router.use('/settings', reactRoute || routeSettings);
+router.use('/settings', SettingsRoute);
 
-router.get('/news', (req: ReposAppRequest, res: Response, next: NextFunction) => {
+router.get('/news', (req: ReposAppRequest, res, next) => {
   const config = getProviders(req).config;
   if (config && config.news && config.news.all && config.news.all.length) {
     return req.individualContext.webContext.render({
@@ -83,40 +81,6 @@ router.get('/news', (req: ReposAppRequest, res: Response, next: NextFunction) =>
   }
 });
 
-router.use(
-  '/',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
-    // Helper method to allow pasting a GitHub URL into the app to go to a repo
-    const { rid, oid, action } = req.query;
-    const { operations } = getProviders(req);
-    if (!rid && !oid) {
-      return next();
-    }
-    const repositoryId = Number(rid);
-    const organizationId = Number(oid);
-    let organization: Organization = null;
-    let repository: Repository = null;
-    try {
-      organization = operations.getOrganizationById(organizationId);
-    } catch (error) {
-      // no-op continue
-      return next();
-    }
-    if (organization) {
-      try {
-        repository = await organization.getRepositoryById(repositoryId);
-        return res.redirect(
-          `/orgs/${organization.name}/repos/${repository.name}${action ? `/${action}` : ''}`
-        );
-      } catch (error) {
-        // no-op continue
-        return next();
-      }
-    }
-    return next();
-  })
-);
-
 // Link cleanups and check their signed-in username vs their link
 router.use(RequireLinkMatchesGitHubSessionExceptPrefixedRoute('/unlink'));
 
@@ -124,7 +88,7 @@ router.use(RequireLinkMatchesGitHubSessionExceptPrefixedRoute('/unlink'));
 router.get(
   '/',
   reactRoute ||
-    asyncHandler(async function (req: ReposAppRequest, res: Response, next: NextFunction) {
+    asyncHandler(async function (req: ReposAppRequest, res, next) {
       const onboarding = req.query.onboarding !== undefined;
       const individualContext = req.individualContext;
       const link = individualContext.link;

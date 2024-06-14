@@ -3,12 +3,12 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response, Router } from 'express';
+import { Router } from 'express';
 import asyncHandler from 'express-async-handler';
 const router: Router = Router();
 
 import { ReposAppRequest, UserAlertType } from '../../interfaces';
-import { CreateError, getProviders } from '../../lib/transitional';
+import { CreateError, getProviders } from '../../transitional';
 
 router.use('/:campaignGroupId', (req: ReposAppRequest, res: any, next) => {
   const { config } = getProviders(req);
@@ -25,21 +25,21 @@ router.use('/:campaignGroupId', (req: ReposAppRequest, res: any, next) => {
 
 router.get(
   '/:campaignGroupId/unsubscribe',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: ReposAppRequest, res: any, next) => {
     return await modifySubscription(true, req, res, next);
   })
 );
 
 router.get(
   '/:campaignGroupId/subscribe',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: ReposAppRequest, res: any, next) => {
     return await modifySubscription(false, req, res, next);
   })
 );
 
 router.get(
   '/:campaignGroupId',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: ReposAppRequest, res: any, next) => {
     const { campaignStateProvider } = getProviders(req);
     if (!campaignStateProvider) {
       return next(new Error('This app is not configured for campaign management'));
@@ -53,7 +53,7 @@ router.get(
       return next(new Error('Corporate authentication and identity required'));
     }
     const currentState = await campaignStateProvider.getState(corporateId, campaignGroupId);
-    return res.json(currentState) as unknown as void;
+    return res.json(currentState);
   })
 );
 

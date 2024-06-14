@@ -3,11 +3,11 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response, Router } from 'express';
+import { Router } from 'express';
 import asyncHandler from 'express-async-handler';
 
 import { jsonError } from '../../../middleware';
-import { getProviders } from '../../../lib/transitional';
+import { getProviders } from '../../../transitional';
 import LeakyLocalCache, { getLinksLightCache } from '../leakyLocalCache';
 import JsonPager from '../jsonPager';
 import {
@@ -118,7 +118,7 @@ export async function equivalentLegacyPeopleSearch(req: ReposAppRequest, options
 
 router.get(
   '/',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: ReposAppRequest, res, next) => {
     const pager = new JsonPager<OrganizationMember>(req, res);
     try {
       const searcher = await equivalentLegacyPeopleSearch(req);
@@ -142,7 +142,7 @@ router.get(
   })
 );
 
-router.use('*', (req, res: Response, next: NextFunction) => {
+router.use('*', (req, res, next) => {
   return next(jsonError('no API or function available within this people list', 404));
 });
 

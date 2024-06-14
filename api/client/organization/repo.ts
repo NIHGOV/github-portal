@@ -3,32 +3,36 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response, Router } from 'express';
+import { Router } from 'express';
 import asyncHandler from 'express-async-handler';
 
 import { jsonError } from '../../../middleware';
-import { CreateError, ErrorHelper, getProviders } from '../../../lib/transitional';
+import { ErrorHelper, getProviders } from '../../../transitional';
+import { Repository } from '../../../business';
 import { IndividualContext } from '../../../business/user';
-import NewRepositoryLockdownSystem from '../../../business/features/newRepositories/newRepositoryLockdown';
+import NewRepositoryLockdownSystem from '../../../features/newRepositories/newRepositoryLockdown';
 import {
   AddRepositoryPermissionsToRequest,
   getContextualRepositoryPermissions,
 } from '../../../middleware/github/repoPermissions';
+import { renameRepositoryDefaultBranchEndToEnd } from '../../../routes/org/repos';
 import getCompanySpecificDeployment from '../../../middleware/companySpecificDeployment';
 
 import RouteRepoPermissions from './repoPermissions';
 import {
+  ReposAppRequest,
   LocalApiRepoAction,
   getRepositoryMetadataProvider,
   NoCacheNoBackground,
-  GitHubRepositoryVisibility,
 } from '../../../interfaces';
-import { RequestWithRepo } from '../../../middleware/business/repository';
 
-enum RepositoryChangeAction {
+type RequestWithRepo = ReposAppRequest & {
+  repository: Repository;
+};
+
+enum ArchivalAction {
   Archive,
   UnArchive,
-  Privatize,
 }
 
 const router: Router = Router();
@@ -40,15 +44,15 @@ router.use('/permissions', RouteRepoPermissions);
 
 router.get(
   '/',
-  asyncHandler(async (req: RequestWithRepo, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: RequestWithRepo, res, next) => {
     const { repository } = req;
     try {
       await repository.getDetails({ backgroundRefresh: false });
       const clone = Object.assign({}, repository.getEntity());
-      delete (clone as any).temp_clone_token; // never share this back
-      delete (clone as any).cost;
+      delete clone.temp_clone_token; // never share this back
+      delete clone.cost;
 
-      return res.json(repository.getEntity()) as unknown as void;
+      return res.json(repository.getEntity());
     } catch (repoError) {
       if (ErrorHelper.IsNotFound(repoError)) {
         // // Attempt fallback by ID (?)
@@ -60,7 +64,7 @@ router.get(
 
 router.get(
   '/exists',
-  asyncHandler(async (req: RequestWithRepo, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: RequestWithRepo, res, next) => {
     let exists = false;
     let name: string = undefined;
     const { repository } = req;
@@ -77,85 +81,58 @@ router.get(
         }
       }
     } catch (repoError) {}
-    return res.json({ exists, name }) as unknown as void;
+    return res.json({ exists, name });
   })
 );
 
-router.get(
-  '/archived',
-  asyncHandler(async (req: RequestWithRepo, res: Response, next: NextFunction) => {
+router.patch(
+  '/renameDefaultBranch',
+  asyncHandler(AddRepositoryPermissionsToRequest),
+  asyncHandler(async function (req: RequestWithRepo, res, next) {
+    const providers = getProviders(req);
+    const activeContext = (req.individualContext || req.apiContext) as IndividualContext;
+    const repoPermissions = getContextualRepositoryPermissions(req);
+    const targetBranchName = req.body.default_branch;
     const { repository } = req;
     try {
-      await repository.getDetails();
-      const data = {
-        archivedAt: null,
-      };
-      if (repository?.archived) {
-        const archivedAt = await repository.getArchivedAt();
-        if (archivedAt) {
-          data.archivedAt = archivedAt.toISOString();
-        }
-      }
-      return res.json(data) as unknown as void;
+      const result = await renameRepositoryDefaultBranchEndToEnd(
+        providers,
+        activeContext,
+        repoPermissions,
+        repository,
+        targetBranchName,
+        true /* wait for refresh before sending response */
+      );
+      return res.json(result);
     } catch (error) {
-      return next(error);
+      return next(jsonError(error));
     }
   })
-);
-router.post(
-  '/privatize',
-  asyncHandler(AddRepositoryPermissionsToRequest),
-  asyncHandler(RepositoryStateChangeHandler.bind(null, RepositoryChangeAction.Privatize))
 );
 
 router.post(
   '/archive',
   asyncHandler(AddRepositoryPermissionsToRequest),
-  asyncHandler(RepositoryStateChangeHandler.bind(null, RepositoryChangeAction.Archive))
+  asyncHandler(archiveUnArchiveRepositoryHandler.bind(null, ArchivalAction.Archive))
 );
 
 router.post(
   '/unarchive',
   asyncHandler(AddRepositoryPermissionsToRequest),
-  asyncHandler(RepositoryStateChangeHandler.bind(null, RepositoryChangeAction.UnArchive))
+  asyncHandler(archiveUnArchiveRepositoryHandler.bind(null, ArchivalAction.UnArchive))
 );
 
-async function RepositoryStateChangeHandler(
-  action: RepositoryChangeAction,
-  req: RequestWithRepo,
-  res: Response,
-  next: NextFunction
-) {
+async function archiveUnArchiveRepositoryHandler(action: ArchivalAction, req: RequestWithRepo, res, next) {
   const activeContext = (req.individualContext || req.apiContext) as IndividualContext;
   const providers = getProviders(req);
   const { insights } = providers;
   const repoPermissions = getContextualRepositoryPermissions(req);
-  let phrase: string = null;
-  let insightsPrefix: string = null;
-  let localAction: LocalApiRepoAction = null;
-  switch (action) {
-    case RepositoryChangeAction.Archive:
-      phrase = 'archive';
-      insightsPrefix = 'ArchiveRepo';
-      localAction = LocalApiRepoAction.Archive;
-      break;
-    case RepositoryChangeAction.UnArchive:
-      phrase = 'unarchive';
-      insightsPrefix = 'UnArchiveRepo';
-      localAction = LocalApiRepoAction.UnArchive;
-      break;
-    case RepositoryChangeAction.Privatize:
-      phrase = 'privatize';
-      insightsPrefix = 'PrivatizeRepo';
-      localAction = LocalApiRepoAction.Privatize;
-      break;
-    default:
-      return next(jsonError('Invalid action', 400));
-  }
+  const phrase = action === ArchivalAction.Archive ? 'archive' : 'unarchive';
   const completedPhrase = `${phrase}d`;
   if (!repoPermissions.allowAdministration) {
     return next(jsonError(`You do not have permission to ${phrase} this repo`, 403));
   }
+  const insightsPrefix = `${action === ArchivalAction.UnArchive ? 'Un' : ''}ArchiveRepo`;
   const { repository } = req;
   try {
     insights?.trackEvent({
@@ -170,28 +147,16 @@ async function RepositoryStateChangeHandler(
     const currentRepositoryState = deployment?.features?.repositoryActions?.getCurrentRepositoryState
       ? await deployment.features.repositoryActions.getCurrentRepositoryState(providers, repository)
       : null;
-    switch (action) {
-      case RepositoryChangeAction.Archive: {
-        await repository.archive();
-        break;
-      }
-      case RepositoryChangeAction.UnArchive: {
-        await repository.unarchive();
-        break;
-      }
-      case RepositoryChangeAction.Privatize: {
-        await repository.update({
-          visibility: GitHubRepositoryVisibility.Private,
-        });
-        break;
-      }
-      default: {
-        return next(CreateError.InvalidParameters('Invalid action'));
-      }
-    }
+    await (action === ArchivalAction.Archive ? repository.archive() : repository.unarchive());
     if (deployment?.features?.repositoryActions?.sendActionReceipt) {
       deployment.features.repositoryActions
-        .sendActionReceipt(providers, activeContext, repository, localAction, currentRepositoryState)
+        .sendActionReceipt(
+          providers,
+          activeContext,
+          repository,
+          action === ArchivalAction.Archive ? LocalApiRepoAction.Archive : LocalApiRepoAction.UnArchive,
+          currentRepositoryState
+        )
         .then((ok) => {})
         .catch(() => {});
     }
@@ -235,7 +200,7 @@ async function RepositoryStateChangeHandler(
 router.delete(
   '/',
   asyncHandler(AddRepositoryPermissionsToRequest),
-  asyncHandler(async function (req: RequestWithRepo, res: Response, next: NextFunction) {
+  asyncHandler(async function (req: RequestWithRepo, res, next) {
     // NOTE: duplicated code from /routes/org/repos.ts
     const providers = getProviders(req);
     const { insights } = providers;
@@ -285,7 +250,7 @@ router.delete(
         });
         return res.json({
           message: `You deleted: ${repository.full_name}`,
-        }) as unknown as void;
+        });
       } catch (error) {
         insights?.trackException({ exception: error });
         insights?.trackEvent({
@@ -330,7 +295,6 @@ router.delete(
     const { operations } = getProviders(req);
     const repositoryMetadataProvider = getRepositoryMetadataProvider(operations);
     const lockdownSystem = new NewRepositoryLockdownSystem({
-      insights,
       operations,
       organization,
       repository,
@@ -342,11 +306,11 @@ router.delete(
     );
     return res.json({
       message: `You deleted your repo, ${repository.full_name}.`,
-    }) as unknown as void;
+    });
   })
 );
 
-router.use('*', (req, res: Response, next: NextFunction) => {
+router.use('*', (req, res, next) => {
   console.warn(req.baseUrl);
   return next(jsonError('no API or function available within this specific repo', 404));
 });

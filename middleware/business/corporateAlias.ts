@@ -5,7 +5,7 @@
 
 import { jsonError } from '..';
 import { IProviders, ReposAppRequest } from '../../interfaces';
-import { getProviders } from '../../lib/transitional';
+import { getProviders } from '../../transitional';
 import { IndividualContext } from '../../business/user';
 
 const cachedCorporateAliasRequestKey = '__corporateAlias';

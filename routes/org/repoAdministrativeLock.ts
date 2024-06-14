@@ -4,19 +4,19 @@
 //
 
 import asyncHandler from 'express-async-handler';
-import { NextFunction, Response, Router } from 'express';
+import { Router } from 'express';
 const router: Router = Router();
 
-import { getProviders } from '../../lib/transitional';
+import { getProviders } from '../../transitional';
 import { Repository } from '../../business/repository';
-import { RepositoryMetadataEntity } from '../../business/entities/repositoryMetadata/repositoryMetadata';
+import { RepositoryMetadataEntity } from '../../entities/repositoryMetadata/repositoryMetadata';
 import { Organization } from '../../business/organization';
-import NewRepositoryLockdownSystem from '../../business/features/newRepositories/newRepositoryLockdown';
+import NewRepositoryLockdownSystem from '../../features/newRepositories/newRepositoryLockdown';
 import { getRepositoryMetadataProvider, ReposAppRequest, UserAlertType } from '../../interfaces';
 
 router.use(
   '/',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: ReposAppRequest, res, next) => {
     const organization = req.organization as Organization;
     if (!organization.isNewRepositoryLockdownSystemEnabled()) {
       return next(new Error('This endpoint is not available as configured'));
@@ -27,7 +27,7 @@ router.use(
 
 router.use(
   '/',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: ReposAppRequest, res, next) => {
     const individualContext = req.individualContext;
     const isPortalAdministrator = await individualContext.isPortalAdministrator();
     if (!isPortalAdministrator) {
@@ -42,7 +42,7 @@ router.use(
 
 router.get(
   '/',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: ReposAppRequest, res, next) => {
     const repository = req['repository'] as Repository;
     const repositoryMetadata = req['repositoryMetadata'] as RepositoryMetadataEntity;
     return renderPage(req, repositoryMetadata, repository);
@@ -51,9 +51,9 @@ router.get(
 
 router.post(
   '/',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: ReposAppRequest, res, next) => {
     const providers = getProviders(req);
-    const { insights, operations } = providers;
+    const operations = providers.operations;
     const repository = req['repository'] as Repository;
     const entity = repository.getEntity();
     if (!entity.parent) {
@@ -68,7 +68,6 @@ router.post(
     const repositoryMetadataProvider = getRepositoryMetadataProvider(operations);
     const organization = repository.organization;
     const lockdownSystem = new NewRepositoryLockdownSystem({
-      insights,
       operations,
       organization,
       repository,

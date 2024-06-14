@@ -5,33 +5,31 @@
 
 import axios from 'axios';
 import throat from 'throat';
-import { shuffle } from 'lodash';
 
 import { Account } from '../account';
 import { GraphManager } from '../graphManager';
-import { GitHubOrganizationResponse, Organization } from '../organization';
-import { GitHubTokenManager } from '../../lib/github/tokenManager';
+import { IGitHubOrganizationResponse, Organization } from '../organization';
+import { GitHubTokenManager } from '../githubApps/tokenManager';
 import RenderHtmlMail from '../../lib/emailRender';
-import { wrapError, sortByCaseInsensitive } from '../../lib/utils';
+import { wrapError, sortByCaseInsensitive } from '../../utils';
 import { Repository } from '../repository';
 import { RestLibrary } from '../../lib/github';
 import {
-  AppPurpose,
   AppPurposeTypes,
   getAppPurposeId,
   GitHubAppAuthenticationType,
   GitHubAppPurposes,
   IGitHubAppConfiguration,
-} from '../../lib/github/appPurposes';
+} from '../githubApps';
 import {
   OrganizationFeature,
   OrganizationSetting,
-} from '../entities/organizationSettings/organizationSetting';
-import { OrganizationSettingProvider } from '../entities/organizationSettings/organizationSettingProvider';
+} from '../../entities/organizationSettings/organizationSetting';
+import { OrganizationSettingProvider } from '../../entities/organizationSettings/organizationSettingProvider';
 import { IMail } from '../../lib/mailProvider';
 import { ILinkProvider } from '../../lib/linkProviders';
 import { ICacheHelper } from '../../lib/caching';
-import { createPortalSudoInstance, IPortalSudo } from '../features';
+import { createPortalSudoInstance, IPortalSudo } from '../../features';
 import { CacheDefault, getMaxAgeSeconds, IOperationsCoreOptions, OperationsCore } from './core';
 import { linkAccounts as linkAccountsMethod } from './link';
 import { sendTerminatedAccountMail as sendTerminatedAccountMailMethod } from './unlinkMail';
@@ -44,7 +42,7 @@ import {
   ICreateLinkOptions,
   ICrossOrganizationMembershipByOrganization,
   ICrossOrganizationTeamMembership,
-  GetAuthorizationHeader,
+  IGetAuthorizationHeader,
   IGitHubAppInstallation,
   IMapPlusMetaCost,
   IOperationsCentralOperationsToken,
@@ -58,22 +56,18 @@ import {
   IOperationsTemplates,
   IPagedCrossOrganizationCacheOptions,
   IPromisedLinks,
-  PurposefulGetAuthorizationHeader,
+  IPurposefulGetAuthorizationHeader,
   ISupportedLinkTypeOutcome,
   IUnlinkMailStatus,
   NoCacheNoBackground,
   SupportedLinkType,
   UnlinkPurpose,
-  type LinkEvent,
-  type UnlinkEvent,
 } from '../../interfaces';
-import { CreateError, ErrorHelper } from '../../lib/transitional';
+import { CreateError, ErrorHelper } from '../../transitional';
 import { Team } from '../team';
-import { IRepositoryMetadataProvider } from '../entities/repositoryMetadata/repositoryMetadataProvider';
+import { IRepositoryMetadataProvider } from '../../entities/repositoryMetadata/repositoryMetadataProvider';
 import { isAuthorizedSystemAdministrator } from './administration';
 import type { ConfigGitHubOrganizationsSpecializedList } from '../../config/github.organizations.types';
-import { type GitHubTokenType, getGitHubTokenTypeFromValue } from '../../lib/github/appTokens';
-import getCompanySpecificDeployment from '../../middleware/companySpecificDeployment';
 
 export * from './core';
 
@@ -92,7 +86,13 @@ export interface ICrossOrganizationMembersResult
   extends Map<number, ICrossOrganizationMembershipByOrganization> {}
 
 export interface IOperationsOptions extends IOperationsCoreOptions {
+  // cacheProvider: ICacheHelper;
+  // config: any;
   github: RestLibrary;
+  // insights: TelemetryClient;
+  // linkProvider: ILinkProvider;
+  // mailAddressProvider: IMailAddressProvider;
+  // mailProvider: IMailProvider;
   repositoryMetadataProvider: IRepositoryMetadataProvider;
 }
 
@@ -100,12 +100,6 @@ export type GetInvisibleOrganizationOptions = {
   settings?: OrganizationSetting;
   authenticationType?: GitHubAppAuthenticationType;
   storeInstanceByName?: boolean;
-};
-
-type CreateOrganizationOptions = {
-  settings: OrganizationSetting;
-  appAuthenticationType: GitHubAppAuthenticationType;
-  asUncontrolledPublicOnly?: boolean;
 };
 
 export class Operations
@@ -128,7 +122,7 @@ export class Operations
   private _invisibleOrganizations: Map<string, Organization>;
   private _uncontrolledOrganizations: Map<string, Organization>;
   private _organizationOriginalNames: any;
-  private _organizationNamesWithAuthorizationHeaders: Map<string, PurposefulGetAuthorizationHeader>;
+  private _organizationNamesWithAuthorizationHeaders: Map<string, IPurposefulGetAuthorizationHeader>;
   private _defaultPageSize: number;
   private _organizationIds: Map<number, Organization>;
   private _organizationSettings: OrganizationSetting[];
@@ -184,10 +178,10 @@ export class Operations
       }
     }
     this._tokenManager = new GitHubTokenManager({
-      operations: this,
       configurations: purposesToConfigurations,
-      executionEnvironment: options.executionEnvironment,
+      app: this.providers.app,
     });
+    GitHubTokenManager.RegisterManagerForOperations(this, this._tokenManager);
     this._dynamicOrganizationIds = new Set();
     this._organizationSettings = [];
   }
@@ -348,46 +342,41 @@ export class Operations
     return Array.from(this._organizationIds.keys());
   }
 
-  private createOrganization(name: string, options: CreateOrganizationOptions): Organization {
+  private createOrganization(
+    name: string,
+    settings: OrganizationSetting,
+    centralOperationsFallbackToken: string,
+    appAuthenticationType: GitHubAppAuthenticationType
+  ): Organization {
     name = name.toLowerCase();
-    if (!options) {
-      throw CreateError.ParameterRequired('options');
-    }
-    const { settings, appAuthenticationType, asUncontrolledPublicOnly } = options;
     if (!settings) {
-      throw CreateError.InvalidParameters(
-        `This application does not have configuration information for the ${name} organization`
-      );
+      throw new Error(`This application is not configured for the ${name} organization`);
     }
     const ownerToken = settings.getOwnerToken();
     const hasDynamicSettings =
       this._dynamicOrganizationIds &&
       settings.organizationId &&
       this._dynamicOrganizationIds.has(Number(settings.organizationId));
-    let configuredGetAuthorizationHeader: GetAuthorizationHeader = this.getAuthorizationHeader.bind(
-      this,
-      name,
-      settings,
-      ownerToken,
-      appAuthenticationType
-    );
-    let forcedGetAuthorizationHeader: GetAuthorizationHeader = this.getAuthorizationHeader.bind(
-      this,
-      name,
-      settings,
-      ownerToken,
-      GitHubAppAuthenticationType.ForceSpecificInstallation
-    );
-    if (!ownerToken && asUncontrolledPublicOnly) {
-      configuredGetAuthorizationHeader = this.getPublicAuthorizationToken();
-      forcedGetAuthorizationHeader = configuredGetAuthorizationHeader;
-    }
     return new Organization(
       this,
       name,
       settings,
-      configuredGetAuthorizationHeader,
-      forcedGetAuthorizationHeader,
+      this.getAuthorizationHeader.bind(
+        this,
+        name,
+        settings,
+        ownerToken,
+        centralOperationsFallbackToken,
+        appAuthenticationType
+      ),
+      this.getAuthorizationHeader.bind(
+        this,
+        name,
+        settings,
+        ownerToken,
+        centralOperationsFallbackToken,
+        GitHubAppAuthenticationType.ForceSpecificInstallation
+      ),
       hasDynamicSettings
     );
   }
@@ -396,6 +385,7 @@ export class Operations
     if (!this._organizations) {
       const organizations = new Map<string, Organization>();
       const names = this.organizationNames;
+      const centralOperationsToken = this.config.github.operations.centralOperationsToken;
       for (let i = 0; i < names.length; i++) {
         const name = names[i];
         let settings: OrganizationSetting = null;
@@ -408,10 +398,12 @@ export class Operations
             settings = dos;
           }
         }
-        const organization = this.createOrganization(name, {
+        const organization = this.createOrganization(
+          name,
           settings,
-          appAuthenticationType: GitHubAppAuthenticationType.BestAvailable,
-        });
+          centralOperationsToken,
+          GitHubAppAuthenticationType.BestAvailable
+        );
         organizations.set(name, organization);
       }
       this._organizations = organizations;
@@ -430,10 +422,13 @@ export class Operations
       for (let i = 0; i < list.length; i++) {
         const settings = list[i];
         if (settings && settings.name && settings.name.toLowerCase() === lowercase) {
-          return this.createOrganization(lowercase, {
-            settings: OrganizationSetting.CreateFromStaticSettings(settings),
-            appAuthenticationType: GitHubAppAuthenticationType.BestAvailable,
-          });
+          const centralOperationsToken = this.config.github.operations.centralOperationsToken;
+          return this.createOrganization(
+            lowercase,
+            OrganizationSetting.CreateFromStaticSettings(settings),
+            centralOperationsToken,
+            GitHubAppAuthenticationType.BestAvailable
+          );
         }
       }
     }
@@ -449,10 +444,12 @@ export class Operations
   }
 
   getUnconfiguredOrganization(settings: OrganizationSetting): Organization {
-    return this.createOrganization(settings.organizationName.toLowerCase(), {
+    return this.createOrganization(
+      settings.organizationName.toLowerCase(),
       settings,
-      appAuthenticationType: GitHubAppAuthenticationType.BestAvailable,
-    });
+      null,
+      GitHubAppAuthenticationType.BestAvailable
+    );
   }
 
   // An invisible organization does not appear in the cross-organization
@@ -483,10 +480,7 @@ export class Operations
       dynamicSettings = options.settings;
     }
     const authenticationType = options?.authenticationType || GitHubAppAuthenticationType.BestAvailable;
-    const organization = this.createOrganization(name, {
-      settings: dynamicSettings,
-      appAuthenticationType: authenticationType,
-    });
+    const organization = this.createOrganization(name, dynamicSettings, null, authenticationType);
     if (!options || options?.storeInstanceByName) {
       this._invisibleOrganizations.set(name, organization);
     }
@@ -504,12 +498,13 @@ export class Operations
     }
     const emptySettings = new OrganizationSetting();
     emptySettings.operationsNotes = `Uncontrolled Organization - ${organizationName}`;
-    const asUncontrolledPublicOnly = true;
-    const org = this.createOrganization(organizationName, {
-      settings: emptySettings,
-      appAuthenticationType: GitHubAppAuthenticationType.ForceSpecificInstallation,
-      asUncontrolledPublicOnly,
-    });
+    const centralOperationsToken = this.config.github.operations.centralOperationsToken;
+    const org = this.createOrganization(
+      organizationName,
+      emptySettings,
+      centralOperationsToken,
+      GitHubAppAuthenticationType.ForceSpecificInstallation
+    );
     this._uncontrolledOrganizations.set(organizationName, org);
     org.uncontrolled = true;
     return org;
@@ -517,19 +512,18 @@ export class Operations
 
   getPublicOnlyAccessOrganization(organizationName: string, organizationId?: number): Organization {
     organizationName = organizationName.toLowerCase();
+    const emptySettings = new OrganizationSetting();
+    emptySettings.operationsNotes = `Uncontrolled public organization - ${organizationName}`;
     const publicAccessToken = this.config.github.operations.publicAccessToken;
     if (!publicAccessToken) {
-      throw CreateError.InvalidParameters('not configured for public read-only tokens');
+      throw new Error('not configured for public read-only tokens');
     }
-    const emptySettings = OrganizationSetting.CreateEmptyWithOldToken(
+    const org = this.createOrganization(
+      organizationName,
+      emptySettings,
       publicAccessToken,
-      `Uncontrolled public organization - ${organizationName}`,
-      organizationId
+      GitHubAppAuthenticationType.ForceSpecificInstallation
     );
-    const org = this.createOrganization(organizationName, {
-      settings: emptySettings,
-      appAuthenticationType: GitHubAppAuthenticationType.ForceSpecificInstallation,
-    });
     this._uncontrolledOrganizations.set(organizationName, org);
     org.uncontrolled = true;
     return org;
@@ -605,14 +599,14 @@ export class Operations
 
   get organizationNamesWithAuthorizationHeaders() {
     if (!this._organizationNamesWithAuthorizationHeaders) {
-      const tokens = new Map<string, PurposefulGetAuthorizationHeader>();
+      const tokens = new Map<string, IPurposefulGetAuthorizationHeader>();
       const visited = new Set<string>();
       for (const entry of this._organizationSettings) {
         const lowercase = entry.organizationName.toLowerCase();
         if (entry.active && !visited.has(lowercase) && !entry.hasFeature(OrganizationFeature.Invisible)) {
           visited.add(lowercase);
           const orgInstance = this.getOrganization(lowercase);
-          const token = orgInstance.getAuthorizationHeader(AppPurpose.Data);
+          const token = orgInstance.getAuthorizationHeader();
           tokens.set(lowercase, token);
         }
       }
@@ -790,6 +784,10 @@ export class Operations
     return this.config.brand.operationsMail;
   }
 
+  getInfrastructureNotificationsMail(): string {
+    return this.config.brand.infrastructureNotificationsMail || this.getOperationsMailAddress();
+  }
+
   getLinksNotificationMailAddress(): string {
     return this.config.notifications.linksMailAddress || this.getOperationsMailAddress();
   }
@@ -887,22 +885,6 @@ export class Operations
   }
 
   async getRepoById(repoId: number, options?: ICacheOptions): Promise<Repository> {
-    const { repositoryCacheProvider } = this.providers;
-    if (repositoryCacheProvider) {
-      try {
-        const cachedRepository = await repositoryCacheProvider.getRepository(String(repoId));
-        if (cachedRepository?.organizationId) {
-          const organization = this.getOrganizationById(Number(cachedRepository.organizationId));
-          return organization.repository(cachedRepository.repositoryName);
-        }
-      } catch (error) {
-        if (ErrorHelper.IsNotFound(error)) {
-          console.log(`Repository ${repoId} not found in the cache: ${error}`);
-        } else {
-          console.log(`Repository ${repoId} error retrieving from cache: ${error}`);
-        }
-      }
-    }
     const cacheOptions = options || {
       maxAgeSeconds: this.defaults.crossOrgsReposStaleSecondsPerOrg,
     };
@@ -924,46 +906,10 @@ export class Operations
     }
   }
 
-  async getOrganizationProfileById(id: number, options?: ICacheOptions): Promise<GitHubOrganizationResponse> {
-    options = options || {};
-    if (!id) {
-      throw new Error('Must provide a repository ID to retrieve the repository.');
-    }
-    const organization = this._organizationIds.get(id);
-    return this._getOrganizationProfileById(id, organization ? id : null, options);
-  }
-
-  async getOrganizationPublicProfileById(
+  async getOrganizationProfileById(
     id: number,
     options?: ICacheOptions
-  ): Promise<GitHubOrganizationResponse> {
-    options = options || {};
-    if (!id) {
-      throw new Error('Must provide a repository ID to retrieve the repository.');
-    }
-    let lookupId: number | null = this._organizationIds.get(id) ? id : null;
-    if (lookupId) {
-      const allIdsExcludingOrg = this.getOrganizationIds().filter((orgId) => orgId !== id);
-      const shuffledIds = shuffle(allIdsExcludingOrg);
-      if (shuffledIds.length > 0) {
-        lookupId = shuffledIds[0];
-      }
-    }
-    if (lookupId === null) {
-      throw CreateError.InvalidParameters(
-        'This approach requires configuring at least two organizations (getOrganizationPublicProfileById).'
-      );
-    }
-    return this._getOrganizationProfileById(id, lookupId, options);
-  }
-
-  private async _getOrganizationProfileById(
-    id: number,
-    lookupUsingIdOrCentralToken: number | null,
-    options?: ICacheOptions
-  ): Promise<GitHubOrganizationResponse> {
-    // EMU note: you need to use an EMU-installed app vs public...
-    // Cache note: this will be a cache miss if you switch between public/non-public entrypoints
+  ): Promise<IGitHubOrganizationResponse> {
     options = options || {};
     if (!id) {
       throw new Error('Must provide a repository ID to retrieve the repository.');
@@ -977,15 +923,13 @@ export class Operations
     if (options.backgroundRefresh !== undefined) {
       cacheOptions.backgroundRefresh = options.backgroundRefresh;
     }
-    const organization = this._organizationIds.get(lookupUsingIdOrCentralToken);
-    let header: GetAuthorizationHeader = null;
-    if (organization) {
-      header = organization.getAuthorizationHeader(AppPurpose.Data) as GetAuthorizationHeader;
-    } else {
-      header = this.getPublicAuthorizationToken();
-    }
     try {
-      const entity = await this.github.request(header, 'GET /organizations/:id', parameters, cacheOptions);
+      const entity = await this.github.request(
+        this.getCentralOperationsToken(),
+        'GET /organizations/:id',
+        parameters,
+        cacheOptions
+      );
       return entity;
     } catch (error) {
       if (error.status && error.status === 404) {
@@ -1298,17 +1242,11 @@ export class Operations
 
   // Eventually link/unlink should move from context into operations here to centralize more than just the events
 
-  async fireLinkEvent(value: LinkEvent): Promise<void> {
-    const companySpecific = getCompanySpecificDeployment();
-    companySpecific?.events?.linking?.onLink && companySpecific.events.linking.onLink(this.providers, value);
+  async fireLinkEvent(value): Promise<void> {
     await fireEvent(this.config, 'link', value);
   }
 
-  async fireUnlinkEvent(value: UnlinkEvent): Promise<void> {
-    const corporateId = value?.aad?.id;
-    const companySpecific = getCompanySpecificDeployment();
-    companySpecific?.events?.linking?.onUnlink &&
-      companySpecific.events.linking.onUnlink(this.providers, corporateId);
+  async fireUnlinkEvent(value): Promise<void> {
     await fireEvent(this.config, 'unlink', value);
   }
 
@@ -1341,32 +1279,19 @@ export class Operations
     return false;
   }
 
-  getPublicReadOnlyStaticToken(): GetAuthorizationHeader {
-    const { config } = this.providers;
-    if (config?.github?.operations?.publicAccessToken) {
-      const capturedToken = config.github.operations.publicAccessToken;
-      return async () => {
-        return {
-          value: `token ${capturedToken}`,
-          purpose: null,
-          source: 'public read-only token',
-        };
-      };
-    }
-    throw CreateError.InvalidParameters('No configured read-only static token');
+  getCentralOperationsToken(): IGetAuthorizationHeader {
+    const func = getCentralOperationsAuthorizationHeader.bind(null, this) as IGetAuthorizationHeader;
+    return func;
   }
 
-  getPublicAuthorizationToken(): GetAuthorizationHeader {
-    try {
-      return this._tokenManager.getAuthorizationHeaderForAnyApp.bind(this._tokenManager);
-    } catch (error) {
-      return this.getPublicReadOnlyStaticToken();
-    }
+  getPublicReadOnlyToken(): IGetAuthorizationHeader {
+    const func = getReadOnlyAuthorizationHeader.bind(null, this) as IGetAuthorizationHeader;
+    return func;
   }
 
   getAccount(id: string) {
     const entity = { id };
-    return new Account(entity, this, this.getPublicAuthorizationToken.bind(this));
+    return new Account(entity, this, getCentralOperationsAuthorizationHeader.bind(null, this));
   }
 
   async getAccountWithDetailsAndLink(id: string): Promise<Account> {
@@ -1375,27 +1300,14 @@ export class Operations
   }
 
   async getAuthenticatedAccount(token: string): Promise<Account> {
-    // Returns an account instance based on the account identified in the token.
     const github = this.github;
     const parameters = {};
-    const fullToken = `token ${token}`;
-    let tokenType: GitHubTokenType = null;
     try {
-      tokenType = getGitHubTokenTypeFromValue(fullToken);
-    } catch (error) {
-      // ignoring any issue here on identifying the type of token
-    }
-    try {
-      const entity = await github.post(fullToken, 'users.getAuthenticated', parameters);
-      const account = new Account(entity, this, this.getPublicAuthorizationToken.bind(this));
+      const entity = await github.post(`token ${token}`, 'users.getAuthenticated', parameters);
+      const account = new Account(entity, this, getCentralOperationsAuthorizationHeader.bind(null, this));
       return account;
     } catch (error) {
-      throw wrapError(
-        error,
-        `Could not get details about the authenticated account${
-          tokenType ? ' using token type "' + tokenType + '"' : '.'
-        }`
-      );
+      throw wrapError(error, 'Could not get details about the authenticated account');
     }
   }
 
@@ -1507,6 +1419,42 @@ async function fireEvent(config, configurationName, value): Promise<IFireEventRe
     }
   }
   return results;
+}
+
+export function getReadOnlyAuthorizationHeader(self: Operations): IPurposefulGetAuthorizationHeader {
+  const s = (self || this) as Operations;
+  if (s.config?.github?.operations?.publicAccessToken) {
+    const capturedToken = s.config.github.operations.publicAccessToken;
+    return async () => {
+      return {
+        value: `token ${capturedToken}`,
+        purpose: null,
+        source: 'public read-only token',
+      };
+    };
+  } else {
+    throw new Error('No public read-only token configured.');
+  }
+}
+
+export function getCentralOperationsAuthorizationHeader(self: Operations): IPurposefulGetAuthorizationHeader {
+  const s = (self || this) as Operations;
+  if (s.config.github && s.config.github.operations && s.config.github.operations.centralOperationsToken) {
+    const capturedToken = s.config.github.operations.centralOperationsToken;
+    return async () => {
+      return {
+        value: `token ${capturedToken}`,
+        purpose: null, // legacy
+        source: 'central operations token',
+      };
+    };
+  } else if (s.getOrganizations().length === 0) {
+    throw new Error('No central operations token nor any organizations configured.');
+  }
+  // Fallback to the first configured organization as a convenience
+  // CONSIDER: would randomizing the organization be better, or a priority based on known-rate limit remaining?
+  const firstOrganization = s.getOrganizations()[0];
+  return firstOrganization.getAuthorizationHeader();
 }
 
 function crossOrganizationResults(operations: Operations, results, keyProperty) {

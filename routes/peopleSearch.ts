@@ -3,11 +3,11 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response, Router } from 'express';
+import { Router } from 'express';
 import asyncHandler from 'express-async-handler';
 const router: Router = Router();
 
-import { getProviders } from '../lib/transitional';
+import { getProviders } from '../transitional';
 import { RequestWithSystemwidePermissions, RequestTeamMemberAddType } from '../interfaces';
 import { ensureAllLinksInMemory, getAllLinksFromRequest } from '../middleware/business/allLinks';
 
@@ -75,7 +75,7 @@ async function getPeopleAcrossOrganizations(
 router.get(
   '/',
   lowercaser(['sort']),
-  asyncHandler(async (req: IPeopleSearchRequest, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: IPeopleSearchRequest, res, next) => {
     const linksFromMiddleware = getAllLinksFromRequest(req);
     const { operations } = getProviders(req);
     const org = req.organization ? req.organization.name : null;

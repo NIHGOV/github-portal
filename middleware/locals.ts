@@ -4,12 +4,11 @@
 //
 
 import os from 'os';
-import { NextFunction, Response } from 'express';
-
 import { ReposAppRequest } from '../interfaces';
-import { getProviders } from '../lib/transitional';
 
-export default function (req: ReposAppRequest, res: Response, next: NextFunction) {
+import { getProviders } from '../transitional';
+
+export default function (req: ReposAppRequest, res, next) {
   const { config, viewServices } = getProviders(req);
   req.app.locals.correlationId = req.correlationId;
   req.app.locals.scrubbedUrl = req.scrubbedUrl;

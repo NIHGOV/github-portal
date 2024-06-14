@@ -3,9 +3,7 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response } from 'express';
-
-import { getProviders } from '../lib/transitional';
+import { getProviders } from '../transitional';
 
 interface ICampaignData {
   uri?: any;
@@ -25,7 +23,7 @@ export default function initializeCampaigns(app) {
   // come through the app.
   app.use('*', campaignMiddleware);
 
-  function campaignMiddleware(req, res: Response, next: NextFunction) {
+  function campaignMiddleware(req, res, next) {
     process.nextTick(processCampaignTelemetry.bind(null, req));
 
     // Immediate return to keep middleware going

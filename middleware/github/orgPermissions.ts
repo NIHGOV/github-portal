@@ -3,10 +3,8 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response } from 'express';
-
 import { OrganizationMembershipState, ReposAppRequest } from '../../interfaces';
-import { wrapError } from '../../lib/utils';
+import { wrapError } from '../../utils';
 
 const orgPermissionsCacheKeyName = 'orgPermissions';
 const orgOwnersCacheKeyName = 'orgOwners';
@@ -23,11 +21,7 @@ export function GetOrganizationPermissionsFromRequest(req: ReposAppRequest) {
   return req[orgPermissionsCacheKeyName];
 }
 
-export async function AddOrganizationPermissionsToRequest(
-  req: ReposAppRequest,
-  res: Response,
-  next: NextFunction
-) {
+export async function AddOrganizationPermissionsToRequest(req: ReposAppRequest, res, next) {
   // Only compute once per request
   if (req[orgPermissionsCacheKeyName]) {
     return next();

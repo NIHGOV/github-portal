@@ -13,16 +13,16 @@ import Debug from 'debug';
 const debug = Debug.debug('restapi');
 
 import {
-  ShouldServeCache,
+  IShouldServeCache,
   ApiContext,
   IntelligentEngine,
   IApiContextRedisKeys,
   IApiContextCacheValues,
   ApiContextType,
-  RestMetadata,
-  RestResponse,
+  IRestMetadata,
+  IRestResponse,
 } from './core';
-import { GetAuthorizationHeader } from '../../interfaces';
+import { IGetAuthorizationHeader } from '../../interfaces';
 
 import appPackage from '../../package.json';
 
@@ -34,7 +34,7 @@ const acceleratedExpirationMinutes = 60; // 1 hour
 export class CompositeApiContext extends ApiContext {
   private _apiMethod: any;
   private _apiTypePrefix: string;
-  private _token: string | GetAuthorizationHeader;
+  private _token: string | IGetAuthorizationHeader;
   private _cacheValues: IApiContextCacheValues;
   private _redisKeys: IApiContextRedisKeys;
 
@@ -74,11 +74,11 @@ export class CompositeApiContext extends ApiContext {
     return this._cacheValues;
   }
 
-  get token(): string | GetAuthorizationHeader {
+  get token(): string | IGetAuthorizationHeader {
     return this._token;
   }
 
-  overrideToken(token: string | GetAuthorizationHeader) {
+  overrideToken(token: string | IGetAuthorizationHeader) {
     this._token = token;
   }
 
@@ -98,12 +98,12 @@ export class CompositeApiContext extends ApiContext {
 export class CompositeIntelligentEngine extends IntelligentEngine {
   withMetadataShouldCacheBeServed(
     apiContext: ApiContext,
-    metadata: RestMetadata
-  ): boolean | ShouldServeCache {
+    metadata: IRestMetadata
+  ): boolean | IShouldServeCache {
     // result can be falsy OR an object; { cache: true, refresh: true }
     // cache: whether to use the cache, if available
     // refresh: whether to refresh in the background for a newer value
-    let shouldServeCache: ShouldServeCache | boolean = false;
+    let shouldServeCache: IShouldServeCache | boolean = false;
     const maxAgeSeconds = apiContext.maxAgeSeconds;
     const updatedIso = metadata ? metadata.updated : null;
     const refreshingIso = metadata ? metadata.refreshing : null;
@@ -173,7 +173,7 @@ export class CompositeIntelligentEngine extends IntelligentEngine {
     return shouldServeCache;
   }
 
-  withResponseShouldCacheBeServed(apiContext: ApiContext, response: RestResponse) {
+  withResponseShouldCacheBeServed(apiContext: ApiContext, response: IRestResponse) {
     if (typeof response === 'function') {
       throw new Error('The response must not be a function');
     }
@@ -198,16 +198,16 @@ export class CompositeIntelligentEngine extends IntelligentEngine {
     return shouldUseCache;
   }
 
-  optionalStripResponse(apiContext: ApiContext, response: RestResponse): RestResponse {
+  optionalStripResponse(apiContext: ApiContext, response: IRestResponse): IRestResponse {
     // Composite does not strip any results further before caching
     return response;
   }
 
-  withResponseUpdateMetadata(apiContext: ApiContext, response: RestResponse) {
+  withResponseUpdateMetadata(apiContext: ApiContext, response: IRestResponse) {
     return response;
   }
 
-  reduceMetadataToCacheFromResponse(apiContext: ApiContext, response: RestResponse) {
+  reduceMetadataToCacheFromResponse(apiContext: ApiContext, response: IRestResponse) {
     // No reduction for object type metadata.
     // Store the app version in case it is needed for a future
     // schema update or cache invalidation
@@ -217,7 +217,7 @@ export class CompositeIntelligentEngine extends IntelligentEngine {
     }
   }
 
-  async callApi(apiContext: CompositeApiContext): Promise<RestResponse> {
+  async callApi(apiContext: CompositeApiContext): Promise<IRestResponse> {
     const args = [];
     const apiMethod = apiContext.apiMethod;
     if (apiContext.token) {
@@ -232,10 +232,10 @@ export class CompositeIntelligentEngine extends IntelligentEngine {
     } catch (applyError) {
       throw applyError;
     }
-    return unknown as RestResponse;
+    return unknown as IRestResponse;
   }
 
-  getResponseMetadata(apiContext: CompositeApiContext, response: RestResponse): RestMetadata {
+  getResponseMetadata(apiContext: CompositeApiContext, response: IRestResponse): IRestMetadata {
     const headers = response.headers || {};
     const calledTime = apiContext.calledTime ? apiContext.calledTime.toISOString() : new Date().toISOString();
     headers.updated = calledTime;
@@ -251,7 +251,7 @@ export class CompositeIntelligentEngine extends IntelligentEngine {
     return headers;
   }
 
-  processMetadataBeforeCall(apiContext: CompositeApiContext, metadata: RestMetadata) {
+  processMetadataBeforeCall(apiContext: CompositeApiContext, metadata: IRestMetadata) {
     if (metadata && !metadata.av) {
       // Old version of metadata, no package version, which is required for all composite metadata now
       metadata = undefined;

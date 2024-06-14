@@ -5,21 +5,10 @@
 
 import { Strategy as GithubStrategy } from 'passport-github';
 
-import {
-  getCodespacesHostname,
-  isCodespacesAuthenticating,
-  isEnterpriseManagedUserLogin,
-} from '../../lib/utils';
-import type {
-  IGitHubAccountDetails,
-  IProviders,
-  IReposApplication,
-  SiteConfiguration,
-} from '../../interfaces';
-import type { ConfigGitHubCodespaces } from '../../config/github.codespaces.types';
+import { IGitHubAccountDetails, IProviders } from '../../interfaces';
+import { getCodespacesHostname, isCodespacesAuthenticating, isEnterpriseManagedUserLogin } from '../../utils';
 
 import Debug from 'debug';
-import { ConfigGitHubOAuth2 } from '../../config/github.oauth2.types';
 const debug = Debug.debug('startup');
 
 export const githubStrategyName = 'github';
@@ -66,7 +55,7 @@ function impersonatedIdentityFromDetails(
 }
 
 function githubResponseToSubset(
-  app: IReposApplication,
+  app,
   modernAppInUse: boolean,
   accessToken: string,
   refreshToken: string,
@@ -84,7 +73,7 @@ function githubResponseToSubset(
 }
 
 async function githubResponseToSubsetEx(
-  app: IReposApplication,
+  app,
   modernAppInUse: boolean,
   accessToken: string,
   refreshToken: string,
@@ -153,7 +142,7 @@ function githubResponseToIncreasedScopeSubset(
   return done(null, subset);
 }
 
-export function getGithubAppConfigurationOptions(config: SiteConfiguration) {
+export function getGithubAppConfigurationOptions(config) {
   let legacyOAuthApp =
     config?.github?.oauth2?.clientId && config?.github?.oauth2?.clientSecret ? config.github.oauth2 : null;
   const customerFacingApp =
@@ -179,9 +168,9 @@ export function getGithubAppConfigurationOptions(config: SiteConfiguration) {
   };
 }
 
-export default function createGithubStrategy(app: IReposApplication, config: SiteConfiguration) {
+export default function createGithubStrategy(app, config) {
   const strategies = {};
-  const codespaces = config?.github?.codespaces || ({} as ConfigGitHubCodespaces);
+  const codespaces = config?.github?.codespaces || {};
   const { modernAppInUse, githubAppConfiguration, useIncreasedScopeLegacyAppIfNeeded } =
     getGithubAppConfigurationOptions(config);
   if (!githubAppConfiguration?.clientId) {
@@ -194,7 +183,7 @@ export default function createGithubStrategy(app: IReposApplication, config: Sit
   const finalCallbackUrl =
     isCodespacesAuthenticating(config, 'github') && !codespaces?.block
       ? getCodespacesHostname(config) + redirectSuffix
-      : (githubAppConfiguration as ConfigGitHubOAuth2)?.callbackUrl;
+      : githubAppConfiguration.callbackUrl;
   let clientId = githubAppConfiguration.clientId;
   let clientSecret = githubAppConfiguration.clientSecret;
   let codespacesOverrideText = '';

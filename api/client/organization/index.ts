@@ -3,13 +3,13 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response, Router } from 'express';
+import { Router } from 'express';
 import asyncHandler from 'express-async-handler';
 
 import { ReposAppRequest } from '../../../interfaces';
 import { jsonError } from '../../../middleware';
 import getCompanySpecificDeployment from '../../../middleware/companySpecificDeployment';
-import { getProviders } from '../../../lib/transitional';
+import { getProviders } from '../../../transitional';
 import {
   blockIfUnmanagedOrganization,
   IReposAppRequestWithOrganizationManagementType,
@@ -32,14 +32,14 @@ router.get(
   asyncHandler(async (req: IReposAppRequestWithOrganizationManagementType, res) => {
     const { organization, organizationProfile, organizationManagementType } = req;
     if (organizationManagementType === OrganizationManagementType.Unmanaged) {
-      return res.json(organizationProfile) as unknown as void;
+      return res.json(organizationProfile);
     }
     const entity = organization.getEntity();
     if (entity) {
-      return res.json(entity) as unknown as void;
+      return res.json(entity);
     }
     const details = await organization.getDetails();
-    return res.json(details) as unknown as void;
+    return res.json(details);
   })
 );
 
@@ -63,21 +63,19 @@ asClientJson() {
 */
 router.get(
   '/',
-  asyncHandler(
-    async (req: IReposAppRequestWithOrganizationManagementType, res: Response, next: NextFunction) => {
-      const { organization, organizationProfile, organizationManagementType } = req;
-      if (organizationManagementType === OrganizationManagementType.Unmanaged) {
-        return res.json({
-          managementType: req.organizationManagementType,
-          id: organizationProfile.id,
-        }) as unknown as void;
-      }
+  asyncHandler(async (req: IReposAppRequestWithOrganizationManagementType, res, next) => {
+    const { organization, organizationProfile, organizationManagementType } = req;
+    if (organizationManagementType === OrganizationManagementType.Unmanaged) {
       return res.json({
         managementType: req.organizationManagementType,
-        ...organization.asClientJson(),
-      }) as unknown as void;
+        id: organizationProfile.id,
+      });
     }
-  )
+    return res.json({
+      managementType: req.organizationManagementType,
+      ...organization.asClientJson(),
+    });
+  })
 );
 
 router.use('/annotations', routeAnnotations);
@@ -95,7 +93,7 @@ router.get('/newRepoBanner', (req: ReposAppRequest, res) => {
   return res.json({ newRepositoriesOffline });
 });
 
-router.use('*', (req, res: Response, next: NextFunction) => {
+router.use('*', (req, res, next) => {
   return next(jsonError('no API or function available', 404));
 });
 

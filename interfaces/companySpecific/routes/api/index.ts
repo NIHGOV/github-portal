@@ -22,7 +22,6 @@ export interface IAttachCompanySpecificRoutesApiContextual {
 export interface IAttachCompanySpecificRoutesApiContextualOrganization {
   index?: ConnectRouter;
   repo?: ConnectRouter;
-  team?: ConnectRouter;
 }
 
 export interface IAttachCompanySpecificRoutesApiContextualAdministration {

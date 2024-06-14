@@ -3,7 +3,7 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response, Router } from 'express';
+import { Router } from 'express';
 import asyncHandler from 'express-async-handler';
 
 import {
@@ -12,9 +12,8 @@ import {
   requireAccessTokenClient,
   setIdentity,
   jsonError,
-  requireAuthenticatedUserOrSignIn,
 } from '../../middleware';
-import { getProviders } from '../../lib/transitional';
+import { getProviders } from '../../transitional';
 
 import getCompanySpecificDeployment from '../../middleware/companySpecificDeployment';
 
@@ -31,19 +30,13 @@ import routeNews from './news';
 import routeCrossOrganizationPeople from './people';
 import routeCrossOrganizationRepos from './repos';
 import routeCrossOrganizationTeams from './teams';
-import routeUsers from './users';
 
 const router: Router = Router();
 
-router.use((req: ReposAppRequest, res: Response, next: NextFunction) => {
+router.use((req: ReposAppRequest, res, next) => {
   const { config } = getProviders(req);
   if (config?.features?.allowApiClient) {
-    if (req.isAuthenticated()) {
-      return next();
-    } else if (req.query.authenticate === 'session') {
-      return requireAuthenticatedUserOrSignIn(req, res, next);
-    }
-    return next(jsonError('Session is not authenticated', 401));
+    return req.isAuthenticated() ? next() : next(jsonError('Session is not authenticated', 401));
   }
   return next(jsonError('Client API features unavailable', 403));
 });
@@ -64,7 +57,6 @@ router.use('/signout', routeSession);
 router.use('/people', routeCrossOrganizationPeople);
 router.use('/repos', routeCrossOrganizationRepos);
 router.use('/teams', routeCrossOrganizationTeams);
-router.use('/users', routeUsers);
 router.use('/news', routeNews);
 
 const dynamicStartupInstance = getCompanySpecificDeployment();
@@ -89,7 +81,7 @@ router.get('/', (req: ReposAppRequest, res) => {
       appService: config?.webServer?.appService?.name
         ? {
             name: config?.webServer?.appService?.name,
-            slot: config?.webServer?.appService?.advanced?.slotType || config?.webServer?.appService?.slot,
+            slot: config?.webServer?.appService?.slot,
             region: config?.webServer?.appService?.region,
           }
         : undefined,
@@ -128,7 +120,7 @@ router.get('/', (req: ReposAppRequest, res) => {
   return res.send(JSON.stringify(data, null, 2));
 });
 
-router.use((req, res: Response, next: NextFunction) => {
+router.use((req, res, next) => {
   return next(jsonError('The resource or endpoint you are looking for is not there', 404));
 });
 

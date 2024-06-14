@@ -4,11 +4,11 @@
 //
 
 import { CacheDefault, getMaxAgeSeconds, RepositoryIssue } from '.';
-import { AppPurpose, AppPurposeTypes } from '../lib/github/appPurposes';
+import { AppPurpose, AppPurposeTypes } from './githubApps';
 import {
   IOperationsInstance,
-  PurposefulGetAuthorizationHeader,
-  GetAuthorizationHeader,
+  IPurposefulGetAuthorizationHeader,
+  IGetAuthorizationHeader,
   ICacheOptionsWithPurpose,
   throwIfNotGitHubCapable,
   ICacheOptions,
@@ -16,11 +16,11 @@ import {
 import { augmentInertiaPreview, RepositoryProject } from './repositoryProject';
 import { RepositoryProjectCard } from './repositoryProjectCard';
 import * as common from './common';
-import { CreateError } from '../lib/transitional';
+import { CreateError } from '../transitional';
 
 export class RepositoryProjectColumn {
   private _operations: IOperationsInstance;
-  private _getSpecificAuthorizationHeader: PurposefulGetAuthorizationHeader;
+  private _getSpecificAuthorizationHeader: IPurposefulGetAuthorizationHeader;
 
   private _id: number;
   private _project: RepositoryProject;
@@ -31,7 +31,7 @@ export class RepositoryProjectColumn {
     project: RepositoryProject,
     columnId: number,
     operations: IOperationsInstance,
-    getSpecificAuthorizationHeader: PurposefulGetAuthorizationHeader,
+    getSpecificAuthorizationHeader: IPurposefulGetAuthorizationHeader,
     entity?: any
   ) {
     this._getSpecificAuthorizationHeader = getSpecificAuthorizationHeader;
@@ -136,11 +136,11 @@ export class RepositoryProjectColumn {
     return card;
   }
 
-  private authorizeSpecificPurpose(purpose: AppPurposeTypes): GetAuthorizationHeader | string {
+  private authorizeSpecificPurpose(purpose: AppPurposeTypes): IGetAuthorizationHeader | string {
     const getAuthorizationHeader = this._getSpecificAuthorizationHeader.bind(
       this,
       purpose
-    ) as GetAuthorizationHeader;
+    ) as IGetAuthorizationHeader;
     return getAuthorizationHeader;
   }
 }

@@ -3,46 +3,33 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response, Router } from 'express';
+import { Router } from 'express';
 import asyncHandler from 'express-async-handler';
 
 import { getContextualTeam } from '../../../middleware/github/teamPermissions';
 
 import { jsonError } from '../../../middleware';
-import { getProviders } from '../../../lib/transitional';
+import { getProviders } from '../../../transitional';
 import JsonPager from '../jsonPager';
 import { getLinksLightCache } from '../leakyLocalCache';
 import { equivalentLegacyPeopleSearch } from './people';
 import { TeamRepositoryPermission, OrganizationMember, corporateLinkToJson } from '../../../business';
 import { ReposAppRequest, TeamJsonFormat, NoCacheNoBackground, ICorporateLink } from '../../../interfaces';
-import { sortRepositoriesByNameCaseInsensitive } from '../../../lib/utils';
-import getCompanySpecificDeployment from '../../../middleware/companySpecificDeployment';
+import { sortRepositoriesByNameCaseInsensitive } from '../../../utils';
 
 const router: Router = Router();
 
 router.get(
   '/',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
-    const providers = getProviders(req);
+  asyncHandler(async (req: ReposAppRequest, res, next) => {
     const team = getContextualTeam(req);
-    const format = TeamJsonFormat.Augmented; // includes corporateMetadata
-    let json = team.asJson(format);
-    const companySpecific = getCompanySpecificDeployment();
-    if (companySpecific?.features?.augmentApiMetadata?.augmentTeamClientJson) {
-      json = await companySpecific.features.augmentApiMetadata.augmentTeamClientJson(
-        providers,
-        team,
-        json,
-        format
-      );
-    }
-    return res.json(json) as unknown as void;
+    return res.json(team.asJson(TeamJsonFormat.Augmented /* includes corporateMetadata */));
   })
 );
 
 router.get(
   '/repos',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: ReposAppRequest, res, next) => {
     try {
       const forceRefresh = !!req.query.refresh;
       const pager = new JsonPager<TeamRepositoryPermission>(req, res);
@@ -69,7 +56,7 @@ router.get(
 
 router.get(
   '/members',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: ReposAppRequest, res, next) => {
     try {
       const forceRefresh = !!req.query.refresh;
       const team = getContextualTeam(req);
@@ -97,7 +84,7 @@ router.get(
 
 router.get(
   '/maintainers',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: ReposAppRequest, res, next) => {
     const { operations } = getProviders(req);
     try {
       const forceRefresh = !!req.query.refresh;
@@ -121,14 +108,14 @@ router.get(
             link: corporateLinkToJson(ls.get(Number(maintainer.id))),
           };
         })
-      ) as unknown as void;
+      );
     } catch (error) {
       return next(error);
     }
   })
 );
 
-router.use('*', (req, res: Response, next: NextFunction) => {
+router.use('*', (req, res, next) => {
   return next(jsonError('no API or function available for this specific team', 404));
 });
 

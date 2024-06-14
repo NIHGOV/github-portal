@@ -3,21 +3,14 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { Application, Response, NextFunction } from 'express';
+import { Application } from 'express';
+import { IProviders } from './providers';
 
-import type { IProviders } from './providers';
-import type { RuntimeConfiguration, SiteConfiguration } from './config';
-import type { ReposAppRequest } from './web';
+import type { RuntimeConfiguration } from './config';
 
-export type ApplicationProfile = {
+export interface IApplicationProfile {
   applicationName: string;
-  customErrorHandlerRender?: (
-    errorView: unknown,
-    err: Error,
-    req: ReposAppRequest,
-    res: Response,
-    next: NextFunction
-  ) => Promise<void | unknown>;
+  customErrorHandlerRender?: (errorView: any, err: Error, req: any, res: any, next: any) => Promise<void>;
   customRoutes?: () => Promise<void>;
   logDependencies: boolean;
   serveClientAssets: boolean;
@@ -26,7 +19,7 @@ export type ApplicationProfile = {
   startup?: (providers: IProviders) => Promise<void>;
   sessions: boolean;
   webServer: boolean;
-};
+}
 
 export interface IReposApplication extends Application {
   // Standard Express
@@ -34,41 +27,22 @@ export interface IReposApplication extends Application {
 
   // Local things
   providers: IProviders;
-  config: SiteConfiguration;
+  config: any;
   isBackgroundJob: boolean;
   enableAllGitHubApps: boolean;
   runtimeConfiguration: RuntimeConfiguration;
 
-  executionEnvironment: ExecutionEnvironment;
-
   startServer: () => Promise<void>;
 
-  initializeApplication: (
-    executionEnvironment: ExecutionEnvironment,
-    config: SiteConfiguration,
-    configurationError: Error
-  ) => Promise<IReposApplication>;
-
+  initializeApplication: (config: any, configurationError: Error) => Promise<IReposApplication>;
+  initializeJob: (config: any, configurationError: Error) => Promise<IReposApplication>;
   startupApplication: () => Promise<IReposApplication>;
+  startupJob: () => Promise<IReposApplication>;
   runJob: (
     job: (job: IReposJob) => Promise<IReposJobResult | void>,
     options?: IReposJobOptions
-  ) => Promise<IReposJobResult | void>;
+  ) => Promise<IReposApplication>;
 }
-
-export type ExecutionEnvironment = {
-  isJob: boolean;
-  enableAllGitHubApps: boolean;
-
-  expressApplication: IReposApplication | null;
-
-  providers: IProviders;
-  skipModules: Set<string>;
-
-  entrypointName: string;
-
-  started: Date;
-};
 
 export interface IReposJob {
   app: IReposApplication;
@@ -76,8 +50,6 @@ export interface IReposJob {
   providers: IProviders;
   parameters: any;
   args: string[];
-
-  executionEnvironment: ExecutionEnvironment;
 }
 
 export interface IReposJobResult {
@@ -90,5 +62,4 @@ export interface IReposJobOptions {
   insightsPrefix?: string;
   parameters?: any;
   enableAllGitHubApps?: boolean;
-  name?: string;
 }

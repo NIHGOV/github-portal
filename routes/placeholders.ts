@@ -3,11 +3,11 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response, Router } from 'express';
+import { Router } from 'express';
 const router: Router = Router();
 
 import { ReposAppRequest } from '../interfaces';
-import { getProviders } from '../lib/transitional';
+import { getProviders } from '../transitional';
 
 // These are Microsoft-specific, we'll remove these eventually.
 // TODO: remove from open source version since not helpful having random routes in place

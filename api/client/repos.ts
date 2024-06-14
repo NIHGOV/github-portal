@@ -3,13 +3,13 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response, Router } from 'express';
+import { Router } from 'express';
 import asyncHandler from 'express-async-handler';
 
 import { Repository } from '../../business';
 import { ReposAppRequest } from '../../interfaces';
 import { jsonError } from '../../middleware';
-import { getProviders } from '../../lib/transitional';
+import { getProviders } from '../../transitional';
 import JsonPager from './jsonPager';
 import { RepositorySearchSortOrder, searchRepos } from './organization/repos';
 
@@ -17,7 +17,7 @@ const router: Router = Router();
 
 router.get(
   '/',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: ReposAppRequest, res, next) => {
     const providers = getProviders(req);
     const pager = new JsonPager<Repository>(req, res);
     const searchOptions = {
@@ -39,7 +39,7 @@ router.get(
   })
 );
 
-router.use('*', (req, res: Response, next: NextFunction) => {
+router.use('*', (req, res, next) => {
   return next(jsonError('no API or function available within this cross-organization repps list', 404));
 });
 

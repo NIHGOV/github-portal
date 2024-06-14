@@ -4,11 +4,10 @@
 //
 
 import { Request, Router } from 'express';
-import asyncHandler from 'express-async-handler';
 const router: Router = Router();
 
 import { IAppSession, ReposAppRequest } from '../interfaces';
-import { CreateError, getProviders } from '../lib/transitional';
+import { getProviders } from '../transitional';
 
 const redacted = '*****';
 
@@ -96,16 +95,5 @@ router.get('/', (req: IRequestWithSession, res) => {
     title: 'Open Source Portal for GitHub - ' + config.brand.companyName,
   });
 });
-
-router.get(
-  '/advanced',
-  asyncHandler(async (req: ReposAppRequest, res, next) => {
-    if (req.user?.azure?.oid !== 'b9f9877e-1cae-445e-bc28-3c943078c8e7') {
-      return next(CreateError.NotAuthorized('You are not authorized to view this page.'));
-    }
-    const obj: any = Object.assign({}, process.env);
-    return res.json(obj) as unknown as void;
-  })
-);
 
 export default router;

@@ -3,15 +3,14 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { OrganizationSetting } from './entities/organizationSettings/organizationSetting';
 import {
   IOperationsGitHubRestLibrary,
   IOperationsDefaultCacheTimes,
-  GetAuthorizationHeader,
+  IGetAuthorizationHeader,
   IGitHubAppInstallation,
   ICacheOptions,
 } from '../interfaces';
-import { wrapError } from '../lib/utils';
+import { wrapError } from '../utils';
 
 const primaryInstallationProperties = [
   'id',
@@ -23,34 +22,13 @@ const primaryInstallationProperties = [
   'events',
 ];
 
-export type GitHubAppDefinition = {
-  id: number;
-  slug: string;
-  friendlyName: string;
-};
-
-export function isInstallationConfigured(
-  settings: OrganizationSetting,
-  installation: IGitHubAppInstallation
-): boolean {
-  if (!settings || !settings.installations) {
-    return false;
-  }
-  for (const install of settings.installations) {
-    if (install.installationId === installation.id) {
-      return true;
-    }
-  }
-  return false;
-}
-
 export default class GitHubApplication {
   constructor(
     private operations: IOperationsGitHubRestLibrary & IOperationsDefaultCacheTimes,
     public id: number,
     public slug: string,
     public friendlyName: string,
-    private getAuthorizationHeader: GetAuthorizationHeader
+    private getAuthorizationHeader: IGetAuthorizationHeader
   ) {}
 
   static PrimaryInstallationProperties = primaryInstallationProperties;
@@ -72,14 +50,6 @@ export default class GitHubApplication {
     //   invalid.push(`This app can only be installed at the organization scope (all repos), please update the settings for the installation.`);
     // }
     return invalid;
-  }
-
-  asClientJson(): GitHubAppDefinition {
-    return {
-      id: this.id,
-      slug: this.slug,
-      friendlyName: this.friendlyName,
-    };
   }
 
   async getInstallation(installationId: number, options?: ICacheOptions): Promise<IGitHubAppInstallation> {
@@ -115,7 +85,7 @@ export default class GitHubApplication {
   async getInstallations(options?: ICacheOptions): Promise<IGitHubAppInstallation[]> {
     options = options || {};
     const operations = this.operations;
-    const getAuthorizationHeader = this.getAuthorizationHeader.bind(this) as GetAuthorizationHeader;
+    const getAuthorizationHeader = this.getAuthorizationHeader.bind(this) as IGetAuthorizationHeader;
     const github = operations.github;
     const caching = {
       maxAgeSeconds: options.maxAgeSeconds || operations.defaults.orgRepoDetailsStaleSeconds, // borrowing from another value
@@ -132,8 +102,8 @@ export default class GitHubApplication {
     return installations;
   }
 
-  private authorize(): GetAuthorizationHeader | string {
-    const getAuthorizationHeader = this.getAuthorizationHeader.bind(this) as GetAuthorizationHeader;
+  private authorize(): IGetAuthorizationHeader | string {
+    const getAuthorizationHeader = this.getAuthorizationHeader.bind(this) as IGetAuthorizationHeader;
     return getAuthorizationHeader;
   }
 }

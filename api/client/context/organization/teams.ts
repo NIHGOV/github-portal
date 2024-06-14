@@ -3,9 +3,8 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response, Router } from 'express';
+import { Router } from 'express';
 import asyncHandler from 'express-async-handler';
-
 import { Team } from '../../../../business';
 import { jsonError } from '../../../../middleware';
 import { setContextualTeam } from '../../../../middleware/github/teamPermissions';
@@ -19,7 +18,7 @@ const router: Router = Router();
 
 router.use(
   '/:teamSlug',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: ReposAppRequest, res, next) => {
     const { organization } = req;
     const { teamSlug } = req.params;
     let team: Team = null;
@@ -36,7 +35,7 @@ router.use(
 
 router.use('/:teamSlug', RouteTeam);
 
-router.use('*', (req, res: Response, next: NextFunction) => {
+router.use('*', (req, res, next) => {
   return next(jsonError('no API or function available for repos', 404));
 });
 

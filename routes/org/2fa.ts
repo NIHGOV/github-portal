@@ -3,18 +3,18 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response, Router } from 'express';
+import { Router } from 'express';
 import asyncHandler from 'express-async-handler';
 const router: Router = Router();
 
 import moment from 'moment';
 
 import { NoCacheNoBackground, ReposAppRequest } from '../../interfaces';
-import { wrapError } from '../../lib/utils';
+import { wrapError } from '../../utils';
 
 router.get(
   '/',
-  asyncHandler(async function (req: ReposAppRequest, res: Response, next: NextFunction) {
+  asyncHandler(async function (req: ReposAppRequest, res, next) {
     const organization = req.organization;
     const onboarding = req.query.onboarding;
     const joining = req.query.joining;

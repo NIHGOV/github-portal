@@ -11,4 +11,3 @@ export * from './administration';
 export * from './passport';
 export * from './views';
 export * from './urls';
-export * from './events';

@@ -3,12 +3,12 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response, Router } from 'express';
+import { Router } from 'express';
 import asyncHandler from 'express-async-handler';
 const router: Router = Router();
 
 import { ReposAppRequest } from '../../interfaces';
-import { getProviders } from '../../lib/transitional';
+import { getProviders } from '../../transitional';
 
 import getCompanySpecificDeployment from '../../middleware/companySpecificDeployment';
 
@@ -20,7 +20,7 @@ import _ from 'lodash';
 
 router.use(
   '*',
-  asyncHandler(async function (req: ReposAppRequest, res: Response, next: NextFunction) {
+  asyncHandler(async function (req: ReposAppRequest, res, next) {
     const { corporateAdministrationProfile } = getProviders(req);
     if (corporateAdministrationProfile && corporateAdministrationProfile.urls) {
       req.individualContext.setInitialViewProperty('_corpAdminUrls', corporateAdministrationProfile.urls);
@@ -41,7 +41,7 @@ try {
 router.use('/app', RouteApp);
 router.use('/apps', RouteApps);
 
-router.get('/', (req: ReposAppRequest, res: Response, next: NextFunction) => {
+router.get('/', (req: ReposAppRequest, res, next) => {
   const individualContext = req.individualContext;
   individualContext.webContext.render({
     view: 'administration',
