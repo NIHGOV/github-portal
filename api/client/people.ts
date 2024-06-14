@@ -3,16 +3,16 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response, Router } from 'express';
+import { Router } from 'express';
 import asyncHandler from 'express-async-handler';
 
 import { corporateLinkToJson } from '../../business';
 import { jsonError } from '../../middleware';
-import { type GitHubSimpleAccount, type ICorporateLink, ReposAppRequest } from '../../interfaces';
+import { ICorporateLink, ReposAppRequest } from '../../interfaces';
 import JsonPager from './jsonPager';
 import getCompanySpecificDeployment from '../../middleware/companySpecificDeployment';
 
-import { getPerson as routeGetPerson } from './person';
+import RouteGetPerson from './person';
 import { equivalentLegacyPeopleSearch } from './peopleSearch';
 
 const router: Router = Router();
@@ -20,28 +20,34 @@ const router: Router = Router();
 const deployment = getCompanySpecificDeployment();
 deployment?.routes?.api?.people && deployment.routes.api.people(router);
 
+interface ISimpleAccount {
+  login: string;
+  avatar_url: string;
+  id: number;
+}
+
 export interface ICrossOrganizationMemberResponse {
-  account: GitHubSimpleAccount;
+  account: ISimpleAccount;
   link?: ICorporateLink;
   organizations: string[];
 }
 
 export interface ICrossOrganizationSearchedMember {
   id: number;
-  account: GitHubSimpleAccount;
+  account: ISimpleAccount;
   link?: ICorporateLink;
   orgs: IOrganizationMembershipAccount;
 }
 
 interface IOrganizationMembershipAccount {
-  [id: string]: GitHubSimpleAccount;
+  [id: string]: ISimpleAccount;
 }
 
-router.get('/:login', routeGetPerson);
+router.get('/:login', RouteGetPerson);
 
 router.get(
   '/',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: ReposAppRequest, res, next) => {
     const pager = new JsonPager<ICrossOrganizationSearchedMember>(req, res);
     try {
       const searcher = await equivalentLegacyPeopleSearch(req);
@@ -67,7 +73,7 @@ router.get(
   })
 );
 
-router.use('*', (req, res: Response, next: NextFunction) => {
+router.use('*', (req, res, next) => {
   return next(jsonError('no API or function available within this cross-organization people list', 404));
 });
 

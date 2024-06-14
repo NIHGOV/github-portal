@@ -19,7 +19,6 @@ export type ConfigGitHubOrganization = {
   teamAllReposRead: string; // | number
   teamAllReposWrite: string; // | number
   teamAllReposAdmin: string;
-  teamOpenAccess: string;
   teamSudoers: string;
   templates: string[];
   onboarding: boolean;

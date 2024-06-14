@@ -3,7 +3,7 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { RestResponse, IIntelligentCacheResponseArray, flattenData } from './core';
+import { IRestResponse, IIntelligentCacheResponseArray, flattenData } from './core';
 import { CompositeApiContext } from './composite';
 import { RestLibrary } from '.';
 import { RestCollections } from './collections';
@@ -11,16 +11,16 @@ import {
   ICacheOptions,
   IGetOrganizationMembersOptions,
   IPagedCrossOrganizationCacheOptions,
-  PurposefulGetAuthorizationHeader,
+  IPurposefulGetAuthorizationHeader,
   ITeamMembershipOptions,
 } from '../../interfaces';
-import { AppPurpose } from './appPurposes';
+import { AppPurpose } from '../../business/githubApps';
 
-interface IOrganizationsResponse extends RestResponse {
+interface IOrganizationsResponse extends IRestResponse {
   orgs?: any;
 }
 
-interface ICrossOrganizationDataResponse extends RestResponse {
+interface ICrossOrganizationDataResponse extends IRestResponse {
   //  data?: any;
 }
 
@@ -42,7 +42,7 @@ export class CrossOrganizationCollator {
   }
 
   async orgMembers(
-    orgsAndTokens: Map<string, PurposefulGetAuthorizationHeader>,
+    orgsAndTokens: Map<string, IPurposefulGetAuthorizationHeader>,
     options: IGetOrganizationMembersOptions,
     cacheOptions: ICacheOptions
   ): Promise<any> {
@@ -57,13 +57,13 @@ export class CrossOrganizationCollator {
     return flattenData(data);
   }
 
-  async teams(orgsAndTokens: Map<string, PurposefulGetAuthorizationHeader>, options, cacheOptions) {
+  async teams(orgsAndTokens: Map<string, IPurposefulGetAuthorizationHeader>, options, cacheOptions) {
     const allTeams = await this.getAllTeams(orgsAndTokens, options, cacheOptions);
     return flattenData(allTeams);
   }
 
   async teamMembers(
-    orgsAndTokens: Map<string, PurposefulGetAuthorizationHeader>,
+    orgsAndTokens: Map<string, IPurposefulGetAuthorizationHeader>,
     options: ITeamMembershipOptions,
     cacheOptions: ICacheOptions
   ): Promise<any> {
@@ -90,7 +90,7 @@ export class CrossOrganizationCollator {
   }
 
   async repos(
-    orgsAndTokens: Map<string, PurposefulGetAuthorizationHeader>,
+    orgsAndTokens: Map<string, IPurposefulGetAuthorizationHeader>,
     options,
     cacheOptions: ICacheOptions
   ): Promise<any> {
@@ -99,7 +99,7 @@ export class CrossOrganizationCollator {
   }
 
   async repoCollaborators(
-    orgsAndTokens: Map<string, PurposefulGetAuthorizationHeader>,
+    orgsAndTokens: Map<string, IPurposefulGetAuthorizationHeader>,
     options,
     cacheOptions: ICacheOptions
   ): Promise<any> {
@@ -126,7 +126,7 @@ export class CrossOrganizationCollator {
   }
 
   async repoTeams(
-    orgsAndTokens: Map<string, PurposefulGetAuthorizationHeader>,
+    orgsAndTokens: Map<string, IPurposefulGetAuthorizationHeader>,
     options,
     cacheOptions: ICacheOptions
   ): Promise<any> {
@@ -173,7 +173,7 @@ export class CrossOrganizationCollator {
   }
 
   private async getCrossOrganizationMethod(
-    orgsAndTokens: Map<string, PurposefulGetAuthorizationHeader>,
+    orgsAndTokens: Map<string, IPurposefulGetAuthorizationHeader>,
     apiName: string,
     methodName: string,
     options,
@@ -242,7 +242,7 @@ export class CrossOrganizationCollator {
 
   private crossOrganizationCollection(
     capturedThis: CrossOrganizationCollator,
-    orgsAndTokens: Map<string, PurposefulGetAuthorizationHeader>,
+    orgsAndTokens: Map<string, IPurposefulGetAuthorizationHeader>,
     options,
     cacheOptions: IPagedCrossOrganizationCacheOptions,
     innerKeyType,
@@ -303,7 +303,7 @@ export class CrossOrganizationCollator {
           const localOptions = Object.assign(localOptionsTarget, options);
           delete localOptions.maxAgeSeconds;
           delete localOptions.backgroundRefresh;
-          const token = orgsAndTokens.get(orgName.toLowerCase()) as PurposefulGetAuthorizationHeader;
+          const token = orgsAndTokens.get(orgName.toLowerCase()) as IPurposefulGetAuthorizationHeader;
           if (!token) {
             throw new Error(`No token available for the organization ${orgName}`);
           }
@@ -348,7 +348,7 @@ export class CrossOrganizationCollator {
   }
 
   private async getAllTeams(
-    orgsAndTokens: Map<string, PurposefulGetAuthorizationHeader>,
+    orgsAndTokens: Map<string, IPurposefulGetAuthorizationHeader>,
     options,
     cacheOptions: IPagedCrossOrganizationCacheOptions
   ): Promise<any> {
@@ -364,7 +364,7 @@ export class CrossOrganizationCollator {
   }
 
   private async getAllRepos(
-    orgsAndTokens: Map<string, PurposefulGetAuthorizationHeader>,
+    orgsAndTokens: Map<string, IPurposefulGetAuthorizationHeader>,
     options,
     cacheOptions: IPagedCrossOrganizationCacheOptions
   ): Promise<any> {

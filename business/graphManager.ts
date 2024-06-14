@@ -18,7 +18,7 @@ import {
   IPagedCrossOrganizationCacheOptions,
   GitHubRepositoryPermission,
 } from '../interfaces';
-import { isPermissionBetterThan } from '../lib/transitional';
+import { isPermissionBetterThan } from '../transitional';
 
 interface ILocalLinksCache {
   updated: moment.Moment;

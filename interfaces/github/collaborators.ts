@@ -5,8 +5,7 @@
 
 export interface IGitHubCollaboratorPermissions {
   admin: boolean;
-  maintain: boolean;
-  push: boolean;
-  triage: boolean;
   pull: boolean;
+  push: boolean;
+  // triage and maintain do not appear today by the GitHub API (sigh), it's in V4 GraphQL but not in V3 REST
 }

@@ -5,17 +5,16 @@
 
 import axios from 'axios';
 import asyncHandler from 'express-async-handler';
-import { NextFunction, Response } from 'express';
 
 import { jsonError } from './jsonError';
 import { IApiRequest } from './apiReposAuth';
-import { PersonalAccessToken } from '../business/entities/token/token';
-import { getProviders } from '../lib/transitional';
+import { PersonalAccessToken } from '../entities/token/token';
+import { getProviders } from '../transitional';
 
 // TODO: consider better caching
 const localMemoryCacheVstsToAadId = new Map();
 
-const vstsAuth = asyncHandler(async (req: IApiRequest, res: Response, next: NextFunction) => {
+const vstsAuth = asyncHandler(async (req: IApiRequest, res, next) => {
   const config = getProviders(req).config;
   if (!config) {
     return next(new Error('Missing configuration for the application'));

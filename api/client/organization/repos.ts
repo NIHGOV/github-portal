@@ -3,25 +3,23 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response, Router } from 'express';
+import { Router } from 'express';
 import asyncHandler from 'express-async-handler';
 
 import { jsonError } from '../../../middleware';
-import { CreateError, getProviders } from '../../../lib/transitional';
+import { getProviders } from '../../../transitional';
 import { Repository } from '../../../business';
 
+import RouteRepo from './repo';
 import JsonPager from '../jsonPager';
 import { ReposAppRequest, IProviders } from '../../../interfaces';
-import { sortRepositoriesByNameCaseInsensitive } from '../../../lib/utils';
-import { apiMiddlewareRepositoriesToRepository } from '../../../middleware/business/repository';
-
-import routeRepo from './repo';
+import { sortRepositoriesByNameCaseInsensitive } from '../../../utils';
 
 const router: Router = Router();
 
 router.get(
   '/',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: ReposAppRequest, res, next) => {
     const { organization } = req;
     const providers = getProviders(req);
     const pager = new JsonPager<Repository>(req, res);
@@ -238,10 +236,21 @@ export async function searchRepos(
 
 // --- End of search reimplementation ---
 
-router.use('/:repoName', asyncHandler(apiMiddlewareRepositoriesToRepository), routeRepo);
+router.use(
+  '/:repoName',
+  asyncHandler(async (req: ReposAppRequest, res, next) => {
+    const { organization } = req;
+    const { repoName } = req.params;
+    // does not confirm the name
+    (req as any).repository = organization.repository(repoName);
+    return next();
+  })
+);
 
-router.use('*', (req, res: Response, next: NextFunction) => {
-  return next(CreateError.NotFound('no API or function available within org/repos endpoint'));
+router.use('/:repoName', RouteRepo);
+
+router.use('*', (req, res, next) => {
+  return next(jsonError('no API or function available within this repos endpoint', 404));
 });
 
 export default router;

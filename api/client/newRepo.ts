@@ -3,16 +3,16 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response, Router } from 'express';
+import { Router } from 'express';
 const router: Router = Router();
 
-import { getProviders } from '../../lib/transitional';
+import { getProviders } from '../../transitional';
 import { jsonError } from '../../middleware/jsonError';
 
 import newOrgRepo from './newOrgRepo';
 import { ReposAppRequest } from '../../interfaces';
 
-router.use('/org/:org', (req: ReposAppRequest, res: Response, next: NextFunction) => {
+router.use('/org/:org', (req: ReposAppRequest, res, next) => {
   const orgName = req.params.org;
   const { operations } = getProviders(req);
   try {

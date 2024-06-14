@@ -3,13 +3,25 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import job from '../job';
+// The local environment script is designed to allow for local debugging, test and
+// development scenarios. The go method is called with resolved configuration.
 
-// This script allows for quick inner-loop development.
+async function go(providers: IProviders): Promise<void> {
+  // ---------------------------------------------------------------------------
+}
 
-job.run(
-  async (providers) => {
-    //
+// -----------------------------------------------------------------------------
+// Local script initialization
+// -----------------------------------------------------------------------------
+import app from '../app';
+import { IProviders, IReposJob } from '../interfaces';
+
+app.runJob(
+  async function ({ providers }: IReposJob) {
+    await go(providers);
+    return {};
   },
-  { name: 'Local Environment' }
+  {
+    enableAllGitHubApps: true,
+  }
 );

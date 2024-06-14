@@ -3,19 +3,19 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response, Router } from 'express';
+import { Router } from 'express';
 import asyncHandler from 'express-async-handler';
 const router: Router = Router();
 
-import { getProviders } from '../../lib/transitional';
+import { getProviders } from '../../transitional';
 import {
   OrganizationSetting,
   IBasicGitHubAppInstallation,
-  SystemTeam,
-} from '../../business/entities/organizationSettings/organizationSetting';
+  SpecialTeam,
+} from '../../entities/organizationSettings/organizationSetting';
 import { IndividualContext } from '../../business/user';
 import { Operations, Organization } from '../../business';
-import GitHubApplication, { isInstallationConfigured } from '../../business/application';
+import GitHubApplication from '../../business/application';
 import {
   ReposAppRequest,
   IGitHubAppInstallation,
@@ -27,7 +27,7 @@ import {
 
 router.use(
   '/:appId',
-  asyncHandler(async function (req: ReposAppRequest, res: Response, next: NextFunction) {
+  asyncHandler(async function (req: ReposAppRequest, res, next) {
     const providers = getProviders(req);
     const appId = Number(req.params.appId);
     const app = providers.operations.getApplicationById(appId);
@@ -43,7 +43,7 @@ router.use(
 
 router.get(
   '/:appId',
-  asyncHandler(async function (req: ReposAppRequest, res: Response, next: NextFunction) {
+  asyncHandler(async function (req: ReposAppRequest, res, next) {
     const githubApplication = req['githubApplication'] as GitHubApplication;
     const installationIdString = req.query.installation_id;
     const setupAction = req.query.setup_action;
@@ -71,7 +71,7 @@ router.get(
 
 router.use(
   '/:appId/installations/:installationId',
-  asyncHandler(async function (req: ReposAppRequest, res: Response, next: NextFunction) {
+  asyncHandler(async function (req: ReposAppRequest, res, next) {
     const githubApplication = req['githubApplication'] as GitHubApplication;
     const installationIdString = req.params.installationId;
     const { operations, organizationSettingsProvider } = getProviders(req);
@@ -100,6 +100,21 @@ router.use(
     return next();
   })
 );
+
+function isInstallationConfigured(
+  settings: OrganizationSetting,
+  installation: IGitHubAppInstallation
+): boolean {
+  if (!settings || !settings.installations) {
+    return false;
+  }
+  for (const install of settings.installations) {
+    if (install.installationId === installation.id) {
+      return true;
+    }
+  }
+  return false;
+}
 
 async function getDynamicSettingsFromLegacySettings(
   operations: Operations,
@@ -151,7 +166,7 @@ async function getDynamicSettingsFromLegacySettings(
 
 router.post(
   '/:appId/installations/:installationId',
-  asyncHandler(async function (req: ReposAppRequest, res: Response, next: NextFunction) {
+  asyncHandler(async function (req: ReposAppRequest, res, next) {
     const hasBurnButtonClicked = req.body['burn-org-app'];
     const hasImportButtonClicked = req.body['adopt-import-settings'];
     const hasCreateButtonClicked = req.body['adopt-new-org'];
@@ -214,9 +229,9 @@ router.post(
         if (result?.state === OrganizationMembershipState.Pending) {
           return res.send(
             `You need to accept the membership now at: https://github.com/${unconfiguredOrganization.name}`
-          ) as unknown as void;
+          );
         } else {
-          return res.send('OK. Elevation should be all set.') as unknown as void;
+          return res.send('OK. Elevation should be all set.');
         }
       } catch (error) {
         return next(error);
@@ -296,25 +311,22 @@ router.post(
               // explicitly now allowing globalSudo to be set here
               throw new Error(`Unsupported team type: ${teamType}`);
             }
-            let specialTeamType: SystemTeam = null;
+            let specialTeamType: SpecialTeam = null;
             switch (teamType) {
               case 'everyone':
-                specialTeamType = SystemTeam.Everyone;
-                break;
-              case 'openAccess':
-                specialTeamType = SystemTeam.OpenAccess;
+                specialTeamType = SpecialTeam.Everyone;
                 break;
               case 'systemAdmin':
-                specialTeamType = SystemTeam.SystemAdmin;
+                specialTeamType = SpecialTeam.SystemAdmin;
                 break;
               case 'systemWrite':
-                specialTeamType = SystemTeam.SystemWrite;
+                specialTeamType = SpecialTeam.SystemWrite;
                 break;
               case 'systemRead':
-                specialTeamType = SystemTeam.SystemRead;
+                specialTeamType = SpecialTeam.SystemRead;
                 break;
               case 'sudo':
-                specialTeamType = SystemTeam.Sudo;
+                specialTeamType = SpecialTeam.Sudo;
                 break;
               // case 'globalSudo':
               // specialTeamType = SpecialTeam.GlobalSudo;
@@ -363,7 +375,7 @@ router.post(
 
 router.get(
   '/:appId/installations/:installationId',
-  asyncHandler(async function (req: ReposAppRequest, res: Response, next: NextFunction) {
+  asyncHandler(async function (req: ReposAppRequest, res, next) {
     const githubApplication = req['githubApplication'] as GitHubApplication;
     const providers = getProviders(req);
     const individualContext = req.individualContext;

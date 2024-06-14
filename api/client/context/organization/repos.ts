@@ -3,22 +3,21 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response, Router } from 'express';
+import { Router } from 'express';
 import asyncHandler from 'express-async-handler';
-
 import { Repository } from '../../../../business';
 import { jsonError } from '../../../../middleware';
 import { setContextualRepository } from '../../../../middleware/github/repoPermissions';
 
-import { OrganizationMembershipState, ReposAppRequest, VoidedExpressRoute } from '../../../../interfaces';
+import { OrganizationMembershipState, ReposAppRequest } from '../../../../interfaces';
 import { IndividualContext } from '../../../../business/user';
 import { createRepositoryFromClient } from '../../newOrgRepo';
 
-import routeContextualRepo from './repo';
+import RouteContextualRepo from './repo';
 
 const router: Router = Router();
 
-async function validateActiveMembership(req: ReposAppRequest, res: Response, next: NextFunction) {
+async function validateActiveMembership(req: ReposAppRequest, res, next) {
   const { organization } = req;
   const activeContext = (req.individualContext || req.apiContext) as IndividualContext;
   if (!activeContext.link) {
@@ -34,15 +33,11 @@ async function validateActiveMembership(req: ReposAppRequest, res: Response, nex
   return next();
 }
 
-router.post(
-  '/',
-  asyncHandler(validateActiveMembership),
-  asyncHandler(createRepositoryFromClient as VoidedExpressRoute)
-);
+router.post('/', asyncHandler(validateActiveMembership), asyncHandler(createRepositoryFromClient));
 
 router.use(
   '/:repoName',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: ReposAppRequest, res, next) => {
     const { organization } = req;
     const { repoName } = req.params;
     let repository: Repository = null;
@@ -52,9 +47,9 @@ router.use(
   })
 );
 
-router.use('/:repoName', routeContextualRepo);
+router.use('/:repoName', RouteContextualRepo);
 
-router.use('*', (req, res: Response, next: NextFunction) => {
+router.use('*', (req, res, next) => {
   return next(jsonError('no API or function available for repos', 404));
 });
 

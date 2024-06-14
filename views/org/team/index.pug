@@ -87,6 +87,13 @@ mixin membersList(typeOfList, membersList, isAdmin, moreMembersToShow)
         p.lead.text-primary.text-center: small &hellip; and others
 
 block content
+
+  //- Services
+  - var languageColor = viewServices.languageColor
+  - var octicon = viewServices.octicon
+  - var fileSize = viewServices.fileSize
+  - var moment = viewServices.moment
+
   //- Variables
   - var maximumMembersToShow = (4 * 3) - 1
   - var maximumRepositoriesToShow = 5
@@ -94,7 +101,6 @@ block content
   //- View services
   - var languageColor = viewServices.languageColor
   - var octicon = viewServices.octicon
-  - var moment = viewServices.moment
 
   //- Mode variables
   - var admin = teamPermissions.allowAdministration
@@ -337,12 +343,9 @@ block content
                 .repo(id=repo.name, style='padding-bottom:36px;display:block')
                   h3
                     a(href='/' + localOrgName + '/repos/' + repo.name)= repo.name
-                    if repo.visibility
+                    if repo.private === true
                       | &nbsp;
-                      .label.label-warning(class={shrink66: !hugeHeading, shrink50: hugeHeading}) #{repo.visibility}
-                    if repo.has_pages 
-                      | &nbsp;
-                      .label.label-warning(class={shrink66: !hugeHeading, shrink50: hugeHeading}) pages
+                      .label.label-warning.shrink66(title='This is a private repository and not open source.') Private
                     if repoPermissions && specificTeam
                       = ' '
                       if repoPermissions.admin
@@ -358,7 +361,7 @@ block content
                       if repo.language
                         li
                           span(style={color: languageColor(repo.language)})
-                            != octicon('dot-fill', 10)
+                            != octicon('primitive-dot', 10)
                           = ' ' + repo.language
                       if repo.stargazers_count
                         li

@@ -3,12 +3,12 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response, Router } from 'express';
+import { Router } from 'express';
 import asyncHandler from 'express-async-handler';
 const router: Router = Router();
 
 import { ReposAppRequest } from '../../interfaces';
-import { popSessionVariable } from '../../lib/utils';
+import { popSessionVariable } from '../../utils';
 import lowercaser from '../../middleware/lowercaser';
 
 import RouteTeam from './team/';
@@ -19,7 +19,7 @@ interface ITeamsRequest extends ReposAppRequest {
   teamUrl?: any;
 }
 
-router.use(function (req: ReposAppRequest, res: Response, next: NextFunction) {
+router.use(function (req: ReposAppRequest, res, next) {
   req.individualContext.webContext.pushBreadcrumb('Teams');
   req.reposContext = {
     section: 'teams',
@@ -28,7 +28,7 @@ router.use(function (req: ReposAppRequest, res: Response, next: NextFunction) {
   next();
 });
 
-router.get('/', function (req, res: Response, next: NextFunction) {
+router.get('/', function (req, res, next) {
   const beforeLinkReferrer = popSessionVariable(req, res, 'beforeLinkReferrer');
   if (beforeLinkReferrer !== undefined) {
     return res.redirect(beforeLinkReferrer);
@@ -40,7 +40,7 @@ router.get('/', lowercaser(['sort', 'set']), RouteTeamsPager);
 
 router.use(
   '/:teamSlug',
-  asyncHandler(async (req: ITeamsRequest, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: ITeamsRequest, res, next) => {
     const organization = req.organization;
     const orgBaseUrl = organization.baseUrl;
     const slug = req.params.teamSlug as string;

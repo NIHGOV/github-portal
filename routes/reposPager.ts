@@ -7,7 +7,7 @@ import asyncHandler from 'express-async-handler';
 import { NextFunction, Response } from 'express';
 import _ from 'lodash';
 
-import { daysInMilliseconds } from '../lib/utils';
+import { daysInMilliseconds } from '../utils';
 import {
   Repository,
   IPersonalizedUserAggregateRepositoryPermission,
@@ -20,7 +20,7 @@ import {
 import QueryCache from '../business/queryCache';
 import { GitHubRepositoryType, IReposAppWithTeam } from '../interfaces';
 import { IRequestTeamPermissions } from '../middleware/github/teamPermissions';
-import { getProviders } from '../lib/transitional';
+import { getProviders } from '../transitional';
 import { UserContext } from '../business/user/aggregate';
 
 interface IGetReposAndOptionalTeamPermissionsResponse {
@@ -213,7 +213,7 @@ export default asyncHandler(async function (req: IReposAppWithTeam, res: Respons
 
   await search.search(page, req.query.sort as string);
 
-  await Promise.all(search.repos.map(repo => repo.getDetails()));
+  // await Promise.all(search.repos.map(repo => repo.getDetails()));
 
   req.individualContext.webContext.render({
     view: 'repos/',

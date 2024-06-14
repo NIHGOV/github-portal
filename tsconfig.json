@@ -1,12 +1,11 @@
 {
   "compilerOptions": {
-    "module": "NodeNext",
+    "module": "commonjs",
     "sourceMap": true,
     "outDir": "./dist",
     "incremental": true,
     "allowJs": true,
-    "declaration": true,
-    "moduleResolution": "nodenext",
+    "moduleResolution": "node",
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -23,8 +22,8 @@
     "./business/**/*",
     "./config/**/*",
     "./data/**/*",
-    "business/entities/**/*",
-    "business/features/**/*",
+    "./entities/**/*",
+    "./features/**/*",
     "./interfaces/**/*",
     "./jobs/**/*",
     "./lib/**/*",
@@ -33,6 +32,6 @@
     "./routes/**/*",
     "./scripts/**/*",
     "./test/**/*",
-    "business/webhooks/**/*"
+    "./webhooks/**/*"
   ]
 }

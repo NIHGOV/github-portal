@@ -3,7 +3,7 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response, Router } from 'express';
+import { Router } from 'express';
 import asyncHandler from 'express-async-handler';
 
 import { Operations, Team } from '../../business';
@@ -13,7 +13,7 @@ import {
   TeamJsonFormat,
 } from '../../interfaces';
 import { jsonError } from '../../middleware';
-import { getProviders } from '../../lib/transitional';
+import { getProviders } from '../../transitional';
 import JsonPager from './jsonPager';
 
 const router: Router = Router();
@@ -40,7 +40,7 @@ async function getCrossOrganizationTeams(operations: Operations): Promise<Team[]
 
 router.get(
   '/',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: ReposAppRequest, res, next) => {
     const { operations } = getProviders(req);
     const pager = new JsonPager<Team>(req, res);
     const q: string = (req.query.q ? (req.query.q as string) : null) || '';
@@ -71,7 +71,7 @@ router.get(
   })
 );
 
-router.use('*', (req, res: Response, next: NextFunction) => {
+router.use('*', (req, res, next) => {
   return next(jsonError('no API or function available within this cross-organization teams list', 404));
 });
 

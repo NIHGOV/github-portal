@@ -3,24 +3,19 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import _ from 'lodash';
-
-import { NextFunction, Response, Router } from 'express';
+import { Router } from 'express';
 import asyncHandler from 'express-async-handler';
 const router: Router = Router();
 
-import { getProviders } from '../../lib/transitional';
+import _ from 'lodash';
+
+import { getProviders } from '../../transitional';
 import { jsonError } from '../../middleware/jsonError';
 import { IndividualContext } from '../../business/user';
 import { Organization } from '../../business/organization';
 import { CreateRepository, ICreateRepositoryApiResult, CreateRepositoryEntrypoint } from '../createRepo';
 import { Team } from '../../business/team';
-import {
-  GitHubRepositoryVisibility,
-  GitHubTeamRole,
-  ReposAppRequest,
-  VoidedExpressRoute,
-} from '../../interfaces';
+import { GitHubRepositoryVisibility, GitHubTeamRole, ReposAppRequest } from '../../interfaces';
 
 // This file supports the client apps for creating repos.
 
@@ -30,7 +25,7 @@ interface ILocalApiRequest extends ReposAppRequest {
   knownRequesterMailAddress?: string;
 }
 
-router.get('/metadata', (req: ILocalApiRequest, res: Response, next: NextFunction) => {
+router.get('/metadata', (req: ILocalApiRequest, res, next) => {
   try {
     const options = {
       projectType: req.query.projectType,
@@ -45,13 +40,12 @@ router.get('/metadata', (req: ILocalApiRequest, res: Response, next: NextFunctio
 
 router.get(
   '/personalizedTeams',
-  asyncHandler(async (req: ILocalApiRequest, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: ILocalApiRequest, res, next) => {
     try {
       const organization = req.organization as Organization;
       const userAggregateContext = req.apiContext.aggregations;
       const maintainedTeams = new Set<string>();
       const broadTeams = new Set<number>(req.organization.broadAccessTeams);
-      const openAccessTeams = new Set<number>(req.organization.openAccessTeams);
       const userTeams = userAggregateContext.reduceOrganizationTeams(
         organization,
         await userAggregateContext.teams()
@@ -63,7 +57,6 @@ router.get(
       const personalizedTeams = Array.from(combinedTeams.values()).map((combinedTeam) => {
         return {
           broad: broadTeams.has(Number(combinedTeam.id)),
-          isOpenAccessTeam: openAccessTeams.has(Number(combinedTeam.id)),
           description: combinedTeam.description,
           id: Number(combinedTeam.id),
           name: combinedTeam.name,
@@ -74,7 +67,7 @@ router.get(
       });
       return res.json({
         personalizedTeams,
-      }) as unknown as void;
+      });
     } catch (error) {
       return next(jsonError(error, 400));
     }
@@ -83,12 +76,11 @@ router.get(
 
 router.get(
   '/teams',
-  asyncHandler(async (req: ILocalApiRequest, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: ILocalApiRequest, res, next) => {
     const providers = getProviders(req);
     const queryCache = providers.queryCache;
     const organization = req.organization as Organization;
     const broadTeams = new Set(organization.broadAccessTeams);
-    const openAccessTeams = new Set<number>(req.organization.openAccessTeams);
     if (req.query.refresh === undefined && queryCache && queryCache.supportsTeams) {
       // Use the newer method in this case...
       const organizationTeams = await queryCache.organizationTeams(organization.id.toString());
@@ -99,12 +91,9 @@ router.get(
           if (broadTeams.has(Number(t.id))) {
             t['broad'] = true;
           }
-          if (openAccessTeams.has(Number(t.id))) {
-            t['openAccess'] = true;
-          }
           return t;
         }),
-      }) as unknown as void;
+      });
     }
 
     // By default, allow a 30-second old list of teams. If the cached
@@ -165,7 +154,7 @@ router.get(
   })
 );
 
-export async function discoverUserIdentities(req: ReposAppRequest, res: Response, next: NextFunction) {
+export async function discoverUserIdentities(req: ReposAppRequest, res, next) {
   const apiContext = req.apiContext as IndividualContext;
   const providers = getProviders(req);
   const mailAddressProvider = providers.mailAddressProvider;
@@ -186,16 +175,12 @@ export async function discoverUserIdentities(req: ReposAppRequest, res: Response
   return next();
 }
 
-router.post(
-  '/repo/:repo',
-  asyncHandler(discoverUserIdentities),
-  asyncHandler(createRepositoryFromClient as VoidedExpressRoute)
-);
+router.post('/repo/:repo', asyncHandler(discoverUserIdentities), asyncHandler(createRepositoryFromClient));
 
-export async function createRepositoryFromClient(req: ILocalApiRequest, res: Response, next: NextFunction) {
+export async function createRepositoryFromClient(req: ILocalApiRequest, res, next) {
   const providers = getProviders(req);
   const { insights, diagnosticsDrop, customizedNewRepositoryLogic, graphProvider } = providers;
-  const individualContext = req.watchdogContextOverride || req.individualContext || req.apiContext;
+  const individualContext = req.individualContext || req.apiContext;
   const config = getProviders(req).config;
   const organization = (req.organization || (req as any).aeOrganization) as Organization;
   const existingRepoId = req.body.existingrepoid;

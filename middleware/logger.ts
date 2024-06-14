@@ -6,7 +6,7 @@
 import logger from 'morgan';
 
 import { ReposAppRequest } from '../interfaces';
-import { getProviders } from '../lib/transitional';
+import { getProviders } from '../transitional';
 
 const encryptionMetadataKey = '_ClientEncryptionMetadata2';
 const piiFormat =

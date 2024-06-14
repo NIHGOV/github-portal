@@ -23,12 +23,6 @@ const memberPrimaryProperties = [
 ];
 const memberSecondaryProperties = [];
 
-export type TeamMemberJson = {
-  id: number;
-  login: string;
-  avatar_url: string;
-};
-
 export class TeamMember {
   private _team: Team;
   private _operations: IOperationsInstance;
@@ -82,7 +76,7 @@ export class TeamMember {
     this._operations = operations;
   }
 
-  asJson(): TeamMemberJson {
+  asJson() {
     return {
       id: this.id,
       login: this.login,

@@ -5,15 +5,9 @@
 
 // This is a Microsoft-specific piece of middleware.
 
-import { NextFunction, Response } from 'express';
-
 import { ReposAppRequest } from '../../interfaces';
 
-export function AuthorizeOnlyFullTimeEmployeesAndInterns(
-  req: ReposAppRequest,
-  res: Response,
-  next: NextFunction
-) {
+export function AuthorizeOnlyFullTimeEmployeesAndInterns(req: ReposAppRequest, res, next) {
   const individualContext = req.individualContext;
   if (!individualContext.corporateIdentity || !individualContext.corporateIdentity.username) {
     return next(new Error('This resource is only available to authenticated users.'));

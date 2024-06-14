@@ -3,7 +3,7 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response, Router } from 'express';
+import { Router } from 'express';
 import asyncHandler from 'express-async-handler';
 
 import { Organization } from '../../../business';
@@ -11,7 +11,7 @@ import { IProviders, ReposAppRequest } from '../../../interfaces';
 
 import { jsonError } from '../../../middleware';
 import getCompanySpecificDeployment from '../../../middleware/companySpecificDeployment';
-import { ErrorHelper, getProviders } from '../../../lib/transitional';
+import { ErrorHelper, getProviders } from '../../../transitional';
 import { IndividualContext } from '../../../business/user';
 
 import routeApprovals from './approvals';
@@ -21,7 +21,6 @@ import routeRepos from './repos';
 import routeTeams from './teams';
 import routeAdministration from './administration';
 import routeSample from './sample';
-import routeSettings from './settings';
 
 const router: Router = Router();
 
@@ -49,7 +48,7 @@ router.get('/', (req: ReposAppRequest, res) => {
 
 router.get(
   '/specialized/multipleLinkGitHubIdentities',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: ReposAppRequest, res, next) => {
     const { operations } = getProviders(req);
     const activeContext = (req.individualContext || req.apiContext) as IndividualContext;
     const links = (activeContext?.link ? [activeContext.link, ...activeContext.additionalLinks] : []).map(
@@ -74,13 +73,13 @@ router.get(
         response.deletedOrChangedUsernames.push(username);
       }
     }
-    return res.json(response) as unknown as void;
+    return res.json(response);
   })
 );
 
 router.get(
   '/accountDetails',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: ReposAppRequest, res, next) => {
     const { operations } = getProviders(req);
     const activeContext = (req.individualContext || req.apiContext) as IndividualContext;
     try {
@@ -105,11 +104,10 @@ router.get('/orgs', routeOrgs);
 router.get('/repos', routeRepos);
 router.get('/teams', routeTeams);
 router.use('/sample', routeSample);
-router.use('/settings', routeSettings);
 
 router.use(
   '/orgs/:orgName',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: ReposAppRequest, res, next) => {
     const { orgName } = req.params;
     const providers = getProviders(req);
     const { operations } = providers;
@@ -125,15 +123,12 @@ router.use(
       return next();
     } catch (noOrgError) {
       if (ErrorHelper.IsNotFound(noOrgError)) {
-        // Could be either the org truly does not exist, OR, it's uncontrolled.
         if (await isUnmanagedOrganization(providers, orgName)) {
           res.status(204);
-          res.end();
-          return;
+          return res.end();
         }
         res.status(404);
-        res.end();
-        return;
+        return res.end();
       }
       return next(jsonError(noOrgError, 500));
     }
@@ -156,7 +151,7 @@ async function isUnmanagedOrganization(providers: IProviders, orgName: string): 
 
 router.use('/orgs/:orgName', routeIndividualContextualOrganization);
 
-router.use('*', (req: ReposAppRequest, res: Response, next: NextFunction) => {
+router.use('*', (req: ReposAppRequest, res, next) => {
   return next(jsonError('Contextual API or route not found', 404));
 });
 

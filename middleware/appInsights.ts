@@ -3,21 +3,13 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response } from 'express';
-
 import wrapOrCreateInsightsConsoleClient from '../lib/insights';
 
 import Debug from 'debug';
 const debug = Debug.debug('startup');
 
 import { setup as appInsightsSetup, defaultClient } from 'applicationinsights';
-import type {
-  IReposApplication,
-  IProviders,
-  ReposAppRequest,
-  SiteConfiguration,
-  ExecutionEnvironment,
-} from '../interfaces';
+import { IReposApplication, IProviders, ReposAppRequest } from '../interfaces';
 
 function ignoreKubernetesProbes(envelope /* , context */) {
   if ('RequestData' === envelope.data.baseType) {
@@ -50,22 +42,20 @@ function filterTelemetry(envelope, context): boolean {
   return true;
 }
 
-export default function initializeAppInsights(
-  providers: IProviders,
-  executionEnvironment: ExecutionEnvironment,
-  app: IReposApplication,
-  config: SiteConfiguration
-) {
+export default function initializeAppInsights(app: IReposApplication, config) {
   let client = undefined;
   if (!config) {
     // Configuration failure happened ahead of this module
     return;
   }
+  const providers = app.settings.providers as IProviders;
   let cs: string =
     config?.telemetry?.applicationInsightsConnectionString || config?.telemetry?.applicationInsightsKey;
   // Override the key with a job-specific one if this is a job execution instead
-  const jobCs: string = config?.telemetry?.jobsApplicationInsightsConnectionString;
-  if (jobCs && executionEnvironment.isJob === true) {
+  const jobCs: string =
+    config?.telemetry?.jobsApplicationInsightsConnectionString ||
+    config?.telemetry?.jobsApplicationInsightsKey;
+  if (jobCs && config.isJobInternal === true) {
     cs = jobCs;
   }
   if (cs) {
@@ -88,7 +78,7 @@ export default function initializeAppInsights(
     debug('insights telemetry is not configured with a key or connection string');
   }
 
-  app?.use((req: ReposAppRequest, res: Response, next: NextFunction) => {
+  app.use((req: ReposAppRequest, res, next) => {
     // Acknowledge synthetic tests immediately without spending time in more middleware
     if (
       req.headers &&

@@ -5,7 +5,7 @@
 
 import { ReposAppRequest } from '../interfaces';
 import thisPackage from '../package.json';
-import { getProviders } from '../lib/transitional';
+import { getProviders } from '../transitional';
 
 const express = require('express');
 const router = express.Router();

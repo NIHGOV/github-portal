@@ -4,7 +4,34 @@
     {
       "type": "node",
       "request": "launch",
-      "name": "Launch site :4000 sudo",
+      "name": "Launch site 3000",
+      "program": "${workspaceFolder}/dist/bin/www.js",
+      "cwd": "${workspaceFolder}/dist",
+      "preLaunchTask": "tsbuild",
+      "sourceMaps": true,
+      "console": "integratedTerminal",
+      "env": {
+        "NODE_ENV": "development",
+        "DEBUG": "startup,g:server,context,github:tokens",
+        "MORE_DEBUG": "appinsights,cache,restapi,pg,querycache,user,redis-cross-org,health"
+      }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Jest Tests",
+      "program": "${workspaceRoot}/node_modules/jest/bin/jest.js",
+      "args": ["-i"],
+      "preLaunchTask": "tsbuild",
+      "sourceMaps": true,
+      "internalConsoleOptions": "openOnSessionStart",
+      "console": "externalTerminal",
+      "outFiles": ["${workspaceRoot}/dist/**/*"]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Launch site 4000 sudo",
       "program": "${workspaceFolder}/dist/bin/www.js",
       "cwd": "${workspaceFolder}/dist",
       "preLaunchTask": "tsbuild",
@@ -21,23 +48,7 @@
     {
       "type": "node",
       "request": "launch",
-      "name": "Launch site :4000 as-is",
-      "program": "${workspaceFolder}/dist/bin/www.js",
-      "cwd": "${workspaceFolder}/dist",
-      "preLaunchTask": "tsbuild",
-      "sourceMaps": true,
-      "console": "integratedTerminal",
-      "env": {
-        "NODE_ENV": "development",
-        "PORT": "4000",
-        "DEBUG": "startup,g:server,context,*simple-oauth2*,appinsights,insights,appinsights",
-        "_DEBUG": "cosmosdb,cache"
-      }
-    },
-    {
-      "type": "node",
-      "request": "launch",
-      "name": "Launch site :4000 sudo OFF",
+      "name": "Launch site 4000 sudo OFF",
       "program": "${workspaceFolder}/dist/bin/www.js",
       "cwd": "${workspaceFolder}/dist",
       "preLaunchTask": "tsbuild",
@@ -55,23 +66,8 @@
     {
       "type": "node",
       "request": "launch",
-      "name": "Launch server-rendered legacy site :3000",
-      "program": "${workspaceFolder}/dist/bin/www.js",
-      "cwd": "${workspaceFolder}/dist",
-      "preLaunchTask": "tsbuild",
-      "sourceMaps": true,
-      "console": "integratedTerminal",
-      "env": {
-        "NODE_ENV": "development",
-        "DEBUG": "startup,g:server,context",
-        "MORE_DEBUG": "appinsights,cache,restapi,pg,querycache,user,redis-cross-org,health,github:tokens"
-      }
-    },
-    {
-      "type": "node",
-      "request": "launch",
-      "name": "Background Job: Event firehose",
-      "program": "${workspaceRoot}/dist/jobs/firehose.js",
+      "name": "Background Job: Firehose",
+      "program": "${workspaceRoot}/dist/jobs/firehose/index.js",
       "preLaunchTask": "tsbuild",
       "sourceMaps": true,
       "console": "integratedTerminal",
@@ -80,18 +76,6 @@
         "NODE_ENV": "development",
         "DEBUG": "startup,querycache"
       }
-    },
-    {
-      "type": "node",
-      "request": "launch",
-      "name": "Jest Tests",
-      "program": "${workspaceRoot}/node_modules/jest/bin/jest.js",
-      "args": ["-i"],
-      "preLaunchTask": "tsbuild",
-      "sourceMaps": true,
-      "internalConsoleOptions": "openOnSessionStart",
-      "console": "externalTerminal",
-      "outFiles": ["${workspaceRoot}/dist/**/*"]
     },
     {
       "type": "node",
@@ -134,7 +118,7 @@
       "sourceMaps": true,
       "env": {
         "NODE_ENV": "development",
-        "DEBUG": "appinsights,startup",
+        "DEBUG": "appinsights,restapi,startup,redis-cross-org,appinsights",
         "DEBUG_GITHUB_PORTAL_SUDO_OFF": "1",
         "DEBUG_GITHUB_ORG_SUDO_OFF": "1"
       }
@@ -150,30 +134,42 @@
       "console": "integratedTerminal",
       "env": {
         "NODE_ENV": "localhost",
-        "DEBUG": "startup",
-        "EXIT_IMMEDIATELY": "1"
+        "DEBUG": "startup"
       }
     },
     {
       "type": "node",
       "request": "launch",
-      "name": "66: Order 66 Terminations",
-      "program": "${workspaceRoot}/dist/microsoft/jobs/terminations.js",
-      "args": ["all"],
+      "name": "Job: Cleanup invitations",
+      "program": "${workspaceRoot}/dist/jobs/cleanupInvites/index.js",
       "cwd": "${workspaceRoot}/dist",
       "preLaunchTask": "tsbuild",
       "sourceMaps": true,
       "console": "integratedTerminal",
       "env": {
         "NODE_ENV": "development",
-        "DEBUG": "startup,appinsights"
+        "DEBUG": "redis,restapi,startup,appinsights"
+      }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Job: Cleanup blob cache",
+      "program": "${workspaceRoot}/dist/jobs/cleanupBlobCache/index.js",
+      "cwd": "${workspaceRoot}/dist",
+      "preLaunchTask": "tsbuild",
+      "sourceMaps": true,
+      "console": "integratedTerminal",
+      "env": {
+        "NODE_ENV": "development",
+        "DEBUG": "startup"
       }
     },
     {
       "type": "node",
       "request": "launch",
       "name": "Job: Backfill aliases (3)",
-      "program": "${workspaceRoot}/dist/jobs/refreshUsernames.js",
+      "program": "${workspaceRoot}/dist/jobs/refreshUsernames/index.js",
       "cwd": "${workspaceRoot}/dist",
       "preLaunchTask": "tsbuild",
       "sourceMaps": true,
@@ -188,21 +184,21 @@
       "type": "node",
       "request": "launch",
       "name": "Job: User attributes hygiene (4)",
-      "program": "${workspaceRoot}/dist/jobs/refreshUsernames.js",
+      "program": "${workspaceRoot}/dist/jobs/refreshUsernames/index.js",
       "cwd": "${workspaceRoot}/dist",
       "preLaunchTask": "tsbuild",
       "sourceMaps": true,
       "console": "integratedTerminal",
       "env": {
         "NODE_ENV": "development",
-        "DEBUG": "startup,appinsights"
+        "DEBUG": "redis,restapi,startup,appinsights,cache"
       }
     },
     {
       "type": "node",
       "request": "launch",
       "name": "Job: Consistency: All (6)",
-      "program": "${workspaceRoot}/dist/jobs/refreshQueryCache.js",
+      "program": "${workspaceRoot}/dist/jobs/refreshQueryCache/index.js",
       "args": ["all"],
       "cwd": "${workspaceRoot}/dist",
       "preLaunchTask": "tsbuild",
@@ -217,7 +213,7 @@
       "type": "node",
       "request": "launch",
       "name": "Job: Consistency: Deleted repos (7)",
-      "program": "${workspaceRoot}/dist/jobs/deletedRepositoriesCache.js",
+      "program": "${workspaceRoot}/dist/jobs/refreshQueryCache/deletedRepositories.js",
       "args": [],
       "cwd": "${workspaceRoot}/dist",
       "preLaunchTask": "tsbuild",
@@ -232,7 +228,7 @@
       "type": "node",
       "request": "launch",
       "name": "Job: Consistency: Teams (8)",
-      "program": "${workspaceRoot}/dist/jobs/refreshQueryCache.js",
+      "program": "${workspaceRoot}/dist/jobs/refreshQueryCache/index.js",
       "args": ["teams"],
       "cwd": "${workspaceRoot}/dist",
       "preLaunchTask": "tsbuild",
@@ -247,7 +243,7 @@
       "type": "node",
       "request": "launch",
       "name": "Job: Consistency: Org members (9)",
-      "program": "${workspaceRoot}/dist/jobs/refreshQueryCache.js",
+      "program": "${workspaceRoot}/dist/jobs/refreshQueryCache/index.js",
       "args": ["organizations"],
       "cwd": "${workspaceRoot}/dist",
       "preLaunchTask": "tsbuild",
@@ -262,7 +258,7 @@
       "type": "node",
       "request": "launch",
       "name": "Job: Consistency: Repo collaborators (10)",
-      "program": "${workspaceRoot}/dist/jobs/refreshQueryCache.js",
+      "program": "${workspaceRoot}/dist/jobs/refreshQueryCache/index.js",
       "args": ["collaborators"],
       "cwd": "${workspaceRoot}/dist",
       "preLaunchTask": "tsbuild",
@@ -277,7 +273,7 @@
       "type": "node",
       "request": "launch",
       "name": "Job: Consistency: Team permissions (11)",
-      "program": "${workspaceRoot}/dist/jobs/refreshQueryCache.js",
+      "program": "${workspaceRoot}/dist/jobs/refreshQueryCache/index.js",
       "args": ["permissions"],
       "cwd": "${workspaceRoot}/dist",
       "preLaunchTask": "tsbuild",
@@ -305,8 +301,8 @@
     {
       "type": "node",
       "request": "launch",
-      "name": "Job: Migrate links (14)",
-      "program": "${workspaceRoot}/dist/jobs/migrateLinks.js",
+      "name": "Job: Migrate links",
+      "program": "${workspaceRoot}/dist/jobs/migrateLinks/index.js",
       "preLaunchTask": "tsbuild",
       "sourceMaps": true,
       "console": "integratedTerminal",
@@ -319,8 +315,8 @@
     {
       "type": "node",
       "request": "launch",
-      "name": "Job: System Team Permissions (15)",
-      "program": "${workspaceRoot}/dist/jobs/permissions.js",
+      "name": "Job: System Team Permissions",
+      "program": "${workspaceRoot}/dist/jobs/permissions/index.js",
       "cwd": "${workspaceRoot}/dist",
       "preLaunchTask": "tsbuild",
       "sourceMaps": true,
@@ -328,48 +324,6 @@
       "env": {
         "NODE_ENV": "development",
         "DEBUG": "startup,appinsights"
-      }
-    },
-    {
-      "type": "node",
-      "request": "launch",
-      "name": "Job: Cleanup invitations (16)",
-      "program": "${workspaceRoot}/dist/jobs/cleanupInvites.js",
-      "cwd": "${workspaceRoot}/dist",
-      "preLaunchTask": "tsbuild",
-      "sourceMaps": true,
-      "console": "integratedTerminal",
-      "env": {
-        "NODE_ENV": "development",
-        "DEBUG": "redis,restapi,startup,appinsights"
-      }
-    },
-    {
-      "type": "node",
-      "request": "launch",
-      "name": "Job: Cleanup blob cache (17)",
-      "program": "${workspaceRoot}/dist/jobs/cleanupBlobCache.js",
-      "cwd": "${workspaceRoot}/dist",
-      "preLaunchTask": "tsbuild",
-      "sourceMaps": true,
-      "console": "integratedTerminal",
-      "env": {
-        "NODE_ENV": "development",
-        "DEBUG": "startup"
-      }
-    },
-    {
-      "type": "node",
-      "request": "launch",
-      "name": "Job: Cleanup team requests (18)",
-      "program": "${workspaceRoot}/dist/jobs/cleanupTeamRequests.js",
-      "cwd": "${workspaceRoot}/dist",
-      "preLaunchTask": "tsbuild",
-      "sourceMaps": true,
-      "console": "integratedTerminal",
-      "env": {
-        "NODE_ENV": "development",
-        "DEBUG": "startup"
       }
     },
     {
@@ -391,7 +345,7 @@
       "type": "node",
       "request": "launch",
       "name": "Script: Import audit CSV",
-      "program": "${workspaceRoot}/dist/jobs/importAuditLog.js",
+      "program": "${workspaceRoot}/dist/jobs/importAuditLog/index.js",
       "preLaunchTask": "tsbuild",
       "sourceMaps": true,
       "console": "integratedTerminal",

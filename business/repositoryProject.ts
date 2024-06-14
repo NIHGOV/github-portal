@@ -4,26 +4,26 @@
 //
 
 import { Repository } from './repository';
-import { wrapError } from '../lib/utils';
-import { AppPurpose, AppPurposeTypes } from '../lib/github/appPurposes';
+import { wrapError } from '../utils';
+import { AppPurpose, AppPurposeTypes } from './githubApps';
 import { CacheDefault, getMaxAgeSeconds } from '.';
 import {
   IOperationsInstance,
-  PurposefulGetAuthorizationHeader,
+  IPurposefulGetAuthorizationHeader,
   GitHubIssueState,
   throwIfNotGitHubCapable,
   ICacheOptions,
-  GetAuthorizationHeader,
+  IGetAuthorizationHeader,
   ICacheOptionsWithPurpose,
 } from '../interfaces';
-import { ErrorHelper } from '../lib/transitional';
+import { ErrorHelper } from '../transitional';
 import { RepositoryProjectColumn } from './repositoryProjectColumn';
 import * as common from './common';
 
 export class RepositoryProject {
   private _operations: IOperationsInstance;
-  private _getAuthorizationHeader: PurposefulGetAuthorizationHeader;
-  private _getSpecificAuthorizationHeader: PurposefulGetAuthorizationHeader;
+  private _getAuthorizationHeader: IPurposefulGetAuthorizationHeader;
+  private _getSpecificAuthorizationHeader: IPurposefulGetAuthorizationHeader;
 
   private _id: number;
   private _repository: Repository;
@@ -36,8 +36,8 @@ export class RepositoryProject {
     repository: Repository,
     projectId: number,
     operations: IOperationsInstance,
-    getAuthorizationHeader: PurposefulGetAuthorizationHeader,
-    getSpecificAuthorizationHeader: PurposefulGetAuthorizationHeader,
+    getAuthorizationHeader: IPurposefulGetAuthorizationHeader,
+    getSpecificAuthorizationHeader: IPurposefulGetAuthorizationHeader,
     entity?: any
   ) {
     this._getAuthorizationHeader = getAuthorizationHeader;
@@ -213,11 +213,11 @@ export class RepositoryProject {
     return false;
   }
 
-  private authorizeSpecificPurpose(purpose: AppPurposeTypes): GetAuthorizationHeader | string {
+  private authorizeSpecificPurpose(purpose: AppPurposeTypes): IGetAuthorizationHeader | string {
     const getAuthorizationHeader = this._getSpecificAuthorizationHeader.bind(
       this,
       purpose
-    ) as GetAuthorizationHeader;
+    ) as IGetAuthorizationHeader;
     return getAuthorizationHeader;
   }
 }

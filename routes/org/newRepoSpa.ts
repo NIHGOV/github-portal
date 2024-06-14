@@ -3,14 +3,14 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response, Router } from 'express';
+import { Router } from 'express';
 import asyncHandler from 'express-async-handler';
 const router: Router = Router();
 
 import { getRepositoryMetadataProvider, ReposAppRequest } from '../../interfaces';
-import { getProviders } from '../../lib/transitional';
+import { getProviders } from '../../transitional';
 import { Organization } from '../../business/organization';
-import NewRepositoryLockdownSystem from '../../business/features/newRepositories/newRepositoryLockdown';
+import NewRepositoryLockdownSystem from '../../features/newRepositories/newRepositoryLockdown';
 
 router.get(
   '/',

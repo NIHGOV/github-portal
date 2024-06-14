@@ -11,11 +11,10 @@
 
 import basicAuth from 'basic-auth';
 import crypto from 'crypto';
-import { NextFunction, Response } from 'express';
 
 import { jsonError } from './jsonError';
-import { getProviders } from '../lib/transitional';
-import { PersonalAccessToken } from '../business/entities/token/token';
+import { getProviders } from '../transitional';
+import { PersonalAccessToken } from '../entities/token/token';
 import { ReposAppRequest } from '../interfaces';
 
 export const wrapErrorForImmediateUserError = (err: Error) => {
@@ -31,7 +30,7 @@ export interface IApiRequest extends ReposAppRequest {
   userContextOverwriteRequest?: any; // refactor?
 }
 
-export default function ReposApiAuthentication(req: IApiRequest, res: Response, next: NextFunction) {
+export default function ReposApiAuthentication(req: IApiRequest, res, next) {
   const user = basicAuth(req);
   const key = user ? user.pass || user.name : null;
   if (!key) {

@@ -3,12 +3,8 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response } from 'express';
-
-import { ReposAppRequest } from '../interfaces';
-
 export default function (params) {
-  return function (req: ReposAppRequest, res: Response, next: NextFunction) {
+  return function (req, res, next) {
     // lowercase parameters
     Object.getOwnPropertyNames(req.params).forEach((param) => {
       if (params.indexOf(param) > -1) {

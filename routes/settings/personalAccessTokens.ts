@@ -3,17 +3,13 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response, Router } from 'express';
+import { Router } from 'express';
 import asyncHandler from 'express-async-handler';
 const router: Router = Router();
 
-import { getProviders } from '../../lib/transitional';
-import { PersonalAccessToken } from '../../business/entities/token/token';
+import { getProviders } from '../../transitional';
+import { PersonalAccessToken } from '../../entities/token/token';
 import { ReposAppRequest } from '../../interfaces';
-
-type ResponseWithNewKey = Response & {
-  newKey: string;
-};
 
 interface IPersonalAccessTokenForDisplay {
   active: boolean;
@@ -52,7 +48,7 @@ function translateTableToEntities(
   });
 }
 
-function getPersonalAccessTokens(req: ReposAppRequest, res: Response, next: NextFunction) {
+function getPersonalAccessTokens(req: ReposAppRequest, res, next) {
   const providers = getProviders(req);
   const tokenProvider = providers.tokenProvider;
   const corporateId = req.individualContext.corporateIdentity.id;
@@ -84,7 +80,7 @@ router.use(getPersonalAccessTokens);
 
 router.get('/', view);
 
-function createToken(req: ReposAppRequest, res: ResponseWithNewKey, next: NextFunction) {
+function createToken(req: ReposAppRequest, res, next) {
   const providers = getProviders(req);
   const tokenProvider = providers.tokenProvider;
   const insights = req.insights;
@@ -140,7 +136,7 @@ router.post('/extension', createToken);
 
 router.post(
   '/delete',
-  asyncHandler(async (req: IRequestForSettingsPersonalAccessTokens, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: IRequestForSettingsPersonalAccessTokens, res, next) => {
     const providers = getProviders(req);
     const tokenProvider = providers.tokenProvider;
     const revokeAll = req.body.revokeAll === '1';

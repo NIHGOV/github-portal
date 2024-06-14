@@ -3,16 +3,16 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response, Router } from 'express';
+import { Router } from 'express';
 const router: Router = Router();
 
-import { getProviders } from '../lib/transitional';
+import { getProviders } from '../transitional';
 import { ReposAppRequest } from '../interfaces';
 
 import RoutePeopleSearch from './peopleSearch';
 import MiddlewareSystemWidePermissions from '../middleware/github/systemWidePermissions';
 
-router.use(function (req: ReposAppRequest, res: Response, next: NextFunction) {
+router.use(function (req: ReposAppRequest, res, next) {
   req.individualContext.webContext.pushBreadcrumb('People');
   req.reposContext = {
     section: 'people',
@@ -22,7 +22,7 @@ router.use(function (req: ReposAppRequest, res: Response, next: NextFunction) {
 });
 
 // Campaign-related redirect to take the user to GitHub
-router.get('/github/:login', (req: ReposAppRequest, res: Response, next: NextFunction) => {
+router.get('/github/:login', (req: ReposAppRequest, res, next) => {
   const providers = getProviders(req);
   if (!providers || !providers.campaign) {
     return next();

@@ -3,17 +3,14 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response } from 'express';
-
 import { Team } from '../../business';
 import {
   GitHubTeamRole,
   ITeamMembershipRoleState,
-  NoCacheNoBackground,
   OrganizationMembershipState,
   ReposAppRequest,
 } from '../../interfaces';
-import { getProviders } from '../../lib/transitional';
+import { getProviders } from '../../transitional';
 import { IndividualContext } from '../../business/user';
 import getCompanySpecificDeployment from '../companySpecificDeployment';
 
@@ -43,11 +40,10 @@ export function getTeamMembershipFromRequest(req: ReposAppRequest) {
   return req[teamStatusCacheKeyName] as IRequestTeamMembershipStatus;
 }
 
-export async function AddTeamMembershipToRequest(req: ReposAppRequest, res: Response, next: NextFunction) {
+export async function AddTeamMembershipToRequest(req: ReposAppRequest, res, next) {
   if (req[teamStatusCacheKeyName]) {
     return next();
   }
-  const skipCache = req.query.cache === '0';
   const team2 = req['team2'] as Team;
   if (!team2) {
     return next(new Error('team2 required'));
@@ -63,9 +59,7 @@ export async function AddTeamMembershipToRequest(req: ReposAppRequest, res: Resp
   } else {
     const login = activeContext.getGitHubIdentity().username;
     try {
-      const statusResult = skipCache
-        ? await team2.getMembership(login, NoCacheNoBackground)
-        : await team2.getMembershipEfficiently(login);
+      const statusResult = await team2.getMembershipEfficiently(login);
       const value: IRequestTeamMembershipStatus = {
         membershipStatus:
           statusResult && (statusResult as ITeamMembershipRoleState).role
@@ -100,7 +94,7 @@ export function getTeamPermissionsFromRequest(req: ReposAppRequest) {
   return req[teamPermissionsCacheKeyName] as IRequestTeamPermissions;
 }
 
-export async function AddTeamPermissionsToRequest(req: ReposAppRequest, res: Response, next: NextFunction) {
+export async function AddTeamPermissionsToRequest(req: ReposAppRequest, res, next) {
   if (req[teamPermissionsCacheKeyName]) {
     return next();
   }

@@ -3,20 +3,20 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response, Router } from 'express';
+import { Router } from 'express';
 import asyncHandler from 'express-async-handler';
 
 import { sendLinkedAccountMail } from '../../../business/operations/link';
 import { ReposAppRequest } from '../../../interfaces';
 import { jsonError } from '../../../middleware';
-import { CreateError, getProviders } from '../../../lib/transitional';
+import { CreateError, getProviders } from '../../../transitional';
 import { IndividualContext } from '../../../business/user';
 
 const router: Router = Router();
 
 router.get(
   '/:templateName',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: ReposAppRequest, res, next) => {
     const { operations } = getProviders(req);
     const activeContext = (req.individualContext || req.apiContext) as IndividualContext;
     const templateName = req.params.templateName as string;
@@ -39,11 +39,11 @@ router.get(
     } catch (error) {
       return next(error);
     }
-    return res.json({ templateName }) as unknown as void;
+    return res.json({ templateName });
   })
 );
 
-router.use('*', (req: ReposAppRequest, res: Response, next: NextFunction) => {
+router.use('*', (req: ReposAppRequest, res, next) => {
   return next(jsonError('Contextual API or route not found within samples', 404));
 });
 

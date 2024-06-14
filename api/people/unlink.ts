@@ -3,13 +3,13 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response, Router } from 'express';
+import { Router } from 'express';
 import asyncHandler from 'express-async-handler';
 
 import { ICorporateLink, UnlinkPurpose } from '../../interfaces';
 import { jsonError } from '../../middleware';
 import { IApiRequest } from '../../middleware/apiReposAuth';
-import { getProviders } from '../../lib/transitional';
+import { getProviders } from '../../transitional';
 
 const router: Router = Router();
 
@@ -17,7 +17,7 @@ interface ILinksApiRequestWithUnlink extends IApiRequest {
   unlink?: ICorporateLink;
 }
 
-router.use(function (req: ILinksApiRequestWithUnlink, res: Response, next: NextFunction) {
+router.use(function (req: ILinksApiRequestWithUnlink, res, next) {
   const token = req.apiKeyToken;
   if (!token.scopes) {
     return next(jsonError('The key is not authorized for specific APIs', 401));
@@ -30,7 +30,7 @@ router.use(function (req: ILinksApiRequestWithUnlink, res: Response, next: NextF
 
 router.use(
   '/github/id/:id',
-  asyncHandler(async (req: ILinksApiRequestWithUnlink, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: ILinksApiRequestWithUnlink, res, next) => {
     const { linkProvider } = getProviders(req);
     const id = req.params.id;
     try {
@@ -46,11 +46,11 @@ router.use(
   })
 );
 
-router.use('*', (req: ILinksApiRequestWithUnlink, res: Response, next: NextFunction) => {
+router.use('*', (req: ILinksApiRequestWithUnlink, res, next) => {
   return next(req.unlink ? undefined : jsonError('No link available for operation', 404));
 });
 
-router.delete('*', (req: ILinksApiRequestWithUnlink, res: Response, next: NextFunction) => {
+router.delete('*', (req: ILinksApiRequestWithUnlink, res, next) => {
   const { config, operations } = getProviders(req);
   const link = req.unlink;
   let purpose: UnlinkPurpose = null;

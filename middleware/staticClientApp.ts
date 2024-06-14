@@ -8,13 +8,10 @@ import appPackage from '../package.json';
 const packageVariableName = 'static-client-package-name';
 const otherPackageVariableName = 'static-react-package-name';
 
-import type { IReposApplication } from '../interfaces';
-import type { ExpressWithStatic } from './types';
-
 import Debug from 'debug';
 const debug = Debug.debug('startup');
 
-export function StaticClientApp(app: IReposApplication, express: ExpressWithStatic) {
+export function StaticClientApp(app, express) {
   // Serve/host the static client app from the location reported by the private
   // NPM module for the Ember app. Assumes that the inclusion of the package
   // returns the path to host.

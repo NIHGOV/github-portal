@@ -16,26 +16,22 @@ export * from './providers';
 export * from './web';
 export * from './config';
 
-import type { ExecutionEnvironment } from './app';
-import type {
+import {
   IAttachCompanySpecificRoutes,
   IAttachCompanySpecificMiddleware,
   ICorporationAdministrationSection,
   IAttachCompanySpecificStrings,
   ICompanySpecificFeatures,
-  ICompanySpecificEvents,
   IAttachCompanySpecificViews,
   IAttachCompanySpecificUrls,
 } from './companySpecific';
-import type { ICompanySpecificPassportMiddleware } from './companySpecific/passport';
-import type { SiteConfiguration } from './config';
-import type { IProviders } from './providers';
+import { ICompanySpecificPassportMiddleware } from './companySpecific/passport';
+import { IProviders } from './providers';
 
 // We're great at long variable names!
 
 export interface ICompanySpecificStartupProperties {
   isCompanySpecific: true;
-  events?: ICompanySpecificEvents;
   routes?: IAttachCompanySpecificRoutes;
   middleware?: IAttachCompanySpecificMiddleware;
   administrationSection?: ICorporationAdministrationSection;
@@ -46,11 +42,6 @@ export interface ICompanySpecificStartupProperties {
   urls?: IAttachCompanySpecificUrls;
 }
 
-export type ICompanySpecificStartupFunction = (
-  executionEnvironment: ExecutionEnvironment,
-  config: SiteConfiguration,
-  p: IProviders,
-  rootdir: string
-) => Promise<void>;
+export type ICompanySpecificStartupFunction = (config: any, p: IProviders, rootdir: string) => Promise<void>;
 
 export type ICompanySpecificStartup = ICompanySpecificStartupFunction & ICompanySpecificStartupProperties;

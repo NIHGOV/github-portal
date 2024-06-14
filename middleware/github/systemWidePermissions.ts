@@ -3,17 +3,11 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { NextFunction, Response } from 'express';
-
 import { ReposAppRequest } from '../../interfaces';
 
 const requestCachedKeyName = 'systemWidePermissions';
 
-export default function addSystemWidePermissionsToRequest(
-  req: ReposAppRequest,
-  res: Response,
-  next: NextFunction
-) {
+export default function addSystemWidePermissionsToRequest(req: ReposAppRequest, res, next) {
   // Only compute once per request
   if (req[requestCachedKeyName]) {
     return next();

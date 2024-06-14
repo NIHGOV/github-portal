@@ -8,9 +8,6 @@ export type ConfigRootContinuousDeployment = {
 };
 
 export type ConfigContinuousDeployment = {
-  branchName: string;
-  build: string;
-  commitId: string;
   version: string;
   name: string;
 };
