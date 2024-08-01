@@ -81,7 +81,7 @@ block content
           li(class=(search.sort === 'Alphabet' ? 'active' : ''), title='Sort by repo name')
             a(href='?sort=Alphabet&tag=' + (specificTeamId ? '&teamRepos=' + specificTeamId : '') + (tag ? tag : '') + (query.tt ? '&tt=' + query.tt : '') + (query.phrase ? '&q=' + query.phrase : ''))
               //- i.glyphicon.glyphicon-sort-by-alphabet
-              != octicon('text-size', 20)
+              != octicon('typography', 20)
               |  Name
               //-i.glyphicon.glyphicon-triangle-bottom
           li(class=(search.sort === 'Updated' ? 'active' : ''))
@@ -225,9 +225,12 @@ block content
                 if showIds
                   = repo.id + ' '
                 a(href='/' + localOrgName + '/repos/' + repo.name)= repo.name
-                if repo.private === true
+                if repo.visibility
                   | &nbsp;
-                  .label.label-warning.shrink66(title='This is a private repository and not open source.') Private
+                  .label.label-warning(class={shrink66: !hugeHeading, shrink50: hugeHeading}) #{repo.visibility}
+                if repo.has_pages 
+                  | &nbsp;
+                  .label.label-warning(class={shrink66: !hugeHeading, shrink50: hugeHeading}) pages
                 if repo.permissions && specificTeam
                   = ' '
                   if repo.permissions.admin
@@ -248,7 +251,7 @@ block content
                   if repo.language
                     li
                       span(style={color: languageColor(repo.language)})
-                        != octicon('primitive-dot', 10)
+                        != octicon('dot-fill', 10)
                       = ' ' + repo.language
                   if repo.stargazers_count
                     li
