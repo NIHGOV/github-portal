@@ -50,7 +50,10 @@ foreach ($item in $data) {
     else {
         $processed_description = $orgData.description
     }
-
+    if ($item.repository_selection -ne "all") {
+        Write-Output "Org $($item.account.login) does not have all repositories selected. This can cause issues with the portal."
+        Throw "Org $($item.account.login) does not have all repositories selected. This can cause issues with the portal."
+    }
     $insertData += [PSCustomObject]@{
         type = @("public", "private", "internal")
         active = $true
@@ -60,6 +63,7 @@ foreach ($item in $data) {
             @{
                 appId = $item.app_id
                 installationId = $item.id
+                repositoryAccess = $item.repository_selection
             }
         )
         organizationid = $item.account.id
