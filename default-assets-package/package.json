@@ -28,7 +28,7 @@
     "grunt-exec": "3.0.0",
     "jquery": "^3.5.1",
     "load-grunt-tasks": "^4.0.0",
-    "octicons": "4.4.0",
+    "octicons": "8.4.2",
     "timeago": "1.6.4"
   },
   "files": [
