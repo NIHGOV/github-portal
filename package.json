@@ -97,7 +97,7 @@
     "file-size": "1.0.0",
     "github-username-regex": "1.0.0",
     "hsts": "2.2.0",
-    "js-yaml": "4.1.0",
+    "js-yaml": "4.1.1",
     "json-2-csv": "^3.18.0",
     "jsonc": "2.0.0",
     "jsonwebtoken": "9.0.2",
