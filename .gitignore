@@ -25,3 +25,6 @@ vendor.nocommit/
 
 # If used by an agent
 .*.txt
+
+# Personal VS Code workspace preferences
+.vscode/settings.json
