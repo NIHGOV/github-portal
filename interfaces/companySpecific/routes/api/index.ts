@@ -3,7 +3,7 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { ConnectRouter } from '..';
+import { ConnectRouter } from '../index.js';
 
 export interface IAttachCompanySpecificRoutesApi {
   rootIndex?: ConnectRouter;
@@ -11,6 +11,8 @@ export interface IAttachCompanySpecificRoutesApi {
   context?: IAttachCompanySpecificRoutesApiContextual;
   organization?: IAttachCompanySpecificRoutesApiOrganization;
   people?: ConnectRouter;
+
+  skipApiVersionChecksForPrefixes?: string[];
 }
 
 export interface IAttachCompanySpecificRoutesApiContextual {

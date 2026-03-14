@@ -12,7 +12,9 @@
       "console": "integratedTerminal",
       "env": {
         "NODE_ENV": "development",
+        "NODE_OPTIONS": "--dns-result-order=ipv4first",
         "PORT": "4000",
+        "FRONTEND_MODE": "proxied",
         "DEBUG_GITHUB_PORTAL_SUDO_FORCE": "1",
         "DEBUG": "startup,cosmosdb,g:server,context,*simple-oauth2*,appinsights,insights",
         "MORE_DEBUG": "appinsights,cache,restapi,pg,querycache,user,redis-cross-org"
@@ -29,9 +31,10 @@
       "console": "integratedTerminal",
       "env": {
         "NODE_ENV": "development",
+        "NODE_OPTIONS": "--dns-result-order=ipv4first",
         "PORT": "4000",
-        "DEBUG": "startup,g:server,context,*simple-oauth2*,appinsights,insights,appinsights",
-        "_DEBUG": "cosmosdb,cache"
+        "FRONTEND_MODE": "proxied",
+        "DEBUG": "startup,g:server,context,*simple-oauth2*,entra,entra:*"
       }
     },
     {
@@ -45,7 +48,9 @@
       "console": "integratedTerminal",
       "env": {
         "NODE_ENV": "development",
+        "NODE_OPTIONS": "--dns-result-order=ipv4first",
         "PORT": "4000",
+        "FRONTEND_MODE": "proxied",
         "DEBUG": "startup,cosmosdb,g:server,context",
         "DEBUG_GITHUB_PORTAL_SUDO_OFF": "1",
         "DEBUG_GITHUB_ORG_SUDO_OFF": "1",
@@ -55,7 +60,7 @@
     {
       "type": "node",
       "request": "launch",
-      "name": "Launch server-rendered legacy site :3000",
+      "name": "Site + serve built frontend :3000",
       "program": "${workspaceFolder}/dist/bin/www.js",
       "cwd": "${workspaceFolder}/dist",
       "preLaunchTask": "tsbuild",
@@ -63,9 +68,57 @@
       "console": "integratedTerminal",
       "env": {
         "NODE_ENV": "development",
-        "DEBUG": "startup,g:server,context",
+        "NODE_OPTIONS": "--dns-result-order=ipv4first",
+        "FRONTEND_MODE": "serve",
+        "DEBUG": "startup,cosmosdb,g:server,context,frontend",
+        "MORE_DEBUG": "appinsights,cache,restapi,pg,querycache,user,redis-cross-org"
+      }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Site + build frontend :3000",
+      "program": "${workspaceFolder}/dist/bin/www.js",
+      "cwd": "${workspaceFolder}/dist",
+      "preLaunchTask": "tsbuild+react:build",
+      "sourceMaps": true,
+      "console": "integratedTerminal",
+      "env": {
+        "NODE_ENV": "development",
+        "NODE_OPTIONS": "--dns-result-order=ipv4first",
+        "FRONTEND_MODE": "serve",
+        "DEBUG": "startup,cosmosdb,g:server,context",
+        "MORE_DEBUG": "appinsights,cache,restapi,pg,querycache,user,redis-cross-org,frontend"
+      }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Launch site with no frontend :3000",
+      "program": "${workspaceFolder}/dist/bin/www.js",
+      "cwd": "${workspaceFolder}/dist",
+      "preLaunchTask": "tsbuild",
+      "sourceMaps": true,
+      "console": "integratedTerminal",
+      "env": {
+        "NODE_ENV": "development",
+        "NODE_OPTIONS": "--dns-result-order=ipv4first",
+        "FRONTEND_MODE": "skip",
+        "DEBUG": "startup,g:server,context,authentication",
         "MORE_DEBUG": "appinsights,cache,restapi,pg,querycache,user,redis-cross-org,health,github:tokens"
       }
+    },
+    {
+      "name": "Frontend: Vite 3000",
+      "type": "node",
+      "request": "launch",
+      "preLaunchTask": "vite"
+    },
+    {
+      "name": "Frontend: OSS Vite 3000",
+      "type": "node",
+      "request": "launch",
+      "preLaunchTask": "vite:oss"
     },
     {
       "type": "node",
@@ -78,20 +131,32 @@
       "cwd": "${workspaceRoot}/dist",
       "env": {
         "NODE_ENV": "development",
+        "NODE_OPTIONS": "--dns-result-order=ipv4first",
         "DEBUG": "startup,querycache"
       }
     },
     {
       "type": "node",
       "request": "launch",
-      "name": "Jest Tests",
-      "program": "${workspaceRoot}/node_modules/jest/bin/jest.js",
-      "args": ["-i"],
+      "name": "Debug Tests",
+      "program": "${workspaceRoot}/node_modules/vitest/vitest.mjs",
+      "args": ["run"],
       "preLaunchTask": "tsbuild",
       "sourceMaps": true,
-      "internalConsoleOptions": "openOnSessionStart",
-      "console": "externalTerminal",
-      "outFiles": ["${workspaceRoot}/dist/**/*"]
+      "console": "integratedTerminal",
+      "outFiles": ["${workspaceRoot}/dist/**/*"],
+      "runtimeArgs": ["--experimental-vm-modules"]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Debug Current Test File",
+      "autoAttachChildProcesses": true,
+      "skipFiles": ["<node_internals>/**", "**/node_modules/**"],
+      "program": "${workspaceRoot}/node_modules/vitest/vitest.mjs",
+      "args": ["run", "${relativeFile}"],
+      "smartStep": true,
+      "console": "integratedTerminal"
     },
     {
       "type": "node",
@@ -104,6 +169,7 @@
       "console": "integratedTerminal",
       "env": {
         "NODE_ENV": "development",
+        "NODE_OPTIONS": "--dns-result-order=ipv4first",
         "DEBUG": "appinsights,startup,oss-cache-optimization,redis-cross-org,appinsights,health",
         "MORE_DEBUG": "redis,restapi"
       }
@@ -119,6 +185,7 @@
       "sourceMaps": true,
       "env": {
         "NODE_ENV": "development",
+        "NODE_OPTIONS": "--dns-result-order=ipv4first",
         "DEBUG": "appinsights,restapi,startup,redis-cross-org,appinsights",
         "DEBUG_GITHUB_PORTAL_SUDO_FORCE": "1"
       }
@@ -134,6 +201,7 @@
       "sourceMaps": true,
       "env": {
         "NODE_ENV": "development",
+        "NODE_OPTIONS": "--dns-result-order=ipv4first",
         "DEBUG": "appinsights,startup",
         "DEBUG_GITHUB_PORTAL_SUDO_OFF": "1",
         "DEBUG_GITHUB_ORG_SUDO_OFF": "1"
@@ -150,6 +218,7 @@
       "console": "integratedTerminal",
       "env": {
         "NODE_ENV": "localhost",
+        "NODE_OPTIONS": "--dns-result-order=ipv4first",
         "DEBUG": "startup",
         "EXIT_IMMEDIATELY": "1"
       }
@@ -166,6 +235,7 @@
       "console": "integratedTerminal",
       "env": {
         "NODE_ENV": "development",
+        "NODE_OPTIONS": "--dns-result-order=ipv4first",
         "DEBUG": "startup,appinsights"
       }
     },
@@ -180,6 +250,7 @@
       "console": "integratedTerminal",
       "env": {
         "NODE_ENV": "development",
+        "NODE_OPTIONS": "--dns-result-order=ipv4first",
         "BACKFILL_ALIASES": "1",
         "DEBUG": "startup"
       }
@@ -195,6 +266,7 @@
       "console": "integratedTerminal",
       "env": {
         "NODE_ENV": "development",
+        "NODE_OPTIONS": "--dns-result-order=ipv4first",
         "DEBUG": "startup,appinsights"
       }
     },
@@ -210,6 +282,7 @@
       "console": "integratedTerminal",
       "env": {
         "NODE_ENV": "development",
+        "NODE_OPTIONS": "--dns-result-order=ipv4first",
         "DEBUG": "startup,querycache,appinsights"
       }
     },
@@ -225,6 +298,7 @@
       "console": "integratedTerminal",
       "env": {
         "NODE_ENV": "development",
+        "NODE_OPTIONS": "--dns-result-order=ipv4first",
         "DEBUG": "startup,querycache,appinsights"
       }
     },
@@ -240,6 +314,7 @@
       "console": "integratedTerminal",
       "env": {
         "NODE_ENV": "development",
+        "NODE_OPTIONS": "--dns-result-order=ipv4first",
         "DEBUG": "startup,querycache,appinsights"
       }
     },
@@ -255,6 +330,7 @@
       "console": "integratedTerminal",
       "env": {
         "NODE_ENV": "development",
+        "NODE_OPTIONS": "--dns-result-order=ipv4first",
         "DEBUG": "startup,querycache,appinsights"
       }
     },
@@ -270,6 +346,7 @@
       "console": "integratedTerminal",
       "env": {
         "NODE_ENV": "development",
+        "NODE_OPTIONS": "--dns-result-order=ipv4first",
         "DEBUG": "startup,querycache,appinsights"
       }
     },
@@ -285,6 +362,7 @@
       "console": "integratedTerminal",
       "env": {
         "NODE_ENV": "development",
+        "NODE_OPTIONS": "--dns-result-order=ipv4first",
         "DEBUG": "startup,querycache,appinsights"
       }
     },
@@ -299,6 +377,7 @@
       "console": "integratedTerminal",
       "env": {
         "NODE_ENV": "development",
+        "NODE_OPTIONS": "--dns-result-order=ipv4first",
         "DEBUG": "startup,appinsights"
       }
     },
@@ -313,6 +392,7 @@
       "cwd": "${workspaceRoot}/dist",
       "env": {
         "NODE_ENV": "development",
+        "NODE_OPTIONS": "--dns-result-order=ipv4first",
         "DEBUG": "redis,restapi,startup,appinsights"
       }
     },
@@ -327,6 +407,7 @@
       "console": "integratedTerminal",
       "env": {
         "NODE_ENV": "development",
+        "NODE_OPTIONS": "--dns-result-order=ipv4first",
         "DEBUG": "startup,appinsights"
       }
     },
@@ -341,6 +422,7 @@
       "console": "integratedTerminal",
       "env": {
         "NODE_ENV": "development",
+        "NODE_OPTIONS": "--dns-result-order=ipv4first",
         "DEBUG": "redis,restapi,startup,appinsights"
       }
     },
@@ -355,6 +437,7 @@
       "console": "integratedTerminal",
       "env": {
         "NODE_ENV": "development",
+        "NODE_OPTIONS": "--dns-result-order=ipv4first",
         "DEBUG": "startup"
       }
     },
@@ -369,6 +452,7 @@
       "console": "integratedTerminal",
       "env": {
         "NODE_ENV": "development",
+        "NODE_OPTIONS": "--dns-result-order=ipv4first",
         "DEBUG": "startup"
       }
     },
@@ -383,6 +467,7 @@
       "console": "integratedTerminal",
       "env": {
         "NODE_ENV": "production",
+        "NODE_OPTIONS": "--dns-result-order=ipv4first",
         "DEBUG": "startup,appinsights,health",
         "NOTE_FOR_PUBLIC_MEMORY_PROVIDER_USE": "In-memory providers should fail in production node env by design, this entry helps validate that"
       }
@@ -399,6 +484,7 @@
       "cwd": "${workspaceRoot}/dist",
       "env": {
         "NODE_ENV": "development",
+        "NODE_OPTIONS": "--dns-result-order=ipv4first",
         "DEBUG": "redis,restapi,startup,appinsights"
       }
     },
@@ -413,7 +499,8 @@
       "args": [],
       "cwd": "${workspaceRoot}/dist",
       "env": {
-        "NODE_ENV": "development,pg",
+        "NODE_ENV": "development",
+        "NODE_OPTIONS": "--dns-result-order=ipv4first",
         "DEBUG": "redis,restapi,startup,appinsights"
       }
     },
@@ -428,6 +515,7 @@
       "console": "integratedTerminal",
       "env": {
         "NODE_ENV": "development",
+        "NODE_OPTIONS": "--dns-result-order=ipv4first",
         "DEBUG": "startup"
       }
     },

@@ -6,13 +6,13 @@
 import crypto from 'crypto';
 import secureCompare from 'secure-compare';
 
-import { Organization } from '..';
+import { Organization } from '../index.js';
+import { sleep } from '../../lib/utils.js';
 
-import { sleep } from '../../lib/utils';
-import { type IProviders } from '../../interfaces';
+import type { AppInsightsTelemetryClient, IProviders } from '../../interfaces/index.js';
 
-import defaultWebhookTasks from './tasks';
-import getCompanySpecificDeployment from '../../middleware/companySpecificDeployment';
+import defaultWebhookTasks from './tasks/index.js';
+import getCompanySpecificDeployment from '../../middleware/companySpecificDeployment.js';
 
 interface IValidationError extends Error {
   statusCode?: number;
@@ -23,36 +23,43 @@ let companySpecificWebhookTasks: WebhookProcessor[] = null;
 
 export abstract class WebhookProcessor {
   abstract filter(data: any): boolean;
-  abstract run(providers: IProviders, organization: Organization, data: any): Promise<boolean>;
+  abstract run(
+    providers: IProviders,
+    insights: AppInsightsTelemetryClient,
+    organization: Organization,
+    data: any
+  ): Promise<boolean>;
 }
 
-export interface IOrganizationWebhookEvent {
-  body: any;
+export type OrganizationWebhookEvent<T = any> = {
+  body: T;
   rawBody?: any;
-  properties: IGitHubWebhookProperties;
-}
+  properties: GitHubWebhookProperties;
+};
 
-export interface IGitHubWebhookProperties {
+export type GitHubWebhookProperties = {
   delivery: string;
   signature: string;
   event: string;
   started: string; // Date UTC string
-}
+};
 
-export interface IProcessOrganizationWebhookOptions {
+export type ProcessOrganizationWebhookOptions = {
+  insights: AppInsightsTelemetryClient;
   providers: IProviders;
   organization: Organization;
-  event: IOrganizationWebhookEvent;
+  event: OrganizationWebhookEvent;
   acknowledgeValidEvent?: any;
-}
+};
 
 export default async function ProcessOrganizationWebhook(
-  options: IProcessOrganizationWebhookOptions
+  options: ProcessOrganizationWebhookOptions
 ): Promise<any> {
   const providers = options.providers;
   if (!providers) {
     throw new Error('No providers provided');
   }
+  const { insights } = options;
   const companySpecific = getCompanySpecificDeployment();
   if (
     companySpecific?.features?.firehose?.getAdditionalWebhookTasks &&
@@ -82,7 +89,8 @@ export default async function ProcessOrganizationWebhook(
   const body = event.body;
   const rawBody = event.rawBody || JSON.stringify(body);
   const properties = event.properties;
-  if (!properties || !properties.delivery || !properties.signature || !properties.event) {
+  // we used to also require properties.signature, but not needed now
+  if (!properties || !properties.delivery || !properties.event) {
     if (options.acknowledgeValidEvent) {
       options.acknowledgeValidEvent();
     }
@@ -132,7 +140,7 @@ export default async function ProcessOrganizationWebhook(
 
   for (const processor of work) {
     try {
-      await processor.run(providers, organization, event);
+      await processor.run(providers, insights, organization, event);
     } catch (processInitializationError) {
       if (processInitializationError.status === 403) {
         console.log(`403: ${processInitializationError}`);

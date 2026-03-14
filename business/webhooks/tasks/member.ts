@@ -5,10 +5,10 @@
 
 // COLLABORATOR on a repository
 
-import { WebhookProcessor } from '../organizationProcessor';
-import { Operations, Organization } from '../..';
-import { IProviders, GitHubCollaboratorType } from '../../../interfaces';
-import { ErrorHelper } from '../../../lib/transitional';
+import { WebhookProcessor } from '../organizationProcessor.js';
+import { Operations, Organization } from '../../index.js';
+import { IProviders, GitHubCollaboratorType, AppInsightsTelemetryClient } from '../../../interfaces/index.js';
+import { ErrorHelper } from '../../../lib/transitional.js';
 
 export default class MemberWebhookProcessor implements WebhookProcessor {
   filter(data: any) {
@@ -16,7 +16,12 @@ export default class MemberWebhookProcessor implements WebhookProcessor {
     return eventType === 'member';
   }
 
-  async run(providers: IProviders, organization: Organization, data: any): Promise<any> {
+  async run(
+    providers: IProviders,
+    insights: AppInsightsTelemetryClient,
+    organization: Organization,
+    data: any
+  ): Promise<any> {
     const operations = providers.operations as Operations;
     const queryCache = providers.queryCache;
     const event = data.body;

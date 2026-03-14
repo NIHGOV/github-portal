@@ -4,27 +4,27 @@
 //
 
 import { NextFunction, Response, Router } from 'express';
-import asyncHandler from 'express-async-handler';
 const router: Router = Router();
-import { getProviders } from '../../lib/transitional';
-import { IAggregateUserSummary } from '../../business/user/aggregate';
-import { TeamJoinApprovalEntity } from '../../business/entities/teamJoinApproval/teamJoinApproval';
-import { Team } from '../../business';
-import { ReposAppRequest, OrganizationMembershipState } from '../../interfaces';
+import { getProviders } from '../../lib/transitional.js';
+import { IAggregateUserSummary } from '../../business/user/aggregate.js';
+import { TeamJoinApprovalEntity } from '../../business/entities/teamJoinApproval/teamJoinApproval.js';
+import { Team } from '../../business/index.js';
+import { ReposAppRequest, OrganizationMembershipState } from '../../interfaces/index.js';
+
 import {
   IRequestOrganizationPermissions,
   AddOrganizationPermissionsToRequest,
-} from '../../middleware/github/orgPermissions';
+} from '../../middleware/github/orgPermissions.js';
 
-import RouteRepos from './repos';
-import RouteTeams from './teams';
-import RouteMembership from './membership';
-import RouteJoin from './join';
-import RouteLeave from './leave';
-import RouteSecurityCheck from './2fa';
-import RouteProfileReview from './profileReview';
-import RouteNewRepoSpa from './newRepoSpa';
-import RoutePeople from './people';
+import RouteRepos from './repos.js';
+import RouteTeams from './teams.js';
+import RouteMembership from './membership.js';
+import RouteJoin from './join.js';
+import RouteLeave from './leave.js';
+import RouteSecurityCheck from './2fa.js';
+import RouteProfileReview from './profileReview.js';
+import RouteNewRepoSpa from './newRepoSpa.js';
+import RoutePeople from './people.js';
 
 interface ILocalOrgRequest extends ReposAppRequest {
   sudoMode?: boolean;
@@ -34,7 +34,6 @@ interface ILocalOrgRequest extends ReposAppRequest {
 router.use(function (req: ReposAppRequest, res: Response, next: NextFunction) {
   const onboarding = req.query.onboarding;
   const organization = req.organization;
-  req.individualContext.webContext.pushBreadcrumb(organization.name, onboarding ? false : undefined);
   req.reposContext = {
     section: 'org',
     organization: req.organization,
@@ -60,37 +59,35 @@ router.use('/people', RoutePeople);
 router.use('/teams', RouteTeams);
 
 // Org membership requirement middleware
-router.use(asyncHandler(AddOrganizationPermissionsToRequest));
+router.use(AddOrganizationPermissionsToRequest);
 
-router.use(
-  asyncHandler(async (req: ILocalOrgRequest, res: Response, next: NextFunction) => {
-    const organization = req.organization;
-    const orgPermissions = req.orgPermissions;
-    if (!orgPermissions) {
-      return next(new Error('Organization permissions are unavailable'));
-    }
-    // Decorate the route for the sudoer
-    if (orgPermissions.sudo) {
-      req.sudoMode = true;
-    }
-    const membershipStatus = orgPermissions.membershipStatus;
-    if (membershipStatus === OrganizationMembershipState.Active) {
-      return next();
-    } else {
-      const individualContext = req.individualContext;
-      const username = individualContext.getGitHubIdentity().username;
+router.use(async (req: ILocalOrgRequest, res: Response, next: NextFunction) => {
+  const organization = req.organization;
+  const orgPermissions = req.orgPermissions;
+  if (!orgPermissions) {
+    return next(new Error('Organization permissions are unavailable'));
+  }
+  // Decorate the route for the sudoer
+  if (orgPermissions.sudo) {
+    req.sudoMode = true;
+  }
+  const membershipStatus = orgPermissions.membershipStatus;
+  if (membershipStatus === OrganizationMembershipState.Active) {
+    return next();
+  } else {
+    const individualContext = req.individualContext;
+    const username = individualContext.getGitHubIdentity().username;
 
-      await organization.getOperationalMembership(username);
-      return res.redirect('/' + organization.name + '/join');
-    }
-  })
-);
+    await organization.getOperationalMembership(username);
+    return res.redirect('/' + organization.name + '/join');
+  }
+});
 
 // Org membership required endpoints:
 
 router.get(
   '/',
-  asyncHandler(async function (req: ReposAppRequest, res: Response, next: NextFunction) {
+  async function (req: ReposAppRequest, res: Response, next: NextFunction) {
     const providers = getProviders(req);
     const approvalProvider = providers.approvalProvider;
     const organization = req.organization;
@@ -131,7 +128,7 @@ router.get(
         organizationEntity,
       },
     });
-  })
+  }
 );
 
 router.use('/membership', RouteMembership);
@@ -144,20 +141,17 @@ router.use('/new-repo', (req: ReposAppRequest, res) => {
 });
 router.use('/wizard', RouteNewRepoSpa);
 
-router.use(
-  '/:repoName',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
-    const repoName = req.params.repoName;
-    const organization = req.organization;
-    const attemptedRepository = organization.repository(repoName);
-    try {
-      const details = await attemptedRepository.getDetails();
-      const correctUrl = `${organization.baseUrl}repos/${details.name}`;
-      return res.redirect(correctUrl);
-    } catch (error) {
-      return next();
-    }
-  })
-);
+router.use('/:repoName', async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  const repoName = String(req.params.repoName);
+  const organization = req.organization;
+  const attemptedRepository = organization.repository(repoName);
+  try {
+    const details = await attemptedRepository.getDetails();
+    const correctUrl = `${organization.baseUrl}repos/${details.name}`;
+    return res.redirect(correctUrl);
+  } catch (error) {
+    return next();
+  }
+});
 
 export default router;
