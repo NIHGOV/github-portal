@@ -120,7 +120,7 @@
     "json-2-csv": "^3.18.0",
     "jsonc": "2.0.0",
     "jsonwebtoken": "9.0.3",
-    "jwks-rsa": "3.2.2",
+    "jwks-rsa": "4.0.1",
     "liquidjs": "10.24.0",
     "lodash": "4.17.23",
     "lowlight": "3.3.0",
