@@ -5,15 +5,15 @@
 
 import Debug from 'debug';
 import session from 'express-session';
-import connectRedis from 'connect-redis';
+import { RedisStore } from 'connect-redis';
 
-import type { IProviders, IReposApplication, SiteConfiguration } from '../interfaces';
+import type { IProviders, IReposApplication, SiteConfiguration } from '../interfaces/index.js';
 
 const dbg = Debug.debug('startup');
 
 const saltNotSet = 'session-salt-not-set-warning';
 
-const supportedProviders = ['memory', 'redis', 'cosmosdb'];
+const supportedProviders = ['memory', 'redis', 'cosmosdb', 'file'];
 
 export default async function ConnectSession(
   app: IReposApplication,
@@ -30,9 +30,13 @@ export default async function ConnectSession(
   if (isProduction && sessionSalt === saltNotSet) {
     throw new Error('In a production Node.js environment, a SESSION_SALT must be set');
   }
-  if (isProduction && sessionProvider === 'memory') {
+  if (
+    isProduction &&
+    (sessionProvider === 'memory' || sessionProvider === 'file') &&
+    !config.process.get('ALLOW_DEV_SESSION_PROVIDERS')
+  ) {
     throw new Error(
-      "In a production Node.js environment, a SESSION_PROVIDER of type 'memory' is not supported."
+      `In a production Node.js environment, the development environment SESSION_PROVIDER type '${sessionProvider}' is not supported.`
     );
   }
   let store = undefined;
@@ -48,22 +52,22 @@ export default async function ConnectSession(
     const redisLegacy = sessionRedisClient.duplicate();
     redisLegacy.connect();
 
-    // NIH - Replaced this as redis auth does not work with upstream
-    // auth logic here.
+    // NIH: Replaced with direct auth call as upstream's callback-based auth does not work
+    // in the NIH environment. See session.ts conflict notes.
     await redisLegacy.auth({ password: config.session.redis.key });
     const redisOptions = {
       client: redisLegacy,
       ttl: config.session.redis.ttl,
       prefix: redisPrefix,
     };
-    store = new connectRedis(redisOptions);
-  } else if (sessionProvider === 'cosmosdb') {
+    store = new RedisStore(redisOptions);
+  } else if (sessionProvider === 'cosmosdb' || sessionProvider === 'file') {
     if (!providers.session) {
       throw new Error('No provided session store');
     }
     store = providers.session;
   }
-  const ttlFromStore = store && store['ttl'] ? store['ttl'] : null;
+  const ttlFromStore = store?.ttl || store?.options?.ttl || null;
   const settings = {
     secret: sessionSalt,
     name: config.session.name || 'sid',
@@ -82,13 +86,14 @@ export default async function ConnectSession(
   if (config.session.domain) {
     settings.cookie.domain = config.session.domain;
   }
+  const debugStartup: string = store?.debugStartup ? ' ' + store.debugStartup : '';
   if (store) {
     settings['store'] = store;
   }
   dbg(
     `session cookie: ${settings.name} ${settings.cookie.secure ? 'SECURE ' : ''} ${
       settings.cookie.domain ? 'Domain: ' + settings.cookie.domain : ''
-    } via ${sessionProvider}`
+    } via ${sessionProvider}${debugStartup}`
   );
   return session(settings);
 }

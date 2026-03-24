@@ -5,11 +5,11 @@
 
 // TEAM changes
 
-import { WebhookProcessor } from '../organizationProcessor';
-import { Operations } from '../..';
-import { Organization } from '../..';
-import { projectCollaboratorPermissionsObjectToGitHubRepositoryPermission } from '../../../lib/transitional';
-import type { IProviders } from '../../../interfaces';
+import { WebhookProcessor } from '../organizationProcessor.js';
+import { Operations } from '../../index.js';
+import { Organization } from '../../index.js';
+import { projectCollaboratorPermissionsObjectToGitHubRepositoryPermission } from '../../../lib/transitional.js';
+import type { AppInsightsTelemetryClient, IProviders } from '../../../interfaces/index.js';
 
 // When teams are added or removed on GitHub, refresh the organization's list of
 // teams as well as the cross-organization view of the teams.
@@ -20,7 +20,12 @@ export default class TeamWebhookProcessor implements WebhookProcessor {
     return eventType === 'team';
   }
 
-  async run(providers: IProviders, organization: Organization, data: any): Promise<boolean> {
+  async run(
+    providers: IProviders,
+    insights: AppInsightsTelemetryClient,
+    organization: Organization,
+    data: any
+  ): Promise<boolean> {
     const operations = providers.operations as Operations;
     const queryCache = providers.queryCache;
     const event = data.body;

@@ -6,10 +6,10 @@
 import { NextFunction, Response, Router } from 'express';
 const router: Router = Router();
 
-import { ReposAppRequest, UserAlertType } from '../../../interfaces';
-import { wrapError } from '../../../lib/utils';
+import { ReposAppRequest, UserAlertType } from '../../../interfaces/index.js';
+import { wrapError } from '../../../lib/utils.js';
 
-import MiddlewareTeamAdminRequired from './teamAdminRequired';
+import MiddlewareTeamAdminRequired from './teamAdminRequired.js';
 
 interface IRequestWithTeamAndLegacy extends ReposAppRequest {
   team2?: any;
@@ -25,7 +25,6 @@ router.get(
       if (error) {
         return next(wrapError(error, 'Had trouble getting the detailed properties for this team.'));
       }
-      req.individualContext.webContext.pushBreadcrumb('Properties');
       req.individualContext.webContext.render({
         view: 'org/team/properties',
         title: team2.name + ' - Properties',

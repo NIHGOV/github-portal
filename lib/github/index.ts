@@ -3,20 +3,36 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
+import Debug from 'debug';
 import { Octokit } from '@octokit/rest';
-import { paginateGraphql } from '@octokit/plugin-paginate-graphql';
-import githubPackage from '@octokit/rest/package.json';
+import { paginateGraphQL } from '@octokit/plugin-paginate-graphql';
+import { retry } from '@octokit/plugin-retry';
+import { RequestError } from '@octokit/request-error';
+import type { TelemetryClient } from 'applicationinsights';
 
-import * as restApi from './restApi';
-import { flattenData } from './core';
-import { CompositeIntelligentEngine } from './composite';
-import { RestCollections } from './collections';
-import { CrossOrganizationCollator } from './crossOrganization';
-import { LinkMethods } from './links';
-import { GetAuthorizationHeader, AuthorizationHeaderValue } from '../../interfaces';
-import { ICacheHelper } from '../caching';
-import { ICustomAppPurpose } from './appPurposes';
-import { CreateError } from '../transitional';
+import * as restApi from './restApi.js';
+import { flattenData } from './core.js';
+import { CompositeIntelligentEngine } from './composite.js';
+import { RestCollections } from './collections.js';
+import { CrossOrganizationCollator } from './crossOrganization.js';
+import { LinkMethods } from './links.js';
+import { AppPurposeTypes, GitHubAppPurposes, ICustomAppPurpose } from './appPurposes.js';
+import { CreateError } from '../transitional.js';
+import { Operations } from '../../business/index.js';
+import { requestLog } from './octokitRequestLog.js';
+import type {
+  GetAuthorizationHeader,
+  AuthorizationHeaderValue,
+  ICacheOptions,
+  SiteConfiguration,
+} from '../../interfaces/index.js';
+import type { ICacheHelper } from '../caching/index.js';
+import type {
+  AdditionalRequirementsOptions,
+  GitHubAuthenticationRequirement,
+  GitHubAuthenticationWithRequirements,
+  OctokitMethod,
+} from './types.js';
 
 export enum CacheMode {
   ValidateCache = 'ValidateCache',
@@ -40,7 +56,11 @@ export type OctokitGraphqlOptions = {
   asIterator?: boolean;
 };
 
-const OurOpinionatedOctokit = Octokit.plugin(paginateGraphql);
+type OctokitParameters = Record<string, string | number | boolean> | ICacheOptions;
+
+const debug = Debug.debug('restapi');
+
+const OurOpinionatedOctokit = Octokit.plugin(paginateGraphQL).plugin(retry);
 
 // With the introduction of a breaking change in the underlying schema, any cache objects
 // which are related to the GitHub library and have a SemVer equal to or less than this
@@ -50,10 +70,19 @@ const breakingChangeGitHubPackageVersion = '6.0.0';
 
 const shouldErrorShowRequest = false;
 
+const ERROR_RESPONSE_HEADERS = [
+  'x-github-request-id',
+  'x-ratelimit-remaining',
+  'x-ratelimit-resource',
+  'x-ratelimit-used',
+];
+
 interface IRestLibraryOptions {
-  config: any;
+  insights: TelemetryClient;
+  config: SiteConfiguration;
   cacheProvider: ICacheHelper;
   github?: Octokit;
+  operations?: Operations;
   baseUrl?: string;
 }
 
@@ -65,6 +94,7 @@ export class RestLibrary {
   private _links: LinkMethods;
   private _crossOrganization: CrossOrganizationCollator;
   private githubEngine?: restApi.IntelligentGitHubEngine;
+  private _insights?: TelemetryClient;
 
   defaultPageSize: number;
 
@@ -77,31 +107,38 @@ export class RestLibrary {
       throw new Error('No Redis instance provided to the GitHub library context constructor.');
     }
     this.cacheProvider = cacheProvider;
-
+    this._insights = options.insights;
     const config = options.config;
     if (!config) {
       throw new Error('No runtime configuration instance provided to the library context constructor');
     }
 
-    const nodeGithubVersion = `${githubPackage.name}/${githubPackage.version}`;
+    const restLibraryName = '@octokit/rest';
+    const nodeGithubVersion = `${restLibraryName}/${Octokit.VERSION}`;
     let userAgent = nodeGithubVersion;
     if (config && config.github && config.github.library && config.github.library.userAgent) {
       userAgent = config.github.library.userAgent;
     }
     let github = options.github;
     if (!github) {
+      const plugins = OurOpinionatedOctokit.plugins;
+      for (let i = 0; i < plugins.length; ++i) {
+        if (plugins[i].name === 'requestLog') {
+          // replace with our own patched version to reduce debug output
+          const newPlugin = requestLog;
+          plugins[i] = newPlugin;
+        }
+      }
       github = new OurOpinionatedOctokit({
         userAgent,
         baseUrl: options.baseUrl,
+        timeout: 2500, // ?
       });
     }
     this.github = github;
 
-    (this.defaultPageSize =
-      config && config.github && config.github.api && config.github.api.defaultPageSize
-        ? config.github.api.defaultPageSize
-        : 100),
-      (this.breakingChangeGitHubPackageVersion = breakingChangeGitHubPackageVersion);
+    this.defaultPageSize = config?.github?.api?.defaultPageSize || 100;
+    this.breakingChangeGitHubPackageVersion = breakingChangeGitHubPackageVersion;
 
     this.githubEngine = new restApi.IntelligentGitHubEngine();
     this.compositeEngine = new CompositeIntelligentEngine();
@@ -132,6 +169,10 @@ export class RestLibrary {
       this._crossOrganization = new CrossOrganizationCollator(this, this.collections);
     }
     return this._crossOrganization;
+  }
+
+  get insights() {
+    return this._insights;
   }
 
   hasNextPage?: (any) => boolean;
@@ -166,10 +207,26 @@ export class RestLibrary {
     return authorizationValue;
   }
 
-  async call(
+  async callWithRequirements(
+    requirements: GitHubAuthenticationWithRequirements,
+    options: OctokitParameters,
+    cacheOptions = null
+  ) {
+    if (!requirements?.requirements?.octokitFunctionName) {
+      throw CreateError.InvalidParameters('No octokitFunctionName in requirements');
+    }
+    return this.call(
+      requirements.authorization,
+      requirements.requirements.octokitFunctionName,
+      options,
+      cacheOptions
+    );
+  }
+
+  private async call(
     awaitToken: GetAuthorizationHeader | AuthorizationHeaderValue | string,
     api: string,
-    options,
+    options: any, // OctokitParameters,
     cacheOptions = null
   ): Promise<any> {
     cacheOptions = cacheOptions || {};
@@ -192,28 +249,55 @@ export class RestLibrary {
     return result;
   }
 
-  request(token: GetAuthorizationHeader | string, restEndpoint, parameters: any, cacheOptions): Promise<any> {
+  private request(
+    token: GetAuthorizationHeader | string,
+    restEndpoint: string,
+    parameters: OctokitParameters,
+    cacheOptions?: ICacheOptions
+  ): Promise<any> {
     parameters = parameters || {};
     parameters['octokitRequest'] = restEndpoint;
     return this.call(token, 'request', parameters, cacheOptions);
   }
 
-  requestAsPost(token: GetAuthorizationHeader | string, restEndpoint, parameters: any): Promise<any> {
+  async requestWithRequirements(
+    requirements: GitHubAuthenticationWithRequirements,
+    parameters: OctokitParameters,
+    cacheOptions?: ICacheOptions
+  ) {
+    if (!requirements?.requirements?.octokitRequest) {
+      throw CreateError.InvalidParameters('No octokitRequest in requirements');
+    }
+    return this.request(
+      requirements.authorization,
+      requirements.requirements.octokitRequest,
+      parameters,
+      cacheOptions
+    );
+  }
+
+  requestAsPost(
+    token: GetAuthorizationHeader | string,
+    restEndpoint: string,
+    parameters: OctokitParameters
+  ): Promise<any> {
     parameters = parameters || {};
     parameters['octokitRequest'] = restEndpoint;
     return this.post(token, 'request', parameters);
   }
 
-  restApi(
-    token: GetAuthorizationHeader | string,
-    httpMethod: HttpMethod,
-    restEndpoint: string,
-    parameters: any
-  ): Promise<any> {
-    const requestUrlValue = `${httpMethod} ${restEndpoint}`;
-    return httpMethod === HttpMethod.Get
-      ? this.request(token, requestUrlValue, parameters, {})
-      : this.requestAsPost(token, requestUrlValue, parameters);
+  async requestAsPostWithRequirements(
+    requirements: GitHubAuthenticationWithRequirements,
+    parameters: OctokitParameters
+  ) {
+    if (!requirements?.requirements?.octokitRequest) {
+      throw CreateError.InvalidParameters('No octokitRequest in requirements');
+    }
+    return this.requestAsPost(
+      requirements.authorization,
+      requirements.requirements.octokitRequest,
+      parameters
+    );
   }
 
   graphql<T = any>(
@@ -251,6 +335,89 @@ export class RestLibrary {
     return this.post(token, api, parameters);
   }
 
+  get octokit(): Octokit {
+    return this.github;
+  }
+
+  createRequirementsForFunction(
+    authorization: string | GetAuthorizationHeader,
+    func: OctokitMethod<any>,
+    funcAsString: string,
+    options?: AdditionalRequirementsOptions
+  ): GitHubAuthenticationWithRequirements {
+    if (
+      typeof authorization === 'string' &&
+      GitHubAppPurposes.AllAvailableAppPurposes.includes(authorization as any as AppPurposeTypes)
+    ) {
+      throw CreateError.InvalidParameters(
+        `The authorization must be a header or a function, not an AppPurpose of ${authorization}`
+      );
+    }
+    const requirements: GitHubAuthenticationRequirement<any> = {
+      octokitFunction: func,
+      octokitFunctionName: funcAsString,
+    };
+    if (typeof authorization !== 'string') {
+      authorization = authorization.bind(authorization, requirements);
+    }
+    if (options?.permissions) {
+      requirements.permissions = options.permissions;
+    }
+    if (options?.permissionsMatchRequired !== undefined) {
+      requirements.permissionsMatchRequired = options.permissionsMatchRequired;
+    }
+    if (options?.usePermissionsFromAlternateUrl) {
+      requirements.usePermissionsFromAlternateUrl = options.usePermissionsFromAlternateUrl;
+    }
+    return { authorization, requirements };
+  }
+
+  createRequirementsForRequest(
+    authorization: string | GetAuthorizationHeader,
+    request: string,
+    options?: AdditionalRequirementsOptions
+  ): GitHubAuthenticationWithRequirements {
+    if (
+      typeof authorization === 'string' &&
+      GitHubAppPurposes.AllAvailableAppPurposes.includes(authorization as any as AppPurposeTypes)
+    ) {
+      throw CreateError.InvalidParameters(
+        `The authorization must be a header or a function, not an AppPurpose of ${authorization}`
+      );
+    }
+    const firstSpace = request.indexOf(' ');
+    if (!firstSpace) {
+      throw CreateError.InvalidParameters('REST API request must begin with the HTTP method: ' + request);
+    }
+    const requirements: GitHubAuthenticationRequirement<any> = {
+      octokitRequest: request,
+    };
+    if (options?.permissions) {
+      requirements.permissions = options.permissions;
+    }
+    if (options?.usePermissionsFromAlternateUrl) {
+      requirements.usePermissionsFromAlternateUrl = options.usePermissionsFromAlternateUrl;
+    }
+    if (options?.permissionsMatchRequired !== undefined) {
+      requirements.permissionsMatchRequired = options.permissionsMatchRequired;
+    }
+    if (options?.allowBestFaithInstallationForAnyHttpMethod !== undefined) {
+      requirements.allowBestFaithInstallationForAnyHttpMethod =
+        options.allowBestFaithInstallationForAnyHttpMethod;
+    }
+    if (typeof authorization !== 'string') {
+      authorization = authorization.bind(authorization, requirements);
+    }
+    return { authorization, requirements };
+  }
+
+  async postWithRequirements(requirements: GitHubAuthenticationWithRequirements, options: OctokitParameters) {
+    if (!requirements?.requirements?.octokitFunctionName) {
+      throw CreateError.InvalidParameters('No octokitFunctionName in requirements');
+    }
+    return this.post(requirements.authorization, requirements.requirements.octokitFunctionName, options);
+  }
+
   async post(awaitToken: GetAuthorizationHeader | string, api: string, options: any): Promise<any> {
     const method = restApi.IntelligentGitHubEngine.findLibraryMethod(this.github, api);
     if (!options.headers) {
@@ -262,8 +429,10 @@ export class RestLibrary {
       delete options.allowEmptyResponse;
       massageData = noDataMassage;
     }
+    const now = new Date();
     let diagnosticHeaderInformation: AuthorizationHeaderValue = null;
-    if (!options.headers.authorization) {
+    // prettier-ignore
+    if (!options.headers.authorization) { // CodeQL [SM01513] basic validation of the presence of a header and not a security logic check
       const value = await this.resolveAuthorizationHeader(awaitToken);
       if ((value as AuthorizationHeaderValue)?.purpose) {
         diagnosticHeaderInformation = value as AuthorizationHeaderValue;
@@ -280,15 +449,27 @@ export class RestLibrary {
         diagnostic.octokitRequest = true;
         diagnostic.endpoint = endpoint;
         diagnostic.options = options;
+        if (debug?.enabled) {
+          const optionsAsString = Object.getOwnPropertyNames(options)
+            .map((key) => {
+              const value = options[key];
+              return `${key}=${value}`;
+            })
+            .join(', ');
+          debug(`API ${api} POST ${endpoint} options: ${optionsAsString}`);
+        }
         value = (await method.call(this.github, endpoint, options)) as Promise<any>;
       } else if (api.startsWith('graphql')) {
+        debug(`API ${api} GraphQL POST`);
         massageData = noDataMassage;
         const query = options.octokitQuery;
         delete options.octokitQuery;
         const graphqlOptions = options.octokitGraphqlOptions as OctokitGraphqlOptions;
         delete options.octokitGraphqlOptions;
         const doNotAwait = graphqlOptions?.asIterator;
-        diagnostic.octokitGraphqlOptions = graphqlOptions;
+        if (graphqlOptions !== undefined) {
+          diagnostic.octokitGraphqlOptions = graphqlOptions;
+        }
         diagnostic.graphql = true;
         diagnostic.query = query;
         diagnostic.options = options;
@@ -299,22 +480,79 @@ export class RestLibrary {
           value = (await method.call(this.github, query, options)) as Promise<any>;
         }
       } else {
+        if (debug?.enabled) {
+          const optionsAsString = Object.getOwnPropertyNames(options)
+            .map((key) => {
+              const value = options[key];
+              return `${key}=${value}`;
+            })
+            .join(', ');
+          debug(`API ${api} Generic POST options: ${optionsAsString}`);
+        }
         diagnostic.options = options;
         value = (await method.call(this.github, options)) as Promise<any>;
       }
       const finalized = massageData(value);
       return finalized;
     } catch (error) {
-      console.log(`API ${api} POST error: ${error.message}`);
+      const asRequestError = error as RequestError;
+      console.log(`\nDetailed GitHub API ${asRequestError?.request?.method || 'POST'} failure:`);
+      const message = error?.message || error?.toString() || 'Unknown error message';
+      const isUnicorn = message.includes('Unicorn!') && message.includes('<!DOCTYPE html>');
+      console.log(isUnicorn ? '\tError: UNICORN' : `\tError: ${error.message}`);
+      const isGraphqlError = error?.name === 'GraphqlResponseError';
       if (error?.message?.includes('Unexpected end of JSON input')) {
         console.log('Usually a unicorn and bad GitHub 500');
         console.dir(error);
       }
+      if (asRequestError?.request?.body) {
+        console.log();
+        console.error('\tRequest body:');
+        if (
+          typeof asRequestError.request.body === 'string' ||
+          typeof asRequestError.request.body === 'number'
+        ) {
+          console.log(`\t\t${asRequestError?.request?.body || 'unknown body'}`);
+        } else if (typeof asRequestError.request.body === 'object') {
+          console.log(`\t\t${JSON.stringify(asRequestError?.request?.body) || 'unknown body'}`);
+        } else {
+          console.log(`\t\tunknown body type: ${typeof asRequestError.request.body}`);
+        }
+      }
+      if (error?.headers) {
+        const headerKeys = Object.getOwnPropertyNames(error.headers);
+        const hasNotableKeys = headerKeys.some((key) => ERROR_RESPONSE_HEADERS.includes(key));
+        if (hasNotableKeys) {
+          console.log();
+          console.error('\tGitHub response headers:');
+          for (const key of headerKeys) {
+            if (ERROR_RESPONSE_HEADERS.includes(key)) {
+              console.error(`\t\t${key}: ${error.headers[key]}`);
+            }
+          }
+        }
+      }
+      if (isGraphqlError && error?.errors) {
+        console.log();
+        console.error('\tGraphQL errors:');
+        for (let i = 0; i < error.errors.length; i++) {
+          const err = error.errors[i];
+          console.error(`\t\t${err.type}: ${err.message}`);
+          if (err.path) {
+            console.error(`\t\tPath: ${err.path.join(' > ')}`);
+          }
+          if (err.locations) {
+            console.error(`\t\tLocations: ${err.locations.map((l) => `${l.line}:${l.column}`).join(', ')}`);
+          }
+        }
+      }
       if (
         error?.message?.includes('Resource not accessible by integration') ||
-        error?.message?.includes('Not Found')
+        error?.message?.includes('Not Found') ||
+        isGraphqlError
       ) {
-        console.error('\tOptions:');
+        console.log();
+        console.error('\tParameters:');
         {
           const options =
             Object.getOwnPropertyNames(diagnostic.options).length > 0 ? diagnostic.options : null;
@@ -327,40 +565,96 @@ export class RestLibrary {
               if (key === 'headers') {
                 const headers = value as Record<string, string>;
                 const headersKeys = Object.getOwnPropertyNames(headers);
-                console.log('\t\tHeaders:');
+                console.log();
+                console.log('\tHeaders:');
                 for (let j = 0; j < headersKeys.length; j++) {
                   const headerKey = headersKeys[j];
                   const headerValue =
                     headerKey.toLocaleLowerCase() === 'authorization'
                       ? headers[headerKey].substring(0, 13) + '***'
                       : headers[headerKey];
-                  console.log(`\t\t  - ${headerKey}: ${headerValue}`);
+                  console.log(`\t\t${headerKey}: ${headerValue}`);
                 }
+              } else if (Array.isArray(value)) {
+                console.log(`\t\t${key}: [ ` + (value as unknown[]).join(', ') + ' ]');
               } else {
-                console.log(`\t\tOption: ${key}: ${value}`);
+                console.log(`\t\t${key}: ${value}`);
               }
             }
           }
           const remainingKeys = Object.getOwnPropertyNames(diagnostic);
           if (remainingKeys.length > 0) {
+            console.log();
             for (let i = 0; i < remainingKeys.length; i++) {
+              let indent = '\t\t';
               const key = remainingKeys[i];
-              const value = diagnostic[key];
-              console.log(`\t\t${key}: ${value}`);
+              let value = diagnostic[key];
+              if (key === 'graphql' || key === 'query') {
+                indent = '\t';
+              }
+              if (typeof value === 'string' && value?.includes && value.includes('\n')) {
+                value = value
+                  .split('\n')
+                  .map((line: string) => `${indent}${line}`)
+                  .join('\n');
+              }
+              console.log(`${indent}${key}: ${value}`);
             }
           }
         }
         if (diagnosticHeaderInformation) {
-          console.error('\tAuthorization selection information:');
-          const { installationId, organizationName, purpose, source } = diagnosticHeaderInformation;
-          organizationName && console.error(`\t\tHeader resolved for organization: ${organizationName}`);
+          console.error('\tAuthorization information:');
+          const {
+            installationId,
+            organizationName,
+            purpose,
+            source,
+            impliedTargetType,
+            permissions,
+            created,
+            expires,
+          } = diagnosticHeaderInformation;
+          if (organizationName) {
+            console.error(
+              `\t\tHeader resolved for ${impliedTargetType || 'organization'}: ${organizationName}`
+            );
+          }
+          if (installationId) {
+            console.error(`\t\tInstallation ID: ${installationId}`);
+          }
           const customPurpose = purpose as ICustomAppPurpose;
-          purpose &&
-            customPurpose?.isCustomAppPurpose === true &&
+          if (purpose && customPurpose?.isCustomAppPurpose === true) {
             console.error(`\t\tCustom purpose: ${customPurpose.id}`);
-          purpose && !customPurpose?.isCustomAppPurpose && console.error(`\t\tPurpose: ${purpose}`);
-          installationId && console.error(`\t\tInstallation ID: ${installationId}`);
-          source && console.error(`\t\tSource: ${source}`);
+          }
+          if (purpose && !customPurpose?.isCustomAppPurpose) {
+            console.error(`\t\tPurpose: ${purpose}`);
+          }
+          if (permissions) {
+            console.error(`\t\tGranular permissions:`);
+            const permissionKeys = Object.getOwnPropertyNames(permissions);
+            for (let i = 0; i < permissionKeys.length; i++) {
+              const permissionKey = permissionKeys[i];
+              const permissionValue = permissions[permissionKey];
+              console.error(`\t\t\t${permissionKey}: ${permissionValue}`);
+            }
+          }
+          if (created || expires) {
+            console.error(`\t\tRequest sent:  ${now.toISOString()}`);
+            if (created && created > now) {
+              console.error(`\t\tWarning: Token created in the future: ${created.toISOString()}`);
+            } else if (expires && expires < now) {
+              console.error(`\t\tWarning: Token expired in the past: ${expires.toISOString()}`);
+            }
+          }
+          if (created) {
+            console.error(`\t\tToken created: ${created.toISOString()}`);
+          }
+          if (expires) {
+            console.error(`\t\tToken expires: ${expires.toISOString()}`);
+          }
+          if (source) {
+            console.error(`\t\tSource: ${source}`);
+          }
         }
       }
       if (error.status) {
@@ -379,6 +673,9 @@ export class RestLibrary {
         console.dir(error.request);
       }
       console.log();
+      if (isUnicorn) {
+        throw CreateError.Wrap(`Received a GitHub unicorn HTTP ${error.status} response`, error);
+      }
       throw error;
     }
   }

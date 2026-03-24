@@ -3,13 +3,19 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { ExecutionEnvironment } from '../../interfaces';
-import { CreateError } from '../transitional';
-
 import Debug from 'debug';
-import { GitHubTokenManager } from './tokenManager';
-import GitHubApplication from '../../business/application';
-import { Operations, OperationsCore } from '../../business';
+
+import { CreateError } from '../transitional.js';
+import { GitHubTokenManager } from './tokenManager.js';
+import GitHubApplication from '../../business/application.js';
+import { Operations } from '../../business/index.js';
+import { GitHubAppTokens } from './appTokens.js';
+
+import type {
+  AppInsightsTelemetryClient,
+  ExecutionEnvironment,
+  GitHubEnterpriseAppIdentity,
+} from '../../interfaces/index.js';
 
 const debug = Debug('github:tokens');
 
@@ -27,15 +33,44 @@ export interface ICustomAppPurpose {
   isCustomAppPurpose: boolean; // basic type check
   id: string;
   name: string;
-  getForOrganizationName?(organizationName: string): IGitHubAppConfiguration;
-  getApplicationConfigurationForInitialization?(): IGitHubAppConfiguration;
+  getForTargetName?(organizationName: string): GitHubAppConfiguration;
+  getApplicationConfigurationForInitialization?(): GitHubAppConfiguration;
 }
 
 export type AppPurposeTypes = AppPurpose | ICustomAppPurpose;
 
-export type CustomAppPurposeWithGetApplications = ICustomAppPurpose & {
-  getGitHubAppInstances: () => GitHubApplication[];
+export function isCustomAppPurpose(purpose: AppPurposeTypes): purpose is ICustomAppPurpose {
+  return (purpose as ICustomAppPurpose)?.isCustomAppPurpose === true;
+}
+
+export type GetAwaitedString = () => Promise<string>;
+
+export type CustomAppPurposeWithGetAppInstance = ICustomAppPurpose & {
+  getGitHubAppInstance: () => GitHubApplication;
 };
+
+export function isCustomAppPurposeWithGetAppInstance(
+  purpose: AppPurposeTypes
+): purpose is CustomAppPurposeWithGetAppInstance {
+  return (
+    (purpose as ICustomAppPurpose)?.isCustomAppPurpose === true &&
+    typeof (purpose as CustomAppPurposeWithGetAppInstance).getGitHubAppInstance === 'function'
+  );
+}
+
+export type CustomAppPurposeWithGetTargetedAppInstances = ICustomAppPurpose & {
+  getGitHubAppInstanceForTargetName: (targetName: string) => GitHubApplication;
+};
+
+export function isCustomAppPurposeWithGetTargetedAppInstance(
+  purpose: AppPurposeTypes
+): purpose is CustomAppPurposeWithGetTargetedAppInstances {
+  return (
+    (purpose as ICustomAppPurpose)?.isCustomAppPurpose === true &&
+    typeof (purpose as CustomAppPurposeWithGetTargetedAppInstances).getGitHubAppInstanceForTargetName ===
+      'function'
+  );
+}
 
 export abstract class CustomAppPurpose implements ICustomAppPurpose {
   get isCustomAppPurpose() {
@@ -47,31 +82,69 @@ export abstract class CustomAppPurpose implements ICustomAppPurpose {
   ) {}
 }
 
-export class CustomAppPurposeOrganizationVariance extends CustomAppPurpose {
+export interface IAppPurposeAuthorizedEnterpriseSlugs extends CustomAppPurpose {
+  getAuthorizedEnterpriseSlugs(): string[];
+}
+
+export function isAppPurposeAuthorizedEnterpriseSlugs(
+  purpose: AppPurposeTypes
+): purpose is ICustomAppPurpose & IAppPurposeAuthorizedEnterpriseSlugs {
+  return typeof (purpose as IAppPurposeAuthorizedEnterpriseSlugs).getAuthorizedEnterpriseSlugs === 'function';
+}
+
+export interface IAppPurposeEnterpriseConfiguration extends CustomAppPurpose {
+  getEnterpriseConfiguration(slug: string): GitHubEnterpriseAppIdentity;
+}
+
+export function isAppPurposeWithEnterpriseConfiguration(
+  purpose: AppPurposeTypes
+): purpose is ICustomAppPurpose & IAppPurposeEnterpriseConfiguration {
+  const cast = purpose as IAppPurposeEnterpriseConfiguration;
+  return cast && typeof cast.getEnterpriseConfiguration === 'function';
+}
+
+export type EnterpriseAppKeyLocations = {
+  keyFile?: string;
+  remoteJwt?: string;
+};
+
+export interface IAppPurposeEnterpriseKeys extends CustomAppPurpose {
+  getEnterpriseKeys(slug: string): EnterpriseAppKeyLocations;
+}
+
+export function isAppPurposeWithEnterpriseKeyLocations(
+  purpose: AppPurposeTypes
+): purpose is ICustomAppPurpose & IAppPurposeEnterpriseKeys {
+  const cast = purpose as IAppPurposeEnterpriseKeys;
+  return cast && typeof cast.getEnterpriseKeys === 'function';
+}
+
+export class CustomAppPurposeTargetConfigurationVaries extends CustomAppPurpose {
   private _appsByAppId = new Map<number, GitHubApplication>();
 
-  fallbackIfNotConfiguredOrganizationName = false;
+  fallbackIfNotConfiguredTargetName = false;
 
   constructor(
     private operations: Operations,
     public id: string,
     public name: string,
-    private configurations: IGitHubAppConfiguration[]
+    private targetType: 'organization' | 'enterprise',
+    private configurations: GitHubAppConfiguration[]
   ) {
     super(id, name);
   }
 
-  getForOrganizationName(organizationName: string) {
+  getForTargetName(targetName: string) {
     const configuration = this.configurations.find(
-      (c) => c.specificOrganizationName.toLowerCase() === organizationName.toLowerCase()
+      (c) => c.specificTargetName.toLowerCase() === targetName.toLowerCase()
     );
-    if (!configuration && this.fallbackIfNotConfiguredOrganizationName === false) {
-      throw CreateError.NotFound(`No configuration found for organization ${organizationName}`);
+    if (!configuration && this.fallbackIfNotConfiguredTargetName === false) {
+      throw CreateError.NotFound(`No configuration found for ${this.targetType} ${targetName}`);
     }
     return configuration || this.configurations[0];
   }
 
-  getGitHubAppInstances() {
+  private getAppInstances() {
     const uniqueAppIds = new Set<number>(this.configurations.map((c) => c.appId).filter((id) => !!id));
     const appInstances: GitHubApplication[] = [];
     for (const appId of uniqueAppIds) {
@@ -88,6 +161,55 @@ export class CustomAppPurposeOrganizationVariance extends CustomAppPurpose {
     }
     return appInstances;
   }
+
+  getGitHubAppInstanceForTargetName(targetName: string) {
+    const appConfig = this.getForTargetName(targetName);
+    const appId = appConfig.appId;
+    if (!appId) {
+      throw CreateError.InvalidParameters(
+        `No app ID configuration found with configuration for ${this.targetType} ${targetName}`
+      );
+    }
+    const instances = this.getAppInstances().filter((app) => app.id === appId);
+    if (instances.length === 0) {
+      throw CreateError.InvalidParameters(
+        `No app instance found initialized with configuration for ${this.targetType} ${targetName}`
+      );
+    }
+    return instances[0];
+  }
+}
+
+export class CustomEnterpriseAppPurpose
+  extends CustomAppPurposeTargetConfigurationVaries
+  implements
+    IAppPurposeEnterpriseConfiguration,
+    IAppPurposeAuthorizedEnterpriseSlugs,
+    IAppPurposeEnterpriseKeys
+{
+  constructor(
+    operations: Operations,
+    id: string,
+    name: string,
+    configurations: GitHubAppConfiguration[],
+    private getAuthorizedEnterpriseSlugsFunc: () => string[],
+    private getEnterpriseConfigurationFunc: (slug: string) => GitHubEnterpriseAppIdentity,
+    private getEnterpriseKeysFunc: (slug: string) => EnterpriseAppKeyLocations
+  ) {
+    super(operations, id, name, 'enterprise', configurations);
+  }
+
+  getEnterpriseKeys(slug: string): EnterpriseAppKeyLocations {
+    return this.getEnterpriseKeysFunc(slug);
+  }
+
+  getAuthorizedEnterpriseSlugs() {
+    return this.getAuthorizedEnterpriseSlugsFunc();
+  }
+
+  getEnterpriseConfiguration(slug: string): GitHubEnterpriseAppIdentity {
+    return this.getEnterpriseConfigurationFunc(slug);
+  }
 }
 
 export class CustomAppPurposeSingleConfiguration extends CustomAppPurpose {
@@ -97,7 +219,7 @@ export class CustomAppPurposeSingleConfiguration extends CustomAppPurpose {
     private operations: Operations,
     public id: string,
     public name: string,
-    private configuration: IGitHubAppConfiguration
+    private configuration: GitHubAppConfiguration
   ) {
     super(id, name);
   }
@@ -106,7 +228,7 @@ export class CustomAppPurposeSingleConfiguration extends CustomAppPurpose {
     return this.configuration;
   }
 
-  getGitHubAppInstances() {
+  getGitHubAppInstance() {
     if (!this._appInstance) {
       this._appInstance = createGitHubAppInstance(this.operations, this.configuration, this);
     }
@@ -116,7 +238,7 @@ export class CustomAppPurposeSingleConfiguration extends CustomAppPurpose {
 
 function createGitHubAppInstance(
   operations: Operations,
-  configuration: IGitHubAppConfiguration,
+  configuration: GitHubAppConfiguration,
   customPurpose: AppPurposeTypes
 ) {
   const app = new GitHubApplication(
@@ -124,25 +246,44 @@ function createGitHubAppInstance(
     configuration.appId,
     configuration.slug,
     configuration.description || configuration.slug,
+    getAppCertificateSha256.bind(this, operations, configuration, customPurpose),
     getAppAuthorizationHeader.bind(this, operations, configuration, customPurpose)
   );
   return app;
 }
 
-async function getAppAuthorizationHeader(
+async function getAppTokensInstance(
   operations: Operations,
-  configuration: IGitHubAppConfiguration,
+  configuration: GitHubAppConfiguration,
   purpose: AppPurposeTypes
-): Promise<string> {
+): Promise<GitHubAppTokens> {
   const appId = configuration.appId;
   const tokenManager = GitHubTokenManager.TryGetTokenManagerForOperations(operations);
   const appTokens = await tokenManager.ensureConfigurationAppInitialized(purpose, configuration);
   if (!appTokens) {
     CreateError.InvalidParameters(`No app tokens found configured for app ID ${appId} in tokens instance.`);
   }
+  return appTokens;
+}
+
+async function getAppAuthorizationHeader(
+  operations: Operations,
+  configuration: GitHubAppConfiguration,
+  purpose: AppPurposeTypes
+): Promise<string> {
+  const appTokens = await getAppTokensInstance(operations, configuration, purpose);
   const jwt = await appTokens.getAppAuthenticationToken();
   const value = `bearer ${jwt}`;
   return value;
+}
+
+async function getAppCertificateSha256(
+  operations: Operations,
+  configuration: GitHubAppConfiguration,
+  purpose: AppPurposeTypes
+): Promise<string> {
+  const appTokens = await getAppTokensInstance(operations, configuration, purpose);
+  return appTokens.getCertificateSha256();
 }
 
 export const DefinedAppPurposes = [
@@ -185,31 +326,31 @@ export function getAppPurposeId(purpose: AppPurposeTypes) {
 export function tryGetAppPurposeAppConfiguration(purpose: AppPurposeTypes, organizationName: string) {
   if (
     (purpose as ICustomAppPurpose).isCustomAppPurpose === true &&
-    (purpose as ICustomAppPurpose).getForOrganizationName
+    (purpose as ICustomAppPurpose).getForTargetName
   ) {
-    return (purpose as ICustomAppPurpose).getForOrganizationName(organizationName);
+    return (purpose as ICustomAppPurpose).getForTargetName(organizationName);
   }
 }
 
-export function tryGetAppPurposeGitHubAppInstances(purpose: AppPurposeTypes) {
-  if (
-    (purpose as ICustomAppPurpose).isCustomAppPurpose === true &&
-    (purpose as CustomAppPurposeWithGetApplications).getGitHubAppInstances
-  ) {
-    return (purpose as CustomAppPurposeWithGetApplications).getGitHubAppInstances();
-  }
-  const operations = GitHubAppPurposes.GetOperationsInstanceForBuiltInPurposes();
-  const tokenManager = GitHubTokenManager.TryGetTokenManagerForOperations(operations);
-  const appTokens = tokenManager.getAppForPurpose(purpose);
-  if (!appTokens) {
-    throw CreateError.InvalidParameters(`No app tokens found configured for purpose ${purpose}`);
-  }
-  const appId = appTokens.appId;
-  if (!appId) {
-    throw CreateError.InvalidParameters(`No app ID found configured for purpose ${purpose}`);
-  }
-  return [operations.getApplicationById(appId)];
-}
+// export async function tryGetAppPurposeGitHubAppInstances(purpose: AppPurposeTypes) {
+//   if (
+//     (purpose as ICustomAppPurpose).isCustomAppPurpose === true &&
+//     (purpose as CustomAppPurposeWithGetApplications).getGitHubAppInstances
+//   ) {
+//     return (purpose as CustomAppPurposeWithGetApplications).getGitHubAppInstances();
+//   }
+//   const operations = GitHubAppPurposes.GetOperationsInstanceForBuiltInPurposes();
+//   const tokenManager = GitHubTokenManager.TryGetTokenManagerForOperations(operations);
+//   const appTokens = await tokenManager.getAppForPurpose(purpose);
+//   if (!appTokens) {
+//     throw CreateError.InvalidParameters(`No app tokens found configured for purpose ${purpose}`);
+//   }
+//   const appId = appTokens.appId;
+//   if (!appId) {
+//     throw CreateError.InvalidParameters(`No app ID found configured for purpose ${purpose}`);
+//   }
+//   return [operations.getApplicationById(appId)];
+// }
 
 export class GitHubAppPurposes {
   private _operations: Operations;
@@ -255,23 +396,25 @@ export enum GitHubAppAuthenticationType {
   BestAvailable = 'best',
 }
 
-export interface IGitHubAppConfiguration {
+export type GitHubAppConfiguration = {
   clientId?: string;
   clientSecret?: string;
   appId?: number;
   appKey?: string;
   appKeyFile?: string;
+  appKeyRemoteJwt?: string; // remote JWT location for key vault connection
   webhookSecret?: string;
   slug?: string;
   description?: string;
   baseUrl?: string;
 
-  specificOrganizationName?: string;
-}
+  specificTargetName?: string;
+};
 
-export interface IGitHubAppsOptions {
-  operations: OperationsCore;
+export type GitHubAppsOptions = {
+  operations: Operations;
+  insights: AppInsightsTelemetryClient;
   // app: IReposApplication;
-  configurations: Map<AppPurposeTypes, IGitHubAppConfiguration>;
+  configurations: Map<AppPurposeTypes, GitHubAppConfiguration>;
   executionEnvironment: ExecutionEnvironment;
-}
+};

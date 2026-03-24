@@ -4,17 +4,16 @@
 //
 
 import { NextFunction, Response, Router } from 'express';
-import asyncHandler from 'express-async-handler';
 const router: Router = Router();
 
-import RouteApproval from './approval';
+import RouteApproval from './approval/index.js';
 
-import { getProviders } from '../../../lib/transitional';
-import { wrapError } from '../../../lib/utils';
-import { Team } from '../../../business';
-import { TeamJoinApprovalEntity } from '../../../business/entities/teamJoinApproval/teamJoinApproval';
-import { Account } from '../../../business';
-import { ReposAppRequest, IRequestTeams } from '../../../interfaces';
+import { getProviders } from '../../../lib/transitional.js';
+import { wrapError } from '../../../lib/utils.js';
+import { Team } from '../../../business/index.js';
+import { TeamJoinApprovalEntity } from '../../../business/entities/teamJoinApproval/teamJoinApproval.js';
+import { Account } from '../../../business/index.js';
+import { ReposAppRequest, IRequestTeams } from '../../../interfaces/index.js';
 
 // Not a great place for these, should move into independent files eventually...
 
@@ -92,26 +91,22 @@ export class PermissionWorkflowEngine {
 // Find the request and assign the workflow engine
 
 router.use(function (req: ReposAppRequest, res: Response, next: NextFunction) {
-  req.individualContext.webContext.pushBreadcrumb('Approvals');
   next();
 });
 
-router.get(
-  '/',
-  asyncHandler(async (req: IRequestTeams, res: Response, next: NextFunction) => {
-    const team = req.team2 as Team;
-    const approvals = await team.getApprovals();
-    req.individualContext.webContext.render({
-      view: 'org/team/approvals',
-      title: 'Approvals for ' + team.name,
-      state: {
-        team: team,
-        pendingApprovals: approvals,
-        teamUrl: req.teamUrl,
-      },
-    });
-  })
-);
+router.get('/', async (req: IRequestTeams, res: Response, next: NextFunction) => {
+  const team = req.team2 as Team;
+  const approvals = await team.getApprovals();
+  req.individualContext.webContext.render({
+    view: 'org/team/approvals',
+    title: 'Approvals for ' + team.name,
+    state: {
+      team: team,
+      pendingApprovals: approvals,
+      teamUrl: req.teamUrl,
+    },
+  });
+});
 
 interface IRequestPlusApprovalEngine extends IRequestTeams {
   approvalEngine?: PermissionWorkflowEngine;
@@ -119,7 +114,7 @@ interface IRequestPlusApprovalEngine extends IRequestTeams {
 
 router.use(
   '/:requestid',
-  asyncHandler(async function (req: IRequestPlusApprovalEngine, res: Response, next: NextFunction) {
+  async function (req: IRequestPlusApprovalEngine, res: Response, next: NextFunction) {
     const team = req.team2 as Team;
     const requestid = req.params.requestid;
     const { approvalProvider, operations } = getProviders(req);
@@ -141,13 +136,12 @@ router.use(
         return next(new Error('Mismatch on team'));
       }
       const engine = new PermissionWorkflowEngine(team, approvalPackage);
-      req.individualContext.webContext.pushBreadcrumb(engine.typeName + ' Request');
       req.approvalEngine = engine;
       return next();
     } catch (error) {
       return next(wrapError(error, 'The pending request you are looking for does not seem to exist.'));
     }
-  })
+  }
 );
 
 // Pass on to the context-specific routes.

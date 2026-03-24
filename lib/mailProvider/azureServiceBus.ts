@@ -3,7 +3,8 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { IMailProvider, IMail } from '.';
+import { IMailProvider, IMail } from './index.js';
+import type { AppInsightsTelemetryClient } from '../../interfaces/providers.js';
 import { ServiceBusClient, ServiceBusMessage } from '@azure/service-bus';
 
 export default class AzureServiceBus implements IMailProvider {
@@ -44,7 +45,7 @@ export default class AzureServiceBus implements IMailProvider {
 
   async initialize() {}
 
-  async sendMail(mail: IMail): Promise<any> {
+  async sendMail(insights: AppInsightsTelemetryClient, mail: IMail): Promise<any> {
     const {
       mail: { azureServiceBus: config },
       brand: { supportMail },

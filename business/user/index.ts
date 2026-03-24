@@ -3,25 +3,26 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import pugLoad from 'pug-load';
+import { Response } from 'express';
 import fs from 'fs';
 import objectPath from 'object-path';
+import pugLoad from 'pug-load';
+import type { TelemetryClient } from 'applicationinsights';
 
 import Debug from 'debug';
 const debug = Debug.debug('context');
 
-import { addBreadcrumb, isCodespacesAuthenticating } from '../../lib/utils';
-import { Operations } from '../operations';
-import { UserContext } from './aggregate';
+import { isCodespacesAuthenticating } from '../../lib/utils.js';
+import { Operations } from '../operations/index.js';
+import { UserContext } from './aggregate.js';
 import {
   ReposAppRequest,
-  IReposAppResponse,
   IProviders,
   UserAlertType,
   IAppSession,
   ICorporateLink,
   IDictionary,
-} from '../../interfaces';
+} from '../../interfaces/index.js';
 
 // - - - identity
 
@@ -50,7 +51,7 @@ export interface ICorporateIdentity {
 export interface IWebContextOptions {
   baseUrl?: string;
   request: ReposAppRequest;
-  response: IReposAppResponse;
+  response: Response;
   sessionUserProperties: SessionUserProperties;
 }
 
@@ -205,7 +206,7 @@ class PugPlugins {
 export class WebContext {
   private _baseUrl: string;
   private _request: ReposAppRequest;
-  private _response: IReposAppResponse;
+  private _response: Response;
   private _sessionUserProperties: SessionUserProperties;
   private _tokens: ReposGitHubTokensSessionAdapter;
 
@@ -236,11 +237,6 @@ export class WebContext {
     const approvalScheme = displayHostname === 'localhost' ? 'http' : 'https';
     const slashPrefix = relative.startsWith('/') ? '' : '/';
     return `${approvalScheme}://${displayHostname}${slashPrefix}${relative}`;
-  }
-
-  pushBreadcrumb(title: string, optionalLink?: string | boolean): void {
-    const req = this._request;
-    addBreadcrumb(req, title, optionalLink);
   }
 
   // NOTE: This function is direct from the legacy provider... it could move to
@@ -405,7 +401,7 @@ export class WebContext {
 export interface IIndividualContextOptions {
   corporateIdentity: ICorporateIdentity;
   link: ICorporateLink | null | undefined;
-  insights: any;
+  insights: TelemetryClient;
   webApiContext: WebApiContext | null | undefined;
   webContext: WebContext | null | undefined;
   operations: Operations;
@@ -421,6 +417,7 @@ export class IndividualContext {
   private _operations: Operations;
   private _aggregations: UserContext;
   private _initialView: IDictionary<any>;
+  private _insights: TelemetryClient;
 
   constructor(options: IIndividualContextOptions) {
     this._initialView = {};
@@ -430,6 +427,7 @@ export class IndividualContext {
     this._additionalLinks = [];
     this._webContext = options.webContext;
     this._operations = options.operations;
+    this._insights = options.insights;
   }
 
   get corporateIdentity(): ICorporateIdentity {
@@ -456,6 +454,10 @@ export class IndividualContext {
 
   get hasAdditionalLinks() {
     return this._additionalLinks.length > 0;
+  }
+
+  get insights() {
+    return this._insights;
   }
 
   setAdditionalLinks(additionalLinks: ICorporateLink[]) {
@@ -536,10 +538,11 @@ export class IndividualContext {
   }
 
   async isPortalAdministrator(): Promise<boolean> {
+    const { insights } = this;
     const operations = this._operations;
     const ghi = this.getGitHubIdentity()?.username;
     const link = this._link;
-    this._isPortalAdministrator = await operations.isPortalSudoer(ghi, link);
+    this._isPortalAdministrator = await operations.isPortalSudoer(insights, ghi, link);
     return this._isPortalAdministrator;
   }
 
