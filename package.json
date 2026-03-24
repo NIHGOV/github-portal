@@ -162,7 +162,7 @@
     "universal-github-app-jwt": "2.2.2",
     "universal-user-agent": "7.0.3",
     "validator": "13.15.26",
-    "walk-back": "5.1.1"
+    "walk-back": "5.1.2"
   },
   "devDependencies": {
     "@eslint/eslintrc": "3.3.3",
