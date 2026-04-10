@@ -3,6 +3,7 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
+import crypto from 'crypto';
 import {
   AzureCliCredential,
   ClientAssertionCredential,
@@ -18,7 +19,7 @@ import type {
   IProviders,
   SiteConfiguration,
 } from '../interfaces/index.js';
-import { CreateError, sha256 } from './transitional.js';
+import { CreateError } from './transitional.js';
 import getCompanySpecificDeployment from '../middleware/companySpecificDeployment.js';
 import { ConfidentialClientApplication, LogLevel } from '@azure/msal-node';
 
@@ -58,6 +59,13 @@ const federatedAudienceUri = 'api://AzureADTokenExchange';
 const debug = Debug.debug('entra');
 const DEBUG_MESSAGE_ON_CACHE_REUSE = false;
 const ENTRA_ALLOW_AZURE_CLI_KEY = 'ENTRA_ALLOW_AZURE_CLI';
+const TOKEN_DEBUG_HMAC_KEY = 'token-debug-id';
+
+function computeShortDebugIdentifier(token: string): string {
+  return (
+    crypto.createHmac('sha256', TOKEN_DEBUG_HMAC_KEY).update(token).digest('base64').substring(0, 8) + '*'
+  );
+}
 
 const cachedApplicationInstancedByTenantIdClientId = new Map<string, EntraApplication>();
 
@@ -509,10 +517,10 @@ export class EntraApplication implements IEntraApplicationTokens {
         const now = new Date();
         const inOneMinute = new Date(now.getTime() + 60 * 1000);
         const inTwoMinutes = new Date(now.getTime() + 2 * 60 * 1000);
-        const shortTokenSha = sha256(cachedToken.accessToken).substr(0, 8) + '*';
+        const shortDebugIdentifier = computeShortDebugIdentifier(cachedToken.accessToken);
         if (cachedToken?.expiresOn && cachedToken.expiresOn < now) {
           debug(
-            `${this._description} not using cached access token ${shortTokenSha} for ${resourceDescription} expired ${cachedToken.expiresOn.toISOString()}`
+            `${this._description} not using cached access token ${shortDebugIdentifier} for ${resourceDescription} expired ${cachedToken.expiresOn.toISOString()}`
           );
           this._cachedTokenByAuthority?.set(scope, undefined);
           cachedToken = undefined;
@@ -522,12 +530,12 @@ export class EntraApplication implements IEntraApplicationTokens {
           cachedToken.expiresOn > inOneMinute
         ) {
           debug(
-            `${this._description} briefly using expiring token ${shortTokenSha} for ${resourceDescription} ${cachedToken.expiresOn.toISOString()}`
+            `${this._description} briefly using expiring token ${shortDebugIdentifier} for ${resourceDescription} ${cachedToken.expiresOn.toISOString()}`
           );
           this._cachedTokenByAuthority?.set(scope, undefined);
         } else if (DEBUG_MESSAGE_ON_CACHE_REUSE) {
           debug(
-            `${this._description} using cached token ${shortTokenSha} for ${resourceDescription} expiring ${cachedToken.expiresOn.toISOString()}`
+            `${this._description} using cached token ${shortDebugIdentifier} for ${resourceDescription} expiring ${cachedToken.expiresOn.toISOString()}`
           );
         }
         if (cachedToken?.accessToken) {
@@ -537,9 +545,9 @@ export class EntraApplication implements IEntraApplicationTokens {
       const response = await this.credential.getToken(scope);
       const expiresOn = new Date(response.expiresOnTimestamp);
       const expiresOnNoSeconds = expiresOn.toISOString().slice(0, 16);
-      const shortTokenSha = sha256(response.token).substr(0, 8) + '*';
+      const shortDebugIdentifier = computeShortDebugIdentifier(response.token);
       debug(
-        `${this._description} new token for ${resourceDescription} ${shortTokenSha} expires=${expiresOnNoSeconds} ${this.clientType === EntraIdentityType.AzureCli ? 'via/cli' : 'w/clientId=' + this.clientId}, tenant=${this.getTenantDisplayName()}`
+        `${this._description} new token for ${resourceDescription} ${shortDebugIdentifier} expires=${expiresOnNoSeconds} ${this.clientType === EntraIdentityType.AzureCli ? 'via/cli' : 'w/clientId=' + this.clientId}, tenant=${this.getTenantDisplayName()}`
       );
       cachedToken = {
         accessToken: response.token,

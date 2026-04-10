@@ -6,19 +6,10 @@
 import globals from 'globals';
 import typescriptEslint from '@typescript-eslint/eslint-plugin';
 import pluginSecurity from 'eslint-plugin-security';
+import pluginN from 'eslint-plugin-n';
 import tsParser from '@typescript-eslint/parser';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import js from '@eslint/js';
-import { FlatCompat } from '@eslint/eslintrc';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
-  recommendedConfig: js.configs.recommended,
-  allConfig: js.configs.all,
-});
+import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended';
 
 export default [
   pluginSecurity.configs.recommended,
@@ -33,13 +24,13 @@ export default [
     ignores: [
       '.github/build/*.cjs',
       '.github/build/*.js',
-      'default-assets-package/**/*',
+      'default-assets-package/thirdparty/**/*.js',
       'dist/**/*.js',
       'dist/**/*.cjs',
       'dist/**/*.mjs',
       'dist/**/*.d.ts',
       '.environment/validate.js',
-      '.ossdev/**/*',
+      '.ossdev/build/*.cjs',
       '**/frontend/',
       '**/vendor/**/*',
       '**/vendor.nocommit/**/*',
@@ -47,7 +38,16 @@ export default [
       '.eslint.config.mjs', // this file
     ],
   },
-  ...compat.extends('eslint:recommended', 'plugin:prettier/recommended'),
+  js.configs.recommended,
+  eslintPluginPrettierRecommended,
+  {
+    // Rules added in eslint:recommended for ESLint v10 - disable for now
+    rules: {
+      'no-useless-assignment': 'off',
+      'preserve-caught-error': 'off',
+      'no-unassigned-vars': 'off',
+    },
+  },
   {
     languageOptions: {
       ecmaVersion: 2021,
@@ -63,16 +63,16 @@ export default [
       },
     },
   },
-  ...compat.extends('plugin:@typescript-eslint/recommended', 'plugin:n/recommended').map((config) => ({
+  ...typescriptEslint.configs['flat/recommended'].map((config) => ({
+    ...config,
+    files: ['**/*.ts'],
+  })),
+  ...[pluginN.configs['flat/recommended']].map((config) => ({
     ...config,
     files: ['**/*.ts'],
   })),
   {
     files: ['**/*.ts'],
-
-    plugins: {
-      '@typescript-eslint': typescriptEslint,
-    },
 
     languageOptions: {
       parser: tsParser,

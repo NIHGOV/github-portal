@@ -6,7 +6,15 @@
 import { describe, expect, test } from 'vitest';
 import axios from 'axios';
 
-import { isApiRequest, scrubErrorForLogging, storeReferrer, stringParam } from './utils.js';
+import {
+  installConsoleRedaction,
+  installDebugRedaction,
+  isApiRequest,
+  sanitizeForLogging,
+  scrubErrorForLogging,
+  storeReferrer,
+  stringParam,
+} from './utils.js';
 import { CreateError } from './transitional.js';
 
 // Axios errors embed the full request config — including every request header —
@@ -337,6 +345,95 @@ describe('scrubErrorForLogging', () => {
     expect(serialized).not.toContain('Bearer eyJ');
     expect(serialized).not.toContain('REAL_TOKEN');
     expect(wrappedError.message).toBe('Incorrect graph parameters');
+  });
+});
+
+describe('sanitizeForLogging', () => {
+  test('redacts authorization header strings and bearer tokens', () => {
+    const sanitized = sanitizeForLogging('Authorization: Bearer header.payload.signature');
+
+    expect(sanitized).toBe('Authorization: Bearer [REDACTED]');
+  });
+
+  test('redacts token query parameters embedded in URLs', () => {
+    const sanitized = sanitizeForLogging(
+      'https://example.test/callback?access_token=secret-token&id_token=second-secret'
+    );
+
+    expect(sanitized).toBe('https://example.test/callback?access_token=[REDACTED]&id_token=[REDACTED]');
+  });
+
+  test('preserves bearer realm challenges while redacting bearer tokens', () => {
+    const sanitized = sanitizeForLogging(
+      'challenge=Bearer realm="example" token=Bearer header.payload.signature'
+    );
+
+    expect(sanitized).toBe('challenge=Bearer realm="example" token=Bearer [REDACTED]');
+  });
+
+  test('redacts sensitive values in nested objects without mutating the source', () => {
+    const original = {
+      headers: {
+        Authorization: 'Bearer secret-token',
+        'content-type': 'application/json',
+      },
+      request: {
+        _header:
+          'POST /api HTTP/1.1\r\nAuthorization: Bearer secret-token\r\nContent-Type: application/json\r\n',
+      },
+      nested: {
+        access_token: 'nested-secret',
+      },
+    };
+
+    const sanitized = sanitizeForLogging(original) as typeof original;
+
+    expect(sanitized.headers.Authorization).toBe('[REDACTED]');
+    expect(sanitized.headers['content-type']).toBe('application/json');
+    expect(sanitized.request._header).toContain('Authorization: [REDACTED]');
+    expect(sanitized.nested.access_token).toBe('[REDACTED]');
+    expect(original.headers.Authorization).toBe('Bearer secret-token');
+    expect(original.nested.access_token).toBe('nested-secret');
+  });
+});
+
+describe('installDebugRedaction', () => {
+  test('routes debug output through sanitized console logging', () => {
+    const output: string[] = [];
+    const collector = (...args: unknown[]) => {
+      output.push(args.map((arg) => String(arg)).join(' '));
+    };
+
+    // Snapshot ALL methods patched by installConsoleRedaction before any modification
+    const originalLog = console.log;
+    const originalInfo = console.info;
+    const originalWarn = console.warn;
+    const originalError = console.error;
+    const originalDebug = console.debug;
+    const originalTrace = console.trace;
+    const originalDir = console.dir;
+    const consoleRedactionInstalled = Symbol.for('opensource-management-portal.console-redaction');
+
+    console.error = collector;
+
+    try {
+      installConsoleRedaction();
+      const fakeDebugApi: { log?: (...args: unknown[]) => void } = {};
+      installDebugRedaction(fakeDebugApi);
+      fakeDebugApi.log?.('Authorization: Bearer header.payload.signature');
+    } finally {
+      console.log = originalLog;
+      console.info = originalInfo;
+      console.warn = originalWarn;
+      console.error = originalError;
+      console.debug = originalDebug;
+      console.trace = originalTrace;
+      console.dir = originalDir;
+      delete (console as unknown as Record<symbol, unknown>)[consoleRedactionInstalled];
+    }
+
+    expect(output.join('\n')).toContain('Authorization: Bearer [REDACTED]');
+    expect(output.join('\n')).not.toContain('header.payload.signature');
   });
 });
 

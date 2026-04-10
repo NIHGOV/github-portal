@@ -3,11 +3,14 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
+import crypto from 'crypto';
+
 import type { NextFunction, RequestHandler, Response } from 'express';
+
 import type { ApiRequestToken, IProviders, ReposAppRequest, SiteConfiguration } from '../interfaces/index.js';
 import type { ICacheHelper } from '../lib/caching/index.js';
 import MemoryCacheHelper from '../lib/caching/memory.js';
-import { CreateError, sha256 } from '../lib/transitional.js';
+import { CreateError } from '../lib/transitional.js';
 
 const AUDIT_CACHE_KEY_PREFIX = 'ratelimit:audit';
 const PRE_AUTH_AUDIT_CACHE_KEY_PREFIX = 'ratelimit:preauth:audit';
@@ -158,7 +161,7 @@ function resolveNetworkIdentity(req: ReposAppRequest): string {
 function hashValue(value: string): string {
   // This is only used to compact an unbounded cache key into a stable identifier.
   // It is not used for password storage or secret comparison.
-  return Buffer.from(sha256(value), 'base64').toString('hex');
+  return crypto.createHmac('sha256', 'rate-limit-cache-key').update(value).digest('hex');
 }
 
 function shouldSample(sampleRate: number, count: number): boolean {
