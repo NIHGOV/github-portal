@@ -660,8 +660,9 @@ export default class GitHubEnterprise {
     let cursor: string | null = null;
     let pagesCompleted = 0;
     let hasNextPage = true;
+    let currentPageSize = pageSize;
     while (hasNextPage) {
-      const response = await github.graphql<{
+      let response: {
         enterprise: {
           members: {
             totalCount: number;
@@ -670,11 +671,69 @@ export default class GitHubEnterprise {
           };
         };
         rateLimit: GraphQLRateLimitInfo;
-      }>(this.enterpriseToken, queries.getMembersWithRateLimit, {
-        enterpriseName: this.slug,
-        first: pageSize,
-        cursor,
-      });
+      };
+      try {
+        response = await github.graphql<typeof response>(
+          this.enterpriseToken,
+          queries.getMembersWithRateLimit,
+          {
+            enterpriseName: this.slug,
+            first: currentPageSize,
+            cursor,
+          }
+        );
+      } catch (pageError) {
+        const status = (pageError as any)?.status;
+        const message = (pageError as any)?.message || '';
+        const isRetryable =
+          status === 404 || message.includes('suffixed values') || message.includes('Not Found');
+        if (isRetryable && currentPageSize > 1) {
+          // Reduce page size to isolate the problematic record
+          const nextPageSize = currentPageSize <= 10 ? 1 : Math.max(10, Math.floor(currentPageSize / 2));
+          console.warn(
+            `Enterprise members GraphQL page failed (status=${status}, pageSize=${currentPageSize}). ` +
+              `Retrying same cursor with pageSize=${nextPageSize}.`
+          );
+          currentPageSize = nextPageSize;
+          await sleep(2000);
+          continue;
+        }
+        if (isRetryable && currentPageSize === 1) {
+          // Cannot reduce further — skip this single entry by requesting 1 record
+          // and advancing the cursor past it
+          console.warn(
+            `Enterprise members GraphQL failed at pageSize=1 (status=${status}). ` +
+              `Skipping problematic record at cursor=${cursor}.`
+          );
+          // Advance cursor: request 2 items and keep only the second if it succeeds,
+          // or simply move the cursor forward by a small offset
+          try {
+            const skipResponse = await github.graphql<typeof response>(
+              this.enterpriseToken,
+              queries.getMembersWithRateLimit,
+              {
+                enterpriseName: this.slug,
+                first: 2,
+                cursor,
+              }
+            );
+            const skipData = skipResponse?.enterprise?.members;
+            if (skipData?.nodes?.length > 1) {
+              members.push(skipData.nodes[skipData.nodes.length - 1]);
+            }
+            hasNextPage = skipData?.pageInfo?.hasNextPage ?? false;
+            cursor = skipData?.pageInfo?.endCursor ?? null;
+            pagesCompleted++;
+            currentPageSize = pageSize;
+            continue;
+          } catch {
+            // Last resort: the skip also failed, give up on this page
+            console.warn('Enterprise members GraphQL: unable to skip past problematic record, stopping.');
+            break;
+          }
+        }
+        throw pageError;
+      }
       const membersData = response?.enterprise?.members;
       const rateLimit = response?.rateLimit;
       if (membersData?.nodes) {
@@ -683,6 +742,13 @@ export default class GitHubEnterprise {
       pagesCompleted++;
       hasNextPage = membersData?.pageInfo?.hasNextPage ?? false;
       cursor = membersData?.pageInfo?.endCursor ?? null;
+      // Restore original page size after a successful fetch
+      if (currentPageSize !== pageSize) {
+        console.log(
+          `Enterprise members GraphQL: recovered, restoring pageSize=${pageSize} from ${currentPageSize}.`
+        );
+        currentPageSize = pageSize;
+      }
       if (onProgress) {
         onProgress({
           pagesCompleted,

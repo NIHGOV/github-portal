@@ -23,6 +23,7 @@ RUN rm -rf dist frontend/build
 # RUN npm install --ignore-scripts --production --verbose
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc npm ci
 RUN npm run-script build
+RUN npm prune --omit=dev
 RUN mv node_modules production_node_modules
 RUN rm -f .npmrc
 

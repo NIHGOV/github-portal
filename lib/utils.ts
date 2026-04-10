@@ -497,6 +497,34 @@ const ALLOWED_LOG_HEADERS = new Set([
   'subject-token-claim-tid',
 ]);
 
+const CONSOLE_REDACTION_INSTALLED = Symbol.for('opensource-management-portal.console-redaction');
+const DEBUG_REDACTION_INSTALLED = Symbol.for('opensource-management-portal.debug-redaction');
+const LOG_REDACTION_PLACEHOLDER = '[REDACTED]';
+const SENSITIVE_LOG_FIELDS = new Set([
+  'access_token',
+  'assertion',
+  'authorization',
+  'client_secret',
+  'cookie',
+  'id_token',
+  'proxy-authorization',
+  'refresh_token',
+  'set-cookie',
+]);
+const SENSITIVE_LOG_PAIR_FIELDS = new Set([
+  'access_token',
+  'assertion',
+  'authorization',
+  'client_secret',
+  'cookie',
+  'id_token',
+  'proxy-authorization',
+  'refresh_token',
+  'set-cookie',
+]);
+const SENSITIVE_LOG_QUERY_FIELDS = new Set(['access_token', 'id_token', 'refresh_token']);
+const BEARER_PREFIX = 'bearer ';
+
 export function scrubErrorForLogging(error: unknown): unknown {
   return scrubErrorRecursive(error, new WeakSet());
 }
@@ -562,4 +590,400 @@ function filterHeaderString(raw: string): string {
       return ALLOWED_LOG_HEADERS.has(name);
     })
     .join('\r\n');
+}
+
+export function sanitizeForLogging(value: unknown): unknown {
+  return sanitizeForLoggingRecursive(value, new WeakMap());
+}
+
+export function installConsoleRedaction(): void {
+  const patchedConsole = console as typeof console & { [CONSOLE_REDACTION_INSTALLED]?: boolean };
+  if (patchedConsole[CONSOLE_REDACTION_INSTALLED]) {
+    return;
+  }
+
+  const originalLog = console.log.bind(console);
+  const originalInfo = console.info.bind(console);
+  const originalWarn = console.warn.bind(console);
+  const originalError = console.error.bind(console);
+  const originalDebug = console.debug.bind(console);
+  const originalTrace = console.trace.bind(console);
+  const originalDir = console.dir.bind(console);
+
+  console.log = (...args: unknown[]) => originalLog(...args.map(sanitizeForLogging));
+  console.info = (...args: unknown[]) => originalInfo(...args.map(sanitizeForLogging));
+  console.warn = (...args: unknown[]) => originalWarn(...args.map(sanitizeForLogging));
+  console.error = (...args: unknown[]) => originalError(...args.map(sanitizeForLogging));
+  console.debug = (...args: unknown[]) => originalDebug(...args.map(sanitizeForLogging));
+  console.trace = (...args: unknown[]) => originalTrace(...args.map(sanitizeForLogging));
+  console.dir = (item?: unknown, options?: unknown) => originalDir(sanitizeForLogging(item), options);
+
+  patchedConsole[CONSOLE_REDACTION_INSTALLED] = true;
+}
+
+export function installDebugRedaction(debugApi: {
+  log?: (...args: unknown[]) => void;
+  [DEBUG_REDACTION_INSTALLED]?: boolean;
+}): void {
+  if (debugApi[DEBUG_REDACTION_INSTALLED]) {
+    return;
+  }
+
+  debugApi.log = (...args: unknown[]) => {
+    console.error(...args.map(sanitizeForLogging));
+  };
+  debugApi[DEBUG_REDACTION_INSTALLED] = true;
+}
+
+function sanitizeForLoggingRecursive(value: unknown, seen: WeakMap<object, unknown>): unknown {
+  if (typeof value === 'string') {
+    return redactSensitiveLogString(value);
+  }
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+  if (value instanceof Date) {
+    return value;
+  }
+  if (value instanceof URL) {
+    return redactSensitiveLogString(value.toString());
+  }
+
+  const cached = seen.get(value as object);
+  if (cached) {
+    return cached;
+  }
+
+  if (Array.isArray(value)) {
+    const clone: unknown[] = [];
+    seen.set(value, clone);
+    for (const nested of value) {
+      clone.push(sanitizeForLoggingRecursive(nested, seen));
+    }
+    return clone;
+  }
+
+  if (value instanceof Error) {
+    return sanitizeErrorForLogging(value, seen);
+  }
+
+  const clone: Record<string, unknown> = {};
+  seen.set(value as object, clone);
+  for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+    clone[key] = sanitizeForLoggingProperty(key, nested, seen);
+  }
+  return clone;
+}
+
+function sanitizeErrorForLogging(error: Error, seen: WeakMap<object, unknown>): Record<string, unknown> {
+  const clone: Record<string, unknown> = {
+    name: error.name,
+    message: redactSensitiveLogString(error.message),
+  };
+  seen.set(error, clone);
+  if (error.stack) {
+    clone.stack = redactSensitiveLogString(error.stack);
+  }
+  for (const [key, nested] of Object.entries(error as unknown as Record<string, unknown>)) {
+    clone[key] = sanitizeForLoggingProperty(key, nested, seen);
+  }
+  scrubErrorForLogging(clone);
+  return clone;
+}
+
+function sanitizeForLoggingProperty(key: string, value: unknown, seen: WeakMap<object, unknown>): unknown {
+  const normalizedKey = key.toLowerCase();
+  if (normalizedKey === '_header' && typeof value === 'string') {
+    return redactHeaderString(value);
+  }
+  if (normalizedKey === 'headers' && value && typeof value === 'object') {
+    return sanitizeHeadersForLogging(value as Record<string, unknown>, seen);
+  }
+  if (SENSITIVE_LOG_FIELDS.has(normalizedKey)) {
+    return LOG_REDACTION_PLACEHOLDER;
+  }
+  return sanitizeForLoggingRecursive(value, seen);
+}
+
+function sanitizeHeadersForLogging(
+  headers: Record<string, unknown>,
+  seen: WeakMap<object, unknown>
+): Record<string, unknown> {
+  const cached = seen.get(headers);
+  if (cached && typeof cached === 'object' && !Array.isArray(cached)) {
+    return cached as Record<string, unknown>;
+  }
+
+  const clone: Record<string, unknown> = {};
+  seen.set(headers, clone);
+  for (const [key, value] of Object.entries(headers)) {
+    if (ALLOWED_LOG_HEADERS.has(key.toLowerCase())) {
+      clone[key] = sanitizeForLoggingRecursive(value, seen);
+    } else {
+      clone[key] = LOG_REDACTION_PLACEHOLDER;
+    }
+  }
+  return clone;
+}
+
+function redactHeaderString(raw: string): string {
+  return raw
+    .split('\r\n')
+    .map((line) => {
+      const colonIndex = line.indexOf(':');
+      if (colonIndex === -1) {
+        return redactSensitiveLogString(line);
+      }
+      const name = line.substring(0, colonIndex).trim();
+      if (ALLOWED_LOG_HEADERS.has(name.toLowerCase())) {
+        return `${name}:${redactSensitiveLogString(line.substring(colonIndex + 1))}`;
+      }
+      return `${name}: ${LOG_REDACTION_PLACEHOLDER}`;
+    })
+    .join('\r\n');
+}
+
+function redactSensitiveLogString(value: string): string {
+  let redacted = value;
+  for (const field of SENSITIVE_LOG_PAIR_FIELDS) {
+    redacted = redactNamedValue(redacted, field);
+  }
+  for (const field of SENSITIVE_LOG_QUERY_FIELDS) {
+    redacted = redactQueryParameter(redacted, field);
+  }
+  return redactStandaloneBearerTokens(redacted);
+}
+
+function redactNamedValue(raw: string, field: string): string {
+  const lower = raw.toLowerCase();
+  const fieldLower = field.toLowerCase();
+  let result = '';
+  let start = 0;
+
+  while (start < raw.length) {
+    const match = lower.indexOf(fieldLower, start);
+    if (match === -1) {
+      result += raw.substring(start);
+      break;
+    }
+    if (!isWordBoundary(raw, match - 1) || !isWordBoundary(raw, match + field.length)) {
+      result += raw.substring(start, match + field.length);
+      start = match + field.length;
+      continue;
+    }
+
+    let cursor = match + field.length;
+    if (raw[cursor] === '"' || raw[cursor] === "'") {
+      cursor++;
+    }
+    cursor = skipWhitespace(raw, cursor);
+    if (raw[cursor] !== ':' && raw[cursor] !== '=') {
+      result += raw.substring(start, match + field.length);
+      start = match + field.length;
+      continue;
+    }
+
+    cursor++;
+    cursor = skipWhitespace(raw, cursor);
+    const openingQuote = raw[cursor] === '"' || raw[cursor] === "'" ? raw[cursor] : '';
+    if (openingQuote) {
+      cursor++;
+    }
+
+    let replacementPrefix = raw.substring(match, cursor);
+    let valueStart = cursor;
+    if (
+      (fieldLower === 'authorization' || fieldLower === 'proxy-authorization') &&
+      raw.substring(valueStart, valueStart + BEARER_PREFIX.length).toLowerCase() === BEARER_PREFIX
+    ) {
+      replacementPrefix += raw.substring(valueStart, valueStart + BEARER_PREFIX.length);
+      valueStart += BEARER_PREFIX.length;
+    }
+
+    const valueEnd = findValueEnd(raw, valueStart);
+    result += raw.substring(start, match);
+    result += replacementPrefix;
+    result += LOG_REDACTION_PLACEHOLDER;
+    if (openingQuote && raw[valueEnd] === openingQuote) {
+      result += openingQuote;
+      start = valueEnd + 1;
+    } else {
+      start = valueEnd;
+    }
+  }
+
+  return result;
+}
+
+function redactQueryParameter(raw: string, field: string): string {
+  const lower = raw.toLowerCase();
+  const needle = `${field.toLowerCase()}=`;
+  let result = '';
+  let start = 0;
+
+  while (start < raw.length) {
+    const match = lower.indexOf(needle, start);
+    if (match === -1) {
+      result += raw.substring(start);
+      break;
+    }
+    const prefixChar = raw[match - 1];
+    if (prefixChar !== '?' && prefixChar !== '&') {
+      result += raw.substring(start, match + needle.length);
+      start = match + needle.length;
+      continue;
+    }
+
+    const valueStart = match + needle.length;
+    const valueEnd = findQueryValueEnd(raw, valueStart);
+    result += raw.substring(start, valueStart);
+    result += LOG_REDACTION_PLACEHOLDER;
+    start = valueEnd;
+  }
+
+  return result;
+}
+
+function redactStandaloneBearerTokens(raw: string): string {
+  const lower = raw.toLowerCase();
+  let result = '';
+  let start = 0;
+
+  while (start < raw.length) {
+    const match = lower.indexOf(BEARER_PREFIX, start);
+    if (match === -1) {
+      result += raw.substring(start);
+      break;
+    }
+    if (!isWordBoundary(raw, match - 1)) {
+      result += raw.substring(start, match + BEARER_PREFIX.length);
+      start = match + BEARER_PREFIX.length;
+      continue;
+    }
+
+    const valueStart = match + BEARER_PREFIX.length;
+    if (raw.substring(valueStart, valueStart + 6).toLowerCase() === 'realm=') {
+      result += raw.substring(start, valueStart);
+      start = valueStart;
+      continue;
+    }
+
+    const valueEnd = findBearerTokenEnd(raw, valueStart);
+    const token = raw.substring(valueStart, valueEnd);
+    if (!looksLikeBearerToken(token)) {
+      result += raw.substring(start, valueStart);
+      start = valueStart;
+      continue;
+    }
+
+    result += raw.substring(start, valueStart);
+    result += LOG_REDACTION_PLACEHOLDER;
+    start = valueEnd;
+  }
+
+  return result;
+}
+
+function skipWhitespace(raw: string, start: number): number {
+  let cursor = start;
+  while (cursor < raw.length && isWhitespace(raw[cursor])) {
+    cursor++;
+  }
+  return cursor;
+}
+
+function findValueEnd(raw: string, start: number): number {
+  let cursor = start;
+  while (cursor < raw.length && !isGenericValueTerminator(raw[cursor])) {
+    cursor++;
+  }
+  return cursor;
+}
+
+function findQueryValueEnd(raw: string, start: number): number {
+  let cursor = start;
+  while (cursor < raw.length && !isQueryValueTerminator(raw[cursor])) {
+    cursor++;
+  }
+  return cursor;
+}
+
+function findBearerTokenEnd(raw: string, start: number): number {
+  let cursor = start;
+  while (cursor < raw.length && isBearerTokenCharacter(raw[cursor])) {
+    cursor++;
+  }
+  return cursor;
+}
+
+function looksLikeBearerToken(value: string): boolean {
+  if (!value) {
+    return false;
+  }
+  if (value.length >= 20) {
+    return true;
+  }
+  const segments = value.split('.');
+  return (
+    (segments.length === 2 || segments.length === 3) &&
+    segments.every((segment) => segment.length > 0 && isBearerTokenSegment(segment))
+  );
+}
+
+function isBearerTokenSegment(value: string): boolean {
+  for (const char of value) {
+    if (!isBearerTokenCharacter(char)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function isBearerTokenCharacter(char: string | undefined): boolean {
+  return !!char && 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~+/='.includes(char);
+}
+
+function isGenericValueTerminator(char: string | undefined): boolean {
+  return (
+    !char ||
+    char === '"' ||
+    char === "'" ||
+    char === ',' ||
+    char === '\r' ||
+    char === '\n' ||
+    char === '}' ||
+    char === '&'
+  );
+}
+
+function isQueryValueTerminator(char: string | undefined): boolean {
+  return !char || char === '&' || isWhitespace(char);
+}
+
+function isWhitespace(char: string | undefined): boolean {
+  return char === ' ' || char === '\t' || char === '\r' || char === '\n';
+}
+
+function isWordBoundary(raw: string, index: number): boolean {
+  if (index < 0 || index >= raw.length) {
+    return true;
+  }
+  const char = raw[index];
+  return !isAsciiLetter(char) && !isAsciiDigit(char) && char !== '_' && char !== '-';
+}
+
+function isAsciiLetter(char: string | undefined): boolean {
+  if (!char) {
+    return false;
+  }
+  const code = char.charCodeAt(0);
+  return (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+}
+
+function isAsciiDigit(char: string | undefined): boolean {
+  if (!char) {
+    return false;
+  }
+  const code = char.charCodeAt(0);
+  return code >= 48 && code <= 57;
 }
