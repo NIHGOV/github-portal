@@ -19,25 +19,29 @@ jobs:
       - name: Set up Node.js version
         uses: actions/setup-node@v4
         with:
-          node-version: "20.x"
+          node-version: "24.x"
 
-      - name: npm install, build, and test
-        run: |
-          npm install
-          npm run build --if-present
-          cd ./default-assets-package
-          npm install
-          npm run build
-          cd ..
-          npm run test --if-present
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Build
+        run: bun run build
+
+      - name: Build default-assets-package
+        run: cd ./default-assets-package && bun install --frozen-lockfile --ignore-scripts && bun run build
+
+      - name: Test
+        run: bun run test --if-present
+
+      - name: Prune dev dependencies
+        run: rm -rf node_modules && bun install --frozen-lockfile --ignore-scripts --production
 
       - name: zip application folders
         run: |
-          echo $PWD
-          ls -lah
           cd ..
-          echo $PWD
-          ls -lah
           tar -czf output.tar.gz ./github-portal
           ls -lah
 
