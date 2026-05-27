@@ -9,7 +9,6 @@
 
 import _ from 'lodash';
 
-import { jsonError } from '../middleware/index.js';
 import {
   CreateError,
   ErrorHelper,
@@ -43,6 +42,7 @@ import {
   AppInsightsTelemetryClient,
 } from '../interfaces/index.js';
 import getCompanySpecificDeployment from '../middleware/companySpecificDeployment.js';
+import { safeStringify } from '../lib/safeStringify.js';
 
 import type { CreateRepositoryRequest } from './client/newOrgRepo.js';
 
@@ -110,7 +110,7 @@ export async function createRepositoryCore(
 ): Promise<ICreateRepositoryApiResult> {
   req.createRepositorySource = entrypoint === CreateRepositoryEntrypoint.Api ? 'api' : 'client';
   if (!organization) {
-    throw jsonError(new Error('No organization available in the route.'), 400);
+    throw CreateError.InvalidParameters('No organization available in the route.');
   }
   let serviceShortName: string = null;
   const serviceOwner: string = null;
@@ -120,7 +120,8 @@ export async function createRepositoryCore(
     serviceShortName = apiKeyToken.displayUsername || '(service)';
   }
   const providers = getProviders(req);
-  const { config, operations, mailProvider, insights } = providers;
+  const { config, operations, mailProvider } = providers;
+  const { insights } = req;
   if (config?.github?.repos?.newRepositoriesOffline) {
     throw CreateError.NotAuthorized(config.github.repos.newRepositoriesOffline);
   }
@@ -162,22 +163,19 @@ export async function createRepositoryCore(
   if (msLicense) {
     msLicense = msLicense.toLowerCase();
     if (supportedLicenseExpressions.indexOf(msLicense) < 0) {
-      throw jsonError(new Error('The provided license expression is not currently supported'), 422);
+      throw CreateError.UnprocessableEntity('The provided license expression is not currently supported');
     }
   }
   if (msProperties.administrators && !Array.isArray(msProperties.administrators)) {
-    throw jsonError(new Error('Administrators must be an array of logins'), 422);
+    throw CreateError.UnprocessableEntity('Administrators must be an array of logins');
   }
   parameters.org = organization.name;
   const existingRepoId = req.body.existingrepoid;
   let metadata: RepositoryMetadataEntity;
   let response: any = null;
   if (existingRepoId && !organization.isNewRepositoryLockdownSystemEnabled()) {
-    throw jsonError(
-      new Error(
-        `Repository ID ${existingRepoId} provided for a repository within the ${organization.name} org that is not configured for existing repository classification`
-      ),
-      422
+    throw CreateError.UnprocessableEntity(
+      `Repository ID ${existingRepoId} provided for a repository within the ${organization.name} org that is not configured for existing repository classification`
     );
   }
   let repository: Repository = null;
@@ -231,7 +229,8 @@ export async function createRepositoryCore(
           message: error && error.message ? error.message : error,
         },
       });
-      throw jsonError(error, error.status || 500);
+      ErrorHelper.EnsureHasStatus(error, 500);
+      throw error;
     }
     response = createResult.response;
     insights?.trackEvent({
@@ -279,7 +278,7 @@ export async function createRepositoryCore(
         properties: {
           username: metadata.createdByThirdPartyUsername,
           error: noAvailableUsername.message,
-          encodedError: JSON.stringify(noAvailableUsername),
+          encodedError: safeStringify(noAvailableUsername),
         },
       });
     }
@@ -379,11 +378,8 @@ export async function createRepositoryCore(
       entityId = await repositoryMetadataProvider.createRepositoryMetadata(metadata);
     }
   } catch (insertRequestError) {
-    const err = jsonError(
-      new Error(
-        `Rolling back, problems creating repo metadata for ${metadata.repositoryName} and repo ${metadata.repositoryId}`
-      ),
-      500
+    const err = CreateError.ServerError(
+      `Rolling back, problems creating repo metadata for ${metadata.repositoryName} and repo ${metadata.repositoryId}`
     );
     individualContext?.insights?.trackException({
       exception: insertRequestError,
@@ -732,7 +728,8 @@ async function tryAnnotateMetadataWithLinkForLogin(
   metadata: RepositoryMetadataEntity,
   login: string
 ) {
-  const { insights, linkProvider } = providers;
+  const { linkProvider } = providers;
+  const insights = providers.genericInsights;
   try {
     const link = await linkProvider.getByThirdPartyUsername(login);
     if (link?.corporateId) {

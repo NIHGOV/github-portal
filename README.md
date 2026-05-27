@@ -1,6 +1,6 @@
 # Open Source Management Portal
 
-**2025 note: this project does not entirely build today and is a partial reference implementation for example purposes only**
+> **Note:** 2025 note: this project does not entirely build today and is a partial reference implementation for example purposes only
 
 This application represents the home for open source engineering experiences
 at Microsoft. As a backend application it manages source of truth for many

@@ -8,14 +8,14 @@ import { NextFunction, Response, Router } from 'express';
 import { Team, Organization } from '../../../business/index.js';
 import { TeamJoinApprovalEntity } from '../../../business/entities/teamJoinApproval/teamJoinApproval.js';
 import { TeamJsonFormat, ReposAppRequest } from '../../../interfaces/index.js';
-import { jsonError } from '../../../middleware/index.js';
+import { CreateError, getProviders } from '../../../lib/transitional.js';
 import {
   ApprovalPair,
   Approvals_getTeamMaintainerApprovals,
   Approvals_getUserRequests,
   closeOldRequest,
 } from '../../../routes/settings/approvals.js';
-import { getProviders } from '../../../lib/transitional.js';
+import { stringParam } from '../../../lib/utils.js';
 import { IndividualContext } from '../../../business/user/index.js';
 
 const router: Router = Router();
@@ -53,14 +53,12 @@ router.get('/', async (req: ReposAppRequest, res: Response, next: NextFunction) 
     };
     return res.json(state) as unknown as void;
   } catch (error) {
-    return next(jsonError(error));
+    return next(error);
   }
 });
 
-// -- individual request
-
 router.get('/:approvalId', async (req: ReposAppRequest, res: Response, next: NextFunction) => {
-  const approvalId = req.params.approvalId;
+  const approvalId = stringParam(req, 'approvalId');
   const activeContext = (req.individualContext || req.apiContext) as IndividualContext;
   if (!activeContext.link) {
     return res.json({});
@@ -82,7 +80,7 @@ router.get('/:approvalId', async (req: ReposAppRequest, res: Response, next: Nex
     if (corporateId === request.corporateId) {
       return res.json(approvalPairToJson({ request, team }));
     }
-    const isPortalSudoer = await operations.isPortalSudoer(insights, username, activeContext.link);
+    const isPortalSudoer = await activeContext.isPortalAdministrator();
     const isOrgSudoer = isPortalSudoer || (await organization.isSudoer(username, activeContext.link));
     isMaintainer = isPortalSudoer || isOrgSudoer;
     const maintainers = await team.getOfficialMaintainers();
@@ -96,18 +94,18 @@ router.get('/:approvalId', async (req: ReposAppRequest, res: Response, next: Nex
     if (isMaintainer) {
       return res.json(approvalPairToJson({ request, team }));
     }
-    throw jsonError('This request does not exist or was created by another user', 400);
+    throw CreateError.InvalidParameters('This request does not exist or was created by another user');
   } catch (error) {
     // Edge case: the team no longer exists.
     if (error?.cause?.statusCode === 404 || error?.cause?.cause?.statusCode === 404) {
       return closeOldRequest(true, request, req, res, next);
     }
-    return next(jsonError(error));
+    return next(error);
   }
 });
 
 router.use('/*splat', (req: ReposAppRequest, res: Response, next: NextFunction) => {
-  return next(jsonError('Contextual API or route not found within approvals', 404));
+  return next(CreateError.NotFound('Contextual API or route not found within approvals'));
 });
 
 export default router;

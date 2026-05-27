@@ -26,7 +26,7 @@ const shouldUpdateCached = true;
 const INSIGHTS_PREFIX = 'JobRefreshRepositories';
 
 async function refreshRepositories(providers: IProviders): Promise<IReposJobResult> {
-  const { config, insights, operations } = providers;
+  const { config, genericInsights: insights, operations } = providers;
   insights?.trackEvent({
     name: `${INSIGHTS_PREFIX}Start`,
     properties: {

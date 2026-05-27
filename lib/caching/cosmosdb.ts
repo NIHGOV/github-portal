@@ -4,13 +4,14 @@
 //
 
 import type { ICacheHelper } from './index.js';
-import { CosmosClient, Database, Container } from '@azure/cosmos';
+import { CosmosClient, Database, Container, PatchOperationType } from '@azure/cosmos';
+import Debug from 'debug';
+import { TokenCredential } from '@azure/identity';
+
 import BlobCache, { type BlobCacheOptions } from './blob.js';
 import { sleep } from '../utils.js';
 import { CreateError, ErrorHelper, getSafeCosmosResourceKey, sha256 } from '../transitional.js';
 
-import Debug from 'debug';
-import { TokenCredential } from '@azure/identity';
 const debug = Debug.debug('cache');
 
 export interface ICosmosCacheOptions {
@@ -363,6 +364,37 @@ export default class CosmosCache implements ICacheHelper {
         console.dir(cosmosError);
       }
       throw cosmosError;
+    }
+  }
+
+  readonly supportsIncrementWithExpire = true;
+
+  async incrementWithExpire(key: string, minutesToExpire: number): Promise<number> {
+    this.throwIfNotInitialized();
+    key = this.key(key);
+    const ttl = minutesToExpire * 60;
+    debug(`COSMOS INCREMENT: ${key}`);
+    try {
+      const { resource } = await this._collection.item(key, key).patch({
+        operations: [{ op: PatchOperationType.incr, path: '/count', value: 1 }],
+      });
+      return resource.count as number;
+    } catch (patchError) {
+      if (ErrorHelper.IsNotFound(patchError)) {
+        try {
+          await this._collection.items.create({ id: key, count: 1, ttl });
+          return 1;
+        } catch (createError) {
+          if (ErrorHelper.IsConflict(createError)) {
+            const { resource } = await this._collection.item(key, key).patch({
+              operations: [{ op: PatchOperationType.incr, path: '/count', value: 1 }],
+            });
+            return resource.count as number;
+          }
+          throw createError;
+        }
+      }
+      throw patchError;
     }
   }
 

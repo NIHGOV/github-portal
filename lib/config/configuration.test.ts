@@ -77,7 +77,6 @@ describe('configuration', () => {
         taggedProperty: keyVaultSchemeSecretIdWithTag,
         kvProperty: keyVaultSchemeSecretId,
       };
-      console.dir(config);
       await keyVaultResolver.getObjectSecrets(config);
       expect(config.kvProperty).toEqual('big secret');
       expect(config.taggedProperty).toEqual('p1');
@@ -103,11 +102,13 @@ describe('configuration', () => {
     });
 
     it('keyvault:// on an invalid secret stops processing', async () => {
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const { keyVaultResolver } = await createFakeWithKeys();
       const config = {
         a: 'keyvault://invalid/secrets/hello/1',
       };
       await expect(keyVaultResolver.getObjectSecrets(config)).rejects.toBeTruthy();
+      consoleSpy.mockRestore();
     });
   });
 });

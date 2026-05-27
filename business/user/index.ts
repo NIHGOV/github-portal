@@ -24,6 +24,8 @@ import {
   IDictionary,
 } from '../../interfaces/index.js';
 
+import { SessionFlag } from '../features/sessionFlags.js';
+
 // - - - identity
 
 export enum GitHubIdentitySource {
@@ -237,6 +239,43 @@ export class WebContext {
     const approvalScheme = displayHostname === 'localhost' ? 'http' : 'https';
     const slashPrefix = relative.startsWith('/') ? '' : '/';
     return `${approvalScheme}://${displayHostname}${slashPrefix}${relative}`;
+  }
+
+  hasSessionFlag(flag: string): boolean {
+    const session = this._request['session'] as IAppSession;
+    return session?.sessionFlags?.includes(flag) || false;
+  }
+
+  addSessionFlag(flag: string): boolean {
+    const session = this._request['session'] as IAppSession;
+    if (!session) {
+      return false;
+    }
+    if (!session.sessionFlags) {
+      session.sessionFlags = [];
+    }
+    if (!session.sessionFlags.includes(flag)) {
+      session.sessionFlags.push(flag);
+    }
+    return true;
+  }
+
+  removeSessionFlag(flag: string): boolean {
+    const session = this._request['session'] as IAppSession;
+    if (!session?.sessionFlags) {
+      return false;
+    }
+    const index = session.sessionFlags.indexOf(flag);
+    if (index >= 0) {
+      session.sessionFlags.splice(index, 1);
+      return true;
+    }
+    return false;
+  }
+
+  getSessionFlags(): string[] {
+    const session = this._request['session'] as IAppSession;
+    return session?.sessionFlags ? [...session.sessionFlags] : [];
   }
 
   // NOTE: This function is direct from the legacy provider... it could move to
@@ -542,7 +581,18 @@ export class IndividualContext {
     const operations = this._operations;
     const ghi = this.getGitHubIdentity()?.username;
     const link = this._link;
-    this._isPortalAdministrator = await operations.isPortalSudoer(insights, ghi, link);
+    let isSudoer = await operations.isPortalSudoer(insights, ghi, link);
+    if (isSudoer && this._webContext?.hasSessionFlag(SessionFlag.NegatePortalAdmin)) {
+      insights?.trackEvent({
+        name: 'PortalAdminNegatedBySessionFlag',
+        properties: {
+          githubLogin: ghi,
+          corporateId: this._corporateIdentity?.id,
+        },
+      });
+      isSudoer = false;
+    }
+    this._isPortalAdministrator = isSudoer;
     return this._isPortalAdministrator;
   }
 

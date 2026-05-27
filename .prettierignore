@@ -1,6 +1,10 @@
 # Ignore artifacts
 dist
 
+# Never modify npmrc files (Microsoft Azure Artifacts configuration)
+.npmrc
+.npmrc.arg
+
 # Ignore upstream files
 .github/dotcom-workflows/
 .deploy/geneva/

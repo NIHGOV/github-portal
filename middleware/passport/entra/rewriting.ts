@@ -14,7 +14,7 @@ export async function processUserProfile(
   providers: IProviders,
   profile: AadResponseProfile
 ): Promise<PassportUserWithEntraID> {
-  const { config, graphProvider, insights } = providers;
+  const { config, graphProvider, genericInsights: insights } = providers;
   if (config?.activeDirectory?.authentication?.developmentTenantRewriting?.enabled) {
     rewriteUserProfile(config, profile);
   }

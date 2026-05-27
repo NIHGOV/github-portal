@@ -12,7 +12,7 @@ export async function isAuthorizedSystemAdministrator(
   corporateId: string,
   corporateUsername: string
 ): Promise<boolean> {
-  const { insights, config } = providers;
+  const { genericInsights: insights, config } = providers;
   const insightsPrefix = 'SystemAdministrator';
   if (corporateId && !corporateUsername) {
     try {

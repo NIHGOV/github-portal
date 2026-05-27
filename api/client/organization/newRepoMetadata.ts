@@ -5,7 +5,7 @@
 
 import { NextFunction, Response, Router } from 'express';
 
-import { jsonError } from '../../../middleware/jsonError.js';
+import { CreateError } from '../../../lib/transitional.js';
 import { ReposAppRequest } from '../../../interfaces/index.js';
 
 const router: Router = Router();
@@ -26,7 +26,7 @@ router.get('/byProjectReleaseType', async (req: ReposAppRequest, res: Response, 
 });
 
 router.use('/*splat', (req, res: Response, next: NextFunction) => {
-  return next(jsonError('no API or function available within this path', 404));
+  return next(CreateError.NotFound('no API or function available within this path'));
 });
 
 export default router;

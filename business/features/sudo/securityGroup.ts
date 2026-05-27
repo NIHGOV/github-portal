@@ -32,7 +32,7 @@ export class OrganizationSudoSecurityGroup extends OrganizationSudo {
   }
 
   async isSudoer(githubLogin: string, link?: ICorporateLink): Promise<boolean> {
-    const { insights } = this.providers;
+    const { genericInsights: insights } = this.providers;
     if (this.isSudoEnvironmentOff()) {
       return false;
     }

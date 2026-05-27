@@ -129,13 +129,8 @@ export async function postActionDecision(
   }
   const approvalRequest = engine.request;
   const requestid = engine.id;
-  const {
-    approvalProvider: teamJoinApprovalProvider,
-    config,
-    mailAddressProvider,
-    mailProvider,
-    insights,
-  } = providers;
+  const { approvalProvider: teamJoinApprovalProvider, config, mailAddressProvider, mailProvider } = providers;
+  const insights = individualContext.insights;
   if (decision === TeamApprovalDecision.Reopen) {
     approvalRequest.active = true;
     try {

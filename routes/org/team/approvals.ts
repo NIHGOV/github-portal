@@ -9,7 +9,7 @@ const router: Router = Router();
 import RouteApproval from './approval/index.js';
 
 import { getProviders } from '../../../lib/transitional.js';
-import { wrapError } from '../../../lib/utils.js';
+import { stringParam, wrapError } from '../../../lib/utils.js';
 import { Team } from '../../../business/index.js';
 import { TeamJoinApprovalEntity } from '../../../business/entities/teamJoinApproval/teamJoinApproval.js';
 import { Account } from '../../../business/index.js';
@@ -116,7 +116,7 @@ router.use(
   '/:requestid',
   async function (req: IRequestPlusApprovalEngine, res: Response, next: NextFunction) {
     const team = req.team2 as Team;
-    const requestid = req.params.requestid;
+    const requestid = stringParam(req, 'requestid');
     const { approvalProvider, operations } = getProviders(req);
     if (!approvalProvider) {
       return next(new Error('No approval provider instance available'));

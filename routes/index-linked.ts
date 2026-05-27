@@ -20,7 +20,6 @@ import routeOrgs from './orgs.js';
 import routePeople from './people.js';
 import routeRepos from './repos.js';
 import routeTeams from './teams.js';
-import routeUndo from './undo.js';
 import routeUnlink from './unlink.js';
 
 const hasReactApp = hasStaticReactClientApp();
@@ -54,9 +53,6 @@ router.use('/people', reactRoute || routePeople);
 router.use('/repos', reactRoute || routeRepos);
 router.use('/teams', reactRoute || routeTeams);
 router.use('/unlink', routeUnlink);
-
-// routes not in the frontend
-router.use('/undo', routeUndo);
 
 router.use('/', routeOrgs);
 

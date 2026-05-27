@@ -11,7 +11,7 @@ const router: Router = Router();
 import { IReposRequestWithOrganization } from '../interfaces/index.js';
 import { injectReactClient, TryFallbackToBlob } from '../middleware/index.js';
 import { getProviders, hasStaticReactClientApp } from '../lib/transitional.js';
-import { wrapError } from '../lib/utils.js';
+import { stringParam, wrapError } from '../lib/utils.js';
 
 import orgRoute from './org//index.js';
 
@@ -32,8 +32,9 @@ async function forwardToOrganizationRoutes(
 ) {
   // This middleware contains both the original GitHub operations types
   // as well as the newer implementation. In time this will peel apart.
-  const orgName = req.params.orgName;
-  const { insights, operations } = getProviders(req);
+  const orgName = stringParam(req, 'orgName');
+  const { operations } = getProviders(req);
+  const { insights } = req;
   try {
     const organization = operations.getOrganization(orgName);
     req.organization = organization;

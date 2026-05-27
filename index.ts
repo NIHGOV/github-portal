@@ -11,12 +11,14 @@ import https from 'https';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+import configResolver from './lib/config/index.js';
+import { installConsoleRedaction, installDebugRedaction } from './lib/utils.js';
+import initialize from './middleware/initialize.js';
+import { tryInitializeCompanySpecificDeployment } from './middleware/companySpecificDeployment.js';
 import type { ExecutionEnvironment, IReposApplication, SiteConfiguration } from './interfaces/index.js';
 
-import configResolver from './lib/config/index.js';
-import initialize from './middleware/initialize.js';
-
-import { tryInitializeCompanySpecificDeployment } from './middleware/companySpecificDeployment.js';
+installConsoleRedaction();
+installDebugRedaction(debug);
 
 const debugStartup = debug('startup');
 const debugServer = debug('g:server');

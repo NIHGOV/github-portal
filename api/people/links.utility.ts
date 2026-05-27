@@ -6,7 +6,7 @@
 import { MemberSearch } from '../../business/memberSearch.js';
 import { CrossOrganizationMembersResult, Operations } from '../../business/operations/index.js';
 import { wrapError } from '../../lib/utils.js';
-import { jsonError } from '../../middleware/jsonError.js';
+import { CreateError } from '../../lib/transitional.js';
 
 import type { ICorporateLink } from '../../interfaces/link.js';
 
@@ -35,7 +35,7 @@ export async function getAllUsers(
       linksError,
       'There was a problem retrieving link information to display alongside members.'
     );
-    throw jsonError(linksError, 500);
+    throw CreateError.ServerError(linksError.message, linksError);
   }
   let crossOrganizationMembers: CrossOrganizationMembersResult;
   try {
@@ -43,7 +43,7 @@ export async function getAllUsers(
     crossOrganizationMembers = await operations.getMembers();
   } catch (error) {
     error = wrapError(error, 'There was a problem getting the members list.');
-    throw jsonError(error, 500);
+    throw CreateError.ServerError(error.message, error);
   }
   const search = new MemberSearch({
     crossOrganizationMembers,
@@ -108,6 +108,6 @@ export async function getAllUsers(
     });
     return results;
   } catch (error) {
-    throw jsonError(error, 400);
+    throw CreateError.InvalidParameters(error.message, error);
   }
 }

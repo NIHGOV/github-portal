@@ -8,7 +8,7 @@ const router: Router = Router();
 
 import { IApprovalProvider } from '../../business/entities/teamJoinApproval/approvalProvider.js';
 import { TeamJoinApprovalEntity } from '../../business/entities/teamJoinApproval/teamJoinApproval.js';
-import { safeLocalRedirectUrl } from '../../lib/utils.js';
+import { safeLocalRedirectUrl, stringParam } from '../../lib/utils.js';
 import { Operations } from '../../business/index.js';
 import { Team } from '../../business/index.js';
 import { Organization } from '../../business/index.js';
@@ -108,7 +108,7 @@ router.post('/:requestid/cancel', function (req: ReposAppRequest, res: Response,
     return next(new Error('No approval provider instance available'));
   }
   const safeReturnUrl = safeLocalRedirectUrl(req.body.returnUrl || req.params.returnUrl);
-  const requestid = req.params.requestid;
+  const requestid = stringParam(req, 'requestid');
   const id = req.individualContext.getGitHubIdentity().id;
   approvalProvider
     .getApprovalEntity(requestid)
@@ -137,7 +137,7 @@ router.post('/:requestid/cancel', function (req: ReposAppRequest, res: Response,
 });
 
 router.get('/:requestid', async function (req: ReposAppRequest, res: Response, next: NextFunction) {
-  const requestid = req.params.requestid;
+  const requestid = stringParam(req, 'requestid');
   const { approvalProvider, operations } = getProviders(req);
   let isMaintainer = false;
   let pendingRequest: TeamJoinApprovalEntity = null;

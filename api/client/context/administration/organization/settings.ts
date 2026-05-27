@@ -7,8 +7,8 @@ import { NextFunction, Response, Router } from 'express';
 
 import { OrganizationSetting } from '../../../../../business/entities/organizationSettings/organizationSetting.js';
 import { ReposAppRequest } from '../../../../../interfaces/index.js';
-import { jsonError } from '../../../../../middleware/index.js';
 import { CreateError, ErrorHelper, getProviders } from '../../../../../lib/transitional.js';
+import { stringParam } from '../../../../../lib/utils.js';
 
 const router: Router = Router();
 
@@ -68,7 +68,7 @@ router.get('/features', async (req: IOrganizationSettings, res: Response, next: 
 
 router.get('/feature/:flag', async (req: IOrganizationSettings, res: Response, next: NextFunction) => {
   const { dynamicSettings, organization } = req;
-  const flag = req.params.flag as string;
+  const flag = stringParam(req, 'flag');
   return res.json({
     flag,
     value: dynamicSettings.features.includes(flag) ? flag : null,
@@ -78,9 +78,10 @@ router.get('/feature/:flag', async (req: IOrganizationSettings, res: Response, n
 
 router.put('/feature/:flag', async (req: IOrganizationSettings, res: Response, next: NextFunction) => {
   const { dynamicSettings, organization } = req;
-  const { insights, organizationSettingsProvider } = getProviders(req);
+  const { organizationSettingsProvider } = getProviders(req);
+  const { insights } = req;
   const { features } = dynamicSettings;
-  const flag = req.params.flag as string;
+  const flag = stringParam(req, 'flag');
   const restart = req.query.restart === '1';
   insights?.trackEvent({
     name: 'AddOrganizationFeatureFlag',
@@ -98,7 +99,7 @@ router.put('/feature/:flag', async (req: IOrganizationSettings, res: Response, n
     dynamicSettings.active = true;
   } else {
     if (features.includes(flag)) {
-      return next(jsonError(`flag "${flag}" is already set`, 400));
+      return next(CreateError.InvalidParameters(`flag "${flag}" is already set`));
     }
     dynamicSettings.features.push(flag);
   }
@@ -108,7 +109,12 @@ router.put('/feature/:flag', async (req: IOrganizationSettings, res: Response, n
     }
     await organizationSettingsProvider.updateOrganizationSetting(dynamicSettings);
   } catch (error) {
-    return next(jsonError(`error adding flag "${flag}": ${error}`, ErrorHelper.GetStatus(error) || 400));
+    return next(
+      CreateError.CreateStatusCodeError(
+        ErrorHelper.GetStatus(error) || 400,
+        `error adding flag "${flag}": ${error}`
+      )
+    );
   }
   return res.json({
     flag,
@@ -120,9 +126,10 @@ router.put('/feature/:flag', async (req: IOrganizationSettings, res: Response, n
 
 router.delete('/feature/:flag', async (req: IOrganizationSettings, res: Response, next: NextFunction) => {
   const { organization, dynamicSettings } = req;
-  const { organizationSettingsProvider, insights } = getProviders(req);
+  const { organizationSettingsProvider } = getProviders(req);
+  const { insights } = req;
   const { features } = dynamicSettings;
-  const flag = req.params.flag as string;
+  const flag = stringParam(req, 'flag');
   const restart = req.query.restart === '1';
   insights?.trackEvent({
     name: 'RemoveOrganizationFeatureFlag',
@@ -139,7 +146,7 @@ router.delete('/feature/:flag', async (req: IOrganizationSettings, res: Response
     dynamicSettings.active = false;
   } else {
     if (!features.includes(flag)) {
-      return next(jsonError(`flag "${flag}" is not set`, 400));
+      return next(CreateError.InvalidParameters(`flag "${flag}" is not set`));
     }
     dynamicSettings.features = dynamicSettings.features.filter((flagEntry) => flagEntry !== flag);
   }
@@ -149,7 +156,12 @@ router.delete('/feature/:flag', async (req: IOrganizationSettings, res: Response
     }
     await organizationSettingsProvider.updateOrganizationSetting(dynamicSettings);
   } catch (error) {
-    return next(jsonError(`error removing flag "${flag}": ${error}`, ErrorHelper.GetStatus(error) || 400));
+    return next(
+      CreateError.CreateStatusCodeError(
+        ErrorHelper.GetStatus(error) || 400,
+        `error removing flag "${flag}": ${error}`
+      )
+    );
   }
   return res.json({
     flag,
@@ -172,7 +184,7 @@ router.get('/properties', async (req: IOrganizationSettings, res: Response, next
 
 router.get('/property/:flag', async (req: IOrganizationSettings, res: Response, next: NextFunction) => {
   const { dynamicSettings, organization } = req;
-  const propertyName = req.params.propertyName as string;
+  const propertyName = stringParam(req, 'flag');
   const { properties } = dynamicSettings;
   return res.json({
     property: propertyName,
@@ -184,18 +196,18 @@ router.get('/property/:flag', async (req: IOrganizationSettings, res: Response, 
 router.put(
   '/property/:propertyName',
   async (req: IOrganizationSettings, res: Response, next: NextFunction) => {
-    const { organization, dynamicSettings } = req;
-    const { insights, organizationSettingsProvider } = getProviders(req);
+    const { organization, dynamicSettings, insights } = req;
+    const { organizationSettingsProvider } = getProviders(req);
     const { properties } = dynamicSettings;
     const newValue = req.body.value as string;
     const restart = req.query.restart === '1';
     if (!newValue) {
-      return next(jsonError('body.value required', 400));
+      return next(CreateError.InvalidParameters('body.value required'));
     }
     if (typeof newValue !== 'string') {
-      return next(jsonError('body.value must be a string value', 400));
+      return next(CreateError.InvalidParameters('body.value must be a string value'));
     }
-    const propertyName = req.params.propertyName as string;
+    const propertyName = stringParam(req, 'propertyName');
     const currentPropertyValue = properties[propertyName] || null;
     insights?.trackEvent({
       name: 'SetOrganizationSettingProperty',
@@ -215,9 +227,9 @@ router.put(
       await organizationSettingsProvider.updateOrganizationSetting(dynamicSettings);
     } catch (error) {
       return next(
-        jsonError(
-          `error setting property "${propertyName}" to "${newValue}": ${error}`,
-          ErrorHelper.GetStatus(error) || 400
+        CreateError.CreateStatusCodeError(
+          ErrorHelper.GetStatus(error) || 400,
+          `error setting property "${propertyName}" to "${newValue}": ${error}`
         )
       );
     }
@@ -235,10 +247,10 @@ router.put(
 router.delete(
   '/property/:propertyName',
   async (req: IOrganizationSettings, res: Response, next: NextFunction) => {
-    const { organization, dynamicSettings } = req;
-    const { organizationSettingsProvider, insights } = getProviders(req);
+    const { organization, dynamicSettings, insights } = req;
+    const { organizationSettingsProvider } = getProviders(req);
     const { properties } = dynamicSettings;
-    const propertyName = req.params.propertyName as string;
+    const propertyName = stringParam(req, 'propertyName');
     const currentPropertyValue = properties[propertyName] || null;
     const restart = req.query.restart === '1';
     insights?.trackEvent({
@@ -251,7 +263,7 @@ router.delete(
       },
     });
     if (properties[propertyName] === undefined) {
-      return next(jsonError(`property "${propertyName}" is not set`, 400));
+      return next(CreateError.InvalidParameters(`property "${propertyName}" is not set`));
     }
     delete dynamicSettings.properties[propertyName];
     try {
@@ -261,7 +273,10 @@ router.delete(
       await organizationSettingsProvider.updateOrganizationSetting(dynamicSettings);
     } catch (error) {
       return next(
-        jsonError(`error removing property "${propertyName}": ${error}`, ErrorHelper.GetStatus(error) || 400)
+        CreateError.CreateStatusCodeError(
+          ErrorHelper.GetStatus(error) || 400,
+          `error removing property "${propertyName}": ${error}`
+        )
       );
     }
     return res.json({
@@ -276,7 +291,7 @@ router.delete(
 //
 
 router.use('/*splat', (req, res: Response, next: NextFunction) => {
-  return next(jsonError('no API or function available in administration - organization', 404));
+  return next(CreateError.NotFound('no API or function available in administration - organization'));
 });
 
 export default router;

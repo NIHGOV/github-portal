@@ -8,17 +8,19 @@ import { NextFunction, Response, Router } from 'express';
 import { Organization } from '../../../business/index.js';
 import { IProviders, ReposAppRequest } from '../../../interfaces/index.js';
 
-import { jsonError } from '../../../middleware/index.js';
 import getCompanySpecificDeployment from '../../../middleware/companySpecificDeployment.js';
-import { ErrorHelper, getProviders } from '../../../lib/transitional.js';
+import { CreateError, ErrorHelper, getProviders } from '../../../lib/transitional.js';
+import { stringParam } from '../../../lib/utils.js';
 import { IndividualContext } from '../../../business/user/index.js';
 
 import routeApprovals from './approvals.js';
+import routeDiagnostics from './diagnostics.js';
 import routeIndividualContextualOrganization from './organization/index.js';
 import routeOrgs from './orgs.js';
 import routeRepos from './repos.js';
 import routeTeams from './teams.js';
 import routeAdministration from './administration/index.js';
+import routeFeatures from './features.js';
 import routeSample from './sample.js';
 import routeSettings from './settings.js';
 
@@ -30,6 +32,7 @@ if (deployment?.routes?.api?.context?.index) {
 }
 
 router.use('/approvals', routeApprovals);
+router.use('/diagnostics', routeDiagnostics);
 
 router.get('/', (req: ReposAppRequest, res) => {
   const { config } = getProviders(req);
@@ -104,9 +107,10 @@ router.get('/repos', routeRepos);
 router.get('/teams', routeTeams);
 router.use('/sample', routeSample);
 router.use('/settings', routeSettings);
+router.use('/features', routeFeatures);
 
 router.use('/orgs/:orgName', async (req: ReposAppRequest, res: Response, next: NextFunction) => {
-  const { orgName } = req.params;
+  const orgName = stringParam(req, 'orgName');
   const providers = getProviders(req);
   const { operations } = providers;
   // const activeContext = (req.individualContext || req.apiContext) as IndividualContext;
@@ -131,7 +135,7 @@ router.use('/orgs/:orgName', async (req: ReposAppRequest, res: Response, next: N
       res.end();
       return;
     }
-    return next(jsonError(noOrgError, 500));
+    return next(CreateError.ServerError(noOrgError.message, noOrgError));
   }
 });
 
@@ -152,7 +156,7 @@ async function isUnmanagedOrganization(providers: IProviders, orgName: string): 
 router.use('/orgs/:orgName', routeIndividualContextualOrganization);
 
 router.use('/*splat', (req: ReposAppRequest, res: Response, next: NextFunction) => {
-  return next(jsonError('Contextual API or route not found', 404));
+  return next(CreateError.NotFound('Contextual API or route not found'));
 });
 
 export default router;

@@ -18,6 +18,7 @@ import { CrossOrganizationCollator } from './crossOrganization.js';
 import { LinkMethods } from './links.js';
 import { AppPurposeTypes, GitHubAppPurposes, ICustomAppPurpose } from './appPurposes.js';
 import { CreateError } from '../transitional.js';
+import { scrubErrorForLogging } from '../utils.js';
 import { Operations } from '../../business/index.js';
 import { requestLog } from './octokitRequestLog.js';
 import type {
@@ -84,6 +85,7 @@ interface IRestLibraryOptions {
   github?: Octokit;
   operations?: Operations;
   baseUrl?: string;
+  cacheKeyPrefix?: string;
 }
 
 export class RestLibrary {
@@ -95,6 +97,7 @@ export class RestLibrary {
   private _crossOrganization: CrossOrganizationCollator;
   private githubEngine?: restApi.IntelligentGitHubEngine;
   private _insights?: TelemetryClient;
+  private _cacheKeyPrefix?: string;
 
   defaultPageSize: number;
 
@@ -139,6 +142,7 @@ export class RestLibrary {
 
     this.defaultPageSize = config?.github?.api?.defaultPageSize || 100;
     this.breakingChangeGitHubPackageVersion = breakingChangeGitHubPackageVersion;
+    this._cacheKeyPrefix = options.cacheKeyPrefix;
 
     this.githubEngine = new restApi.IntelligentGitHubEngine();
     this.compositeEngine = new CompositeIntelligentEngine();
@@ -173,6 +177,10 @@ export class RestLibrary {
 
   get insights() {
     return this._insights;
+  }
+
+  get cacheKeyPrefix(): string | undefined {
+    return this._cacheKeyPrefix;
   }
 
   hasNextPage?: (any) => boolean;
@@ -495,6 +503,7 @@ export class RestLibrary {
       const finalized = massageData(value);
       return finalized;
     } catch (error) {
+      scrubErrorForLogging(error);
       const asRequestError = error as RequestError;
       console.log(`\nDetailed GitHub API ${asRequestError?.request?.method || 'POST'} failure:`);
       const message = error?.message || error?.toString() || 'Unknown error message';

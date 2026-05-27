@@ -7,12 +7,13 @@ import { NextFunction, Response, Router } from 'express';
 
 import { ReposAppRequest, AccountJsonFormat } from '../../interfaces/index.js';
 import { CreateError, getProviders } from '../../lib/transitional.js';
+import { stringParam } from '../../lib/utils.js';
 
 const router: Router = Router();
 
 router.get('/:login', async (req: ReposAppRequest, res: Response, next: NextFunction) => {
   const { operations } = getProviders(req);
-  const login = req.params.login as string;
+  const login = stringParam(req, 'login');
   try {
     if (!login) {
       throw CreateError.ParameterRequired('login');

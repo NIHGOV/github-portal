@@ -6,7 +6,7 @@
 import { TelemetryClient } from 'applicationinsights';
 import { AuthorizationCode } from 'simple-oauth2';
 import { RedisClientType } from 'redis';
-
+import type { RequestHandler } from 'express';
 import type { Pool as PostgresPool } from 'pg';
 
 import type {
@@ -73,7 +73,6 @@ export interface IProviders {
   github?: RestLibrary;
   graphProvider?: IGraphProvider;
   immutable?: IImmutableStorageProvider;
-  insights?: TelemetryClient;
   linkProvider?: ILinkProvider;
   mailAddressProvider?: IMailAddressProvider;
   mailProvider?: IMailProvider;
@@ -83,6 +82,8 @@ export interface IProviders {
   organizationSettingsProvider?: IOrganizationSettingProvider;
   postgresPool?: PostgresPool;
   queryCache?: QueryCache;
+  preAuthRateLimitMiddleware?: RequestHandler;
+  rateLimitMiddleware?: RequestHandler;
   webhookQueueProcessor?: IQueueProcessor;
   sessionRedisClient?: RedisClientType;
   cacheProvider?: ICacheHelper;

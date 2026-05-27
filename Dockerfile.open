@@ -5,11 +5,15 @@
 
 # This file simulates running the scripts to convert to open, locally.
 
-ARG IMAGE_NAME=mcr.microsoft.com/azurelinux/base/nodejs:20
+ARG IMAGE_NAME=mcr.microsoft.com/azurelinux/base/core:3.0
 
-FROM $IMAGE_NAME AS build
+FROM $IMAGE_NAME AS node24-base
 
-RUN tdnf -y update --quiet
+RUN tdnf -y update --quiet && \
+    tdnf -y install --quiet ca-certificates nodejs24 nodejs24-npm && \
+    tdnf clean all --quiet
+
+FROM node24-base AS build
 
 WORKDIR /build
 
@@ -50,7 +54,7 @@ WORKDIR /build/frontend
 RUN npm install
 RUN npm run build
 
-FROM $IMAGE_NAME AS run
+FROM node24-base AS run
 
 ENV IS_DOCKER=1 \
     NPM_CONFIG_LOGLEVEL=warn \

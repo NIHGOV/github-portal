@@ -6,7 +6,7 @@
 import { NextFunction, Response, Router } from 'express';
 
 import { ReposAppRequest } from '../../../../../interfaces/index.js';
-import { jsonError } from '../../../../../middleware/index.js';
+import { CreateError } from '../../../../../lib/transitional.js';
 
 import routeSettings from './settings.js';
 
@@ -22,7 +22,7 @@ router.get('/', async (req: ReposAppRequest, res: Response, next: NextFunction) 
 });
 
 router.use('/*splat', (req, res: Response, next: NextFunction) => {
-  return next(jsonError('no API or function available in administration - organization', 404));
+  return next(CreateError.NotFound('no API or function available in administration - organization'));
 });
 
 export default router;

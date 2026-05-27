@@ -23,6 +23,8 @@ export type ConfigWebServer = {
       sku: string;
       hostname: string;
       alwaysOn: string;
+      isSiteContainers: boolean;
+      stack: string;
       slotType: 'production' | 'staging' | undefined;
     };
   };

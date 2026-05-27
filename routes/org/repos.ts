@@ -11,6 +11,7 @@ import _ from 'lodash';
 import moment from 'moment';
 
 import lowercaser from '../../middleware/lowercaser.js';
+import { stringParam } from '../../lib/utils.js';
 
 import routeAdministrativeLock from './repoAdministrativeLock.js';
 import NewRepositoryLockdownSystem from '../../business/features/newRepositories/newRepositoryLockdown.js';
@@ -162,7 +163,7 @@ export async function findRepoCollaboratorsExcludingOwners(
 }
 
 router.use('/:repoName', async function (req: ILocalRequest, res: Response, next: NextFunction) {
-  const repoName = req.params.repoName;
+  const repoName = stringParam(req, 'repoName');
   const organization = req.organization;
   const repository = organization.repository(repoName);
   await repository.getDetails();
@@ -213,7 +214,8 @@ router.get('/:repoName/delete', async function (req: ILocalRequest, res: Respons
 router.post('/:repoName/delete', async function (req: ILocalRequest, res: Response, next: NextFunction) {
   // NOTE: this code is also duplicated for now in the client/internal/* folder
   // CONSIDER: de-duplicate
-  const { insights, operations } = getProviders(req);
+  const { operations } = getProviders(req);
+  const { insights } = req;
   const { organization, repository } = req;
   const repositoryMetadataProvider = getRepositoryMetadataProvider(operations);
   const lockdownSystem = new NewRepositoryLockdownSystem({

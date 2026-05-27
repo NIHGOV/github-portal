@@ -269,7 +269,10 @@ export class Team {
           this.authorize(AppPurpose.Data),
           'GET /organizations/:org_id/team/:team_id',
           {
-            usePermissionsFromAlternateUrl: '/orgs/{org}/teams/{team_slug}',
+            permissions: {
+              permission: 'members',
+              access: 'read',
+            },
           }
         ),
         parameters,
@@ -475,7 +478,10 @@ export class Team {
           this.authorize(AppPurpose.CustomerFacing),
           'GET /organizations/:org_id/team/:team_id/memberships/:username',
           {
-            usePermissionsFromAlternateUrl: '/orgs/{org}/teams/{team_slug}', // /memberships/{username}
+            permissions: {
+              permission: 'members',
+              access: 'read',
+            },
           }
         ),
         parameters,

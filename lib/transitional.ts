@@ -251,6 +251,7 @@ export class CreateError {
   static CreateStatusCodeError(code: number, message?: string, cause?: Error): Error {
     const error = cause ? new Error(message, { cause }) : new Error(message);
     error['status'] = code;
+    error['statusCode'] = code;
     return error;
   }
 
@@ -301,6 +302,10 @@ export class CreateError {
 
   static ServerError(message: string, cause?: Error): Error {
     return CreateError.CreateStatusCodeError(500, message, cause);
+  }
+
+  static UnprocessableEntity(message: string, cause?: Error): Error {
+    return CreateError.CreateStatusCodeError(422, message, cause);
   }
 }
 

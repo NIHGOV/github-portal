@@ -6,9 +6,10 @@
 import { NextFunction, Response, Router } from 'express';
 
 import { Team } from '../../../../business/index.js';
-import { jsonError } from '../../../../middleware/index.js';
+import { CreateError } from '../../../../lib/transitional.js';
 import { setContextualTeam } from '../../../../middleware/github/teamPermissions.js';
 import { ReposAppRequest } from '../../../../interfaces/index.js';
+import { scrubErrorForLogging, stringParam } from '../../../../lib/utils.js';
 
 import RouteTeam from './team.js';
 
@@ -18,12 +19,13 @@ const router: Router = Router();
 
 router.use('/:teamSlug', async (req: ReposAppRequest, res: Response, next: NextFunction) => {
   const { organization } = req;
-  const { teamSlug } = req.params;
+  const teamSlug = stringParam(req, 'teamSlug');
   let team: Team = null;
   try {
     team = await organization.getTeamFromSlug(teamSlug);
     setContextualTeam(req, team);
   } catch (error) {
+    scrubErrorForLogging(error);
     console.dir(error);
     return next(error);
   }
@@ -33,7 +35,7 @@ router.use('/:teamSlug', async (req: ReposAppRequest, res: Response, next: NextF
 router.use('/:teamSlug', RouteTeam);
 
 router.use('/*splat', (req, res: Response, next: NextFunction) => {
-  return next(jsonError('no API or function available for repos', 404));
+  return next(CreateError.NotFound('no API or function available for repos'));
 });
 
 export default router;

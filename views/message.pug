@@ -33,6 +33,12 @@ block content
             br
             a.btn.btn-primary(href=messageLink, target=messageLinkTarget || undefined)= messageLinkTitle
 
+        if postAction && postButtonText
+          form(method='post', action=postAction)
+            p
+              br
+              button.btn.btn-primary(type='submit')= postButtonText
+
         p
           br
           a.btn.btn-default(href='/')= buttonText || 'Home'

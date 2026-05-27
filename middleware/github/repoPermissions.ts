@@ -27,6 +27,7 @@ const requestScopedRepositoryKeyName = 'repository';
 
 export interface IContextualRepositoryPermissions {
   allowAdministration: boolean;
+  granularAdministration: boolean;
   admin: boolean;
   maintain: boolean;
   write: boolean;
@@ -110,6 +111,7 @@ export async function getComputedRepositoryPermissions(
   const repoPermissions: IContextualRepositoryPermissions = {
     isLinked: false,
     allowAdministration: false,
+    granularAdministration: false,
     admin: false,
     maintain: false,
     sudo: false,

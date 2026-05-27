@@ -7,7 +7,8 @@ import { NextFunction, Response, Router } from 'express';
 
 import { Organization } from '../../../business/organization.js';
 import { setContextualTeam } from '../../../middleware/github/teamPermissions.js';
-import { jsonError } from '../../../middleware/jsonError.js';
+import { CreateError } from '../../../lib/transitional.js';
+import { stringParam } from '../../../lib/utils.js';
 import { ReposAppRequest, TeamJsonFormat } from '../../../interfaces/index.js';
 import JsonPager from '../jsonPager.js';
 import LeakyLocalCache from '../leakyLocalCache.js';
@@ -23,14 +24,14 @@ const leakyLocalCache = new LeakyLocalCache<number, Team[]>();
 
 router.use('/:teamSlug', async (req: ReposAppRequest, res: Response, next: NextFunction) => {
   const { organization } = req;
-  const { teamSlug } = req.params;
+  const teamSlug = stringParam(req, 'teamSlug');
   let team: Team = null;
   try {
     team = await organization.getTeamFromSlug(teamSlug);
     setContextualTeam(req, team);
     return next();
   } catch (teamError) {
-    return next(jsonError(teamError));
+    return next(teamError);
   }
 });
 
@@ -66,7 +67,7 @@ export async function getClientApiOrganizationTeamsResponse(
 ) {
   const organization = (req.organization || (req as any).aeOrganization) as Organization;
   if (!organization) {
-    return next(jsonError('No available organization', 400));
+    return next(CreateError.InvalidParameters('No available organization'));
   }
   const pager = new JsonPager<Team>(req, res);
   const q: string = (req.query.q ? (req.query.q as string) : null) || '';
@@ -94,12 +95,12 @@ export async function getClientApiOrganizationTeamsResponse(
     );
   } catch (repoError) {
     console.dir(repoError);
-    return next(jsonError(repoError));
+    return next(repoError);
   }
 }
 
 router.use('/*splat', (req, res: Response, next: NextFunction) => {
-  return next(jsonError('no API or function available within this team', 404));
+  return next(CreateError.NotFound('no API or function available within this team'));
 });
 
 export default router;

@@ -20,6 +20,7 @@ import {
   GraphEntityType,
 } from './index.js';
 import { ErrorHelper, CreateError, splitSemiColonCommas } from '../transitional.js';
+import { scrubErrorForLogging } from '../utils.js';
 import type { ICacheHelper } from '../caching/index.js';
 import type { IEntraApplicationTokens } from '../applicationIdentity.js';
 
@@ -724,6 +725,7 @@ export class MicrosoftGraphProvider implements IGraphProvider {
       }
       return response.data;
     } catch (error) {
+      scrubErrorForLogging(error);
       const axiosError = error as AxiosError;
       if (axiosError?.response) {
         if (axiosError.response?.status === 404) {
@@ -764,6 +766,7 @@ export class MicrosoftGraphProvider implements IGraphProvider {
     try {
       return await this._entraApplicationTokens.getAccessToken(MICROSOFT_GRAPH_RESOURCE_URI);
     } catch (error) {
+      scrubErrorForLogging(error);
       const axiosError = error as AxiosError;
       if (axiosError?.response) {
         console.log(`graph request error ${error.toString()} (client ${clientId})`);

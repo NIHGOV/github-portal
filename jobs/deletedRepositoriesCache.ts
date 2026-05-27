@@ -212,7 +212,7 @@ async function processDeletedRepositories(providers: IProviders): Promise<void> 
 }
 
 async function byUserJob(providers: IProviders): Promise<IReposJobResult> {
-  const { config, insights } = providers;
+  const { config, genericInsights: insights } = providers;
   insights?.trackEvent({
     name: `${INSIGHTS_PREFIX}Start`,
     properties: {

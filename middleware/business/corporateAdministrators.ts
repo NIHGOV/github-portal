@@ -9,10 +9,9 @@
 import { NextFunction, Response } from 'express';
 
 import { ReposAppRequest } from '../../interfaces/index.js';
-import { getProviders } from '../../lib/transitional.js';
+import { CreateError, getProviders } from '../../lib/transitional.js';
 import { IndividualContext } from '../../business/user/index.js';
 import { wrapError } from '../../lib/utils.js';
-import { jsonError } from '../jsonError.js';
 
 export interface IReposAppRequestWithSystemAdministration extends ReposAppRequest {
   isSystemAdministrator: boolean;
@@ -20,7 +19,7 @@ export interface IReposAppRequestWithSystemAdministration extends ReposAppReques
 
 function denyRoute(next: NextFunction, isApi: boolean) {
   if (isApi) {
-    return next(jsonError('You are not authorized to call this API.', 403));
+    return next(CreateError.NotAuthorized('You are not authorized to call this API.'));
   }
   return next(
     wrapError(

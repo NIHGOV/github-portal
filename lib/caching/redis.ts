@@ -154,4 +154,16 @@ export default class RedisHelper implements ICacheHelper {
     debug('DEL ' + key);
     await this._redis.del(key);
   }
+
+  readonly supportsIncrementWithExpire = true;
+
+  async incrementWithExpire(key: string, minutesToExpire: number): Promise<number> {
+    key = this.key(key);
+    debug(`INCR ${key} EX ${minutesToExpire}m`);
+    const count = await this._redis.incr(key);
+    if (count === 1) {
+      await this._redis.expire(key, minutesToExpire * 60);
+    }
+    return count;
+  }
 }

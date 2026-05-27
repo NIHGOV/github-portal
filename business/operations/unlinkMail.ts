@@ -19,7 +19,7 @@ export async function sendTerminatedAccountMail(
   customUnlinkReason: string,
   additionalMails: string[]
 ): Promise<IUnlinkMailStatus> {
-  const { config, mailProvider, insights } = operations.providers;
+  const { config, mailProvider, genericInsights: insights } = operations.providers;
   if (!mailProvider || !account.link || !account.link.corporateId) {
     return null;
   }

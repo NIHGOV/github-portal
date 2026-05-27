@@ -92,7 +92,7 @@ async function githubResponseToSubsetEx(
   profile: IPassportGitHubIdentityProfile
 ): Promise<IGitHubIdentitySubset> {
   const providers = app.settings.providers as IProviders;
-  const { config, insights, operations } = providers;
+  const { config, genericInsights: insights, operations } = providers;
   const codespacesConfig = config?.github?.codespaces;
   const impersonateOverrideEmuAccount =
     codespacesConfig?.authentication?.github?.impersonateOverrideEmuAccount;

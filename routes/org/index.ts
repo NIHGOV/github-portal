@@ -6,6 +6,7 @@
 import { NextFunction, Response, Router } from 'express';
 const router: Router = Router();
 import { getProviders } from '../../lib/transitional.js';
+import { stringParam } from '../../lib/utils.js';
 import { IAggregateUserSummary } from '../../business/user/aggregate.js';
 import { TeamJoinApprovalEntity } from '../../business/entities/teamJoinApproval/teamJoinApproval.js';
 import { Team } from '../../business/index.js';
@@ -142,7 +143,7 @@ router.use('/new-repo', (req: ReposAppRequest, res) => {
 router.use('/wizard', RouteNewRepoSpa);
 
 router.use('/:repoName', async (req: ReposAppRequest, res: Response, next: NextFunction) => {
-  const repoName = String(req.params.repoName);
+  const repoName = stringParam(req, 'repoName');
   const organization = req.organization;
   const attemptedRepository = organization.repository(repoName);
   try {

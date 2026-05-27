@@ -17,4 +17,6 @@ export interface ICacheHelper {
   setWithExpire(key: string, value: string, minutesToExpire: number): Promise<void>;
   expire(key: string, minutesToExpire: number): Promise<void>;
   delete(key: string): Promise<void>;
+  readonly supportsIncrementWithExpire?: boolean;
+  incrementWithExpire?(key: string, minutesToExpire: number): Promise<number>;
 }

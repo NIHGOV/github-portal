@@ -67,7 +67,8 @@ export function injectReactClient() {
   let flightingBasics: BasicFlightingOptions = null;
   let flightingOptions: FlightingOptions = null;
   return function injectedRoute(req: ReposAppRequest, res: Response, next: NextFunction) {
-    const { config, insights } = getProviders(req);
+    const { config } = getProviders(req);
+    const insights = req.insights;
     // special passthrough
     if (req.path.includes('/byClient')) {
       debug(`${req.path} - skipping react client injection due to /byClient presence`);
@@ -131,6 +132,9 @@ export function injectReactClient() {
     }
     if (config?.webServer?.appService?.region) {
       meta['app-service-region'] = config.webServer.appService.region;
+    }
+    if (config?.webServer?.appService?.advanced?.stack) {
+      meta['app-service-stack'] = config.webServer.appService.advanced.stack;
     }
 
     // Repos app framework

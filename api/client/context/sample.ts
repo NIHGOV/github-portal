@@ -7,16 +7,16 @@ import { NextFunction, Response, Router } from 'express';
 
 import { sendLinkedAccountMail } from '../../../business/operations/link.js';
 import { ReposAppRequest } from '../../../interfaces/index.js';
-import { jsonError } from '../../../middleware/index.js';
 import { CreateError, getProviders } from '../../../lib/transitional.js';
 import { IndividualContext } from '../../../business/user/index.js';
+import { stringParam } from '../../../lib/utils.js';
 
 const router: Router = Router();
 
 router.get('/:templateName', async (req: ReposAppRequest, res: Response, next: NextFunction) => {
   const { operations } = getProviders(req);
   const activeContext = (req.individualContext || req.apiContext) as IndividualContext;
-  const templateName = req.params.templateName as string;
+  const templateName = stringParam(req, 'templateName');
   try {
     switch (templateName) {
       case 'link': {
@@ -40,7 +40,7 @@ router.get('/:templateName', async (req: ReposAppRequest, res: Response, next: N
 });
 
 router.use('/*splat', (req: ReposAppRequest, res: Response, next: NextFunction) => {
-  return next(jsonError('Contextual API or route not found within samples', 404));
+  return next(CreateError.NotFound('Contextual API or route not found within samples'));
 });
 
 export default router;

@@ -799,6 +799,16 @@ export class Operations {
   }
 
   getAccount(id: string) {
+    if (!id) {
+      throw CreateError.InvalidParameters(
+        'getAccount requires a numeric GitHub user ID, but none was provided.'
+      );
+    }
+    if (!/^\d+$/.test(id)) {
+      throw CreateError.InvalidParameters(
+        `getAccount requires a numeric GitHub user ID, but received: "${id}". Use getAccountByUsername for login-based lookups.`
+      );
+    }
     const entity = { id };
     return new Account(entity, this, this.getPublicAuthorizationToken.bind(this));
   }
@@ -2188,7 +2198,7 @@ export class Operations {
   }
 
   async emailTestRender(viewName: string, contentOptions: Record<string, any>): Promise<void> {
-    const { insights } = this.providers;
+    const { genericInsights: insights } = this.providers;
     await renderHtmlMail(
       insights,
       viewName,

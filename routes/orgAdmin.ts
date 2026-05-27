@@ -13,7 +13,7 @@ import { Operations } from '../business/index.js';
 import { Organization } from '../business/index.js';
 import { Account } from '../business/index.js';
 import { ICorporateLink, ReposAppRequest, IProviders, UnlinkPurpose } from '../interfaces/index.js';
-import { isCodespacesAuthenticating } from '../lib/utils.js';
+import { isCodespacesAuthenticating, stringParam } from '../lib/utils.js';
 import type { ILinkProvider } from '../lib/linkProviders/index.js';
 
 // - - - Middleware: require that the user isa portal administrator to continue
@@ -268,7 +268,7 @@ async function getGitHubAccountInformationById(operations: Operations, id: strin
 }
 
 router.get('/whois/id/:githubid', function (req: ReposAppRequest, res: Response, next: NextFunction) {
-  const thirdPartyId = req.params.githubid;
+  const thirdPartyId = stringParam(req, 'githubid');
   const providers = getProviders(req);
   queryByGitHubId(providers, thirdPartyId)
     .then((query) => {
@@ -298,7 +298,7 @@ interface IIDValue {
 }
 
 router.get('/whois/link/:linkid', async function (req: ReposAppRequest, res: Response, next: NextFunction) {
-  const linkId = req.params.linkid;
+  const linkId = stringParam(req, 'linkid');
   const { linkProvider: lp } = getProviders(req);
   const linkProvider = lp as PostgresLinkProvider;
   const link = await linkProvider.getByPostgresLinkId(linkId);
@@ -315,7 +315,7 @@ router.get('/whois/link/:linkid', async function (req: ReposAppRequest, res: Res
 
 router.post('/whois/link/:linkid', async function (req: ReposAppRequest, res: Response, next: NextFunction) {
   const { config } = getProviders(req);
-  const linkId = req.params.linkid;
+  const linkId = stringParam(req, 'linkid');
   const isLinkDelete = req.body['delete-link'];
   req.body['isServiceAccount'] = req.body['isServiceAccount'] === 'yes';
   const keys = [
@@ -431,7 +431,7 @@ router.post('/whois/link/', async function (req: ReposAppRequest, res: Response,
 });
 
 router.post('/whois/id/:githubid', function (req: ReposAppRequest, res: Response, next: NextFunction) {
-  const thirdPartyId = req.params.githubid;
+  const thirdPartyId = stringParam(req, 'githubid');
   const markAsServiceAccount = req.body['mark-as-service-account'];
   const unmarkServiceAccount = req.body['unmark-service-account'];
   const removeCollaboration = req.body['remove-collaboration'] || req.body['remove-collaboration-100'];
@@ -466,7 +466,7 @@ router.post('/whois/id/:githubid', function (req: ReposAppRequest, res: Response
 });
 
 router.get('/whois/aad/:upn', function (req: ReposAppRequest, res: Response, next: NextFunction) {
-  const upn = req.params.upn;
+  const upn = stringParam(req, 'upn');
   const providers = getProviders(req);
   queryByCorporateUsername(providers, upn)
     .then((query) => {
@@ -487,7 +487,7 @@ router.get('/whois/aad/:upn', function (req: ReposAppRequest, res: Response, nex
 });
 
 router.get('/whois/github/:username', function (req: ReposAppRequest, res: Response, next: NextFunction) {
-  const login = req.params.username;
+  const login = stringParam(req, 'username');
   const providers = getProviders(req);
   queryByGitHubLogin(providers, login)
     .then((query) => {
@@ -506,7 +506,7 @@ router.get('/whois/github/:username', function (req: ReposAppRequest, res: Respo
 });
 
 router.post('/whois/github/:username', function (req: ReposAppRequest, res: Response, next: NextFunction) {
-  const username = req.params.username;
+  const username = stringParam(req, 'username');
   const markAsServiceAccount = req.body['mark-as-service-account'];
   const unmarkServiceAccount = req.body['unmark-service-account'];
   const removeCollaboration = req.body['remove-collaboration'] || req.body['remove-collaboration-100'];

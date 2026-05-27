@@ -67,9 +67,9 @@ export async function runJob(
     return;
   }
   const providers = executionEnvironment?.providers;
-  if (options.insightsPrefix && providers?.insights) {
+  if (options.insightsPrefix && providers?.genericInsights) {
     try {
-      providers?.insights?.trackEvent({
+      providers?.genericInsights?.trackEvent({
         name: `${options.insightsPrefix}Started`,
         properties: {
           hostname: hostname(),
@@ -90,9 +90,9 @@ export async function runJob(
   let result: IReposJobResult = null;
   try {
     result = (await job.call(null, jobObject)) as IReposJobResult;
-    if (result?.successProperties && providers?.insights && options.insightsPrefix) {
+    if (result?.successProperties && providers?.genericInsights && options.insightsPrefix) {
       try {
-        providers?.insights?.trackEvent({
+        providers?.genericInsights?.trackEvent({
           name: `${options.insightsPrefix}Success`,
           properties: Object.assign(
             {
@@ -120,7 +120,7 @@ export async function runJob(
     quitInTenSeconds(false, config);
     if (options.insightsPrefix) {
       try {
-        providers?.insights?.trackException({
+        providers?.genericInsights?.trackException({
           exception: jobError,
           properties: {
             name: `${options.insightsPrefix}Failure`,
@@ -143,7 +143,7 @@ export async function runJob(
 
 function trySilentInsightsFlush(providers: IProviders) {
   try {
-    providers?.insights?.flush();
+    providers?.genericInsights?.flush();
   } catch (ignored) {
     console.warn(ignored);
   }

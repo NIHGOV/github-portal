@@ -2,6 +2,8 @@
   "firehoseOffline": "env://GITHUB_FIREHOSE_OFFLINE",
 
   "sharedSecret": "env://GITHUB_WEBHOOK_SHARED_SECRET",
+  "allowInvalidSignature": "env://GITHUB_WEBHOOK_ALLOW_INVALID_SIGNATURE?trueIf=1&default=0",
+  "acceptUnsigned": "env://GITHUB_WEBHOOK_ACCEPT_UNSIGNED?trueIf=1&default=0",
 
   "runtimeMinutes": "env://GITHUB_WEBHOOKS_RUNTIME_MINUTES",
   "parallelism": "env://GITHUB_WEBHOOKS_MAX_PARALLELISM",

@@ -7,7 +7,6 @@ import { NextFunction, Response, Router } from 'express';
 
 import { throat } from '../../vendor/throat/index.js';
 
-import { jsonError } from '../../middleware/index.js';
 import { CreateError, getProviders } from '../../lib/transitional.js';
 import { ReposAppRequest } from '../../interfaces/index.js';
 
@@ -38,7 +37,7 @@ router.get('/', async (req: ReposAppRequest, res: Response, next: NextFunction) 
     });
     return res.json(dd) as unknown as void;
   } catch (error) {
-    throw jsonError(error, 400);
+    throw error;
   }
 });
 
@@ -130,7 +129,7 @@ router.get('/annotations', async (req: ReposAppRequest, res: Response, next: Nex
       }),
     }) as unknown as void;
   } catch (error) {
-    throw jsonError(error, 400);
+    throw error;
   }
 });
 
@@ -144,7 +143,7 @@ router.get('/list.txt', async (req: ReposAppRequest, res: Response, next: NextFu
     res.contentType('text/txt');
     res.send(dd.sort().join('\n'));
   } catch (error) {
-    throw jsonError(error, 400);
+    throw error;
   }
 });
 

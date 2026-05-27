@@ -3,105 +3,51 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { Request, Router } from 'express';
+import { Router } from 'express';
 const router: Router = Router();
 
-import { IAppSession, ReposAppRequest } from '../interfaces/index.js';
-import { CreateError, getProviders } from '../lib/transitional.js';
+import { getProviders } from '../lib/transitional.js';
+import { collectSessionDiagnostics } from '../lib/diagnostics.js';
 
-const redacted = '*****';
+import type { IAppSession, ReposAppRequest } from '../interfaces/index.js';
 
-interface IRequestWithSession extends Request {
-  app: any;
-  session: IAppSession;
-  user: any;
-}
-
-interface ISafeUserView {
-  cookies: any;
-  sessionId: any;
-  sessionIndex: any;
-  user: any;
-  websiteHostname?: any;
-}
-
-router.get('/', (req: IRequestWithSession, res) => {
-  const { config } = getProviders(req as any as ReposAppRequest);
-  const sessionPrefix =
-    req['sessionStore'] && (req['sessionStore'] as any).prefix
-      ? (req['sessionStore'] as any).prefix + ':'
-      : null;
-  const sessionIndex = sessionPrefix ? `${sessionPrefix}${req.session.id}` : req.session.id;
-  const safeUserView: ISafeUserView = {
-    cookies: req.cookies,
-    sessionId: req.session.id,
-    sessionIndex,
-    user: {},
+function renderDiagnosticsPage(req: ReposAppRequest, res, pingResult?: Record<string, unknown>) {
+  const { config } = getProviders(req);
+  const session = req.session as IAppSession;
+  const diagnostics = collectSessionDiagnostics(session, (req as any).user);
+  // preserve legacy myinfo fields that are not part of the shared diagnostics
+  const safeUserView = {
+    cookies: (req as any).cookies,
+    ...diagnostics,
+    websiteHostname: process.env.WEBSITE_HOSTNAME,
   };
-  if (req.user?.lastAuthenticated) {
-    safeUserView.user.lastAuthenticated = req.user.lastAuthenticated;
-  }
-  if (req.user?.github) {
-    const github = {};
-    for (const key in req.user.github) {
-      let val = req.user.github[key];
-      if (key === 'accessToken') {
-        val = redacted;
-      }
-      github[key] = val;
-    }
-    safeUserView.user.github = github;
-  }
-  if (req.user?.githubIncreasedScope || (req.user?.github && req.user.github['scope'] === 'githubapp')) {
-    const githubIncreasedScope = {};
-    const source =
-      req.user.github && req.user.github['scope'] === 'githubapp'
-        ? req.user.github
-        : req.user.githubIncreasedScope;
-    for (const key in source) {
-      let val = source[key];
-      if (key === 'accessToken') {
-        val = redacted;
-      }
-      githubIncreasedScope[key] = val;
-    }
-    safeUserView.user.githubIncreasedScope = githubIncreasedScope;
-  }
-  if (req.user?.azure) {
-    const azure = {};
-    for (const key in req.user.azure) {
-      let val = req.user.azure[key];
-      if (key === 'accessToken' || key === 'oauthToken') {
-        val = redacted;
-      }
-      azure[key] = val;
-    }
-    safeUserView.user.azure = azure;
-  }
-  for (const key in req.session) {
-    if (typeof req.session[key] !== 'object') {
-      safeUserView[key] = req.session[key];
-    }
-  }
-  safeUserView.websiteHostname = process.env.WEBSITE_HOSTNAME;
   return res.render('message', {
     message: 'My information',
-    messageTiny: 'This information might be useful in helping diagnose issues.',
+    messageTiny: pingResult
+      ? 'This information may be useful for diagnosing issues. The test ping completed successfully.'
+      : 'This information might be useful in helping diagnose issues.',
     messageOutput: JSON.stringify(safeUserView, undefined, 2),
-    user: req.user,
+    messageDetails: pingResult ? `Test ping response: ${JSON.stringify(pingResult)}` : undefined,
+    postAction: `${req.baseUrl}/ping`,
+    postButtonText: 'Test ping',
+    user: (req as any).user,
     config: config,
     corporateLinks: config.corporate.trainingResources['public-homepage'],
     serviceBanner: config && config.serviceMessage ? config.serviceMessage.banner : undefined,
     title: 'Open Source Portal for GitHub - ' + config.brand.companyName,
   });
+}
+
+router.get('/', (req: ReposAppRequest, res) => {
+  return renderDiagnosticsPage(req, res);
 });
 
-router.get('/advanced', async (req: ReposAppRequest, res, next) => {
-  if (req.user?.azure?.oid !== 'b9f9877e-1cae-445e-bc28-3c943078c8e7') {
-    return next(CreateError.NotAuthorized('You are not authorized to view this page.'));
-  }
-  const obj: any = Object.assign({}, process.env);
-  return res.json(obj) as unknown as void;
+router.post('/ping', (req: ReposAppRequest, res) => {
+  return renderDiagnosticsPage(req, res, {
+    pong: true,
+    method: 'POST',
+    csrfValidated: true,
+  });
 });
 
 export default router;

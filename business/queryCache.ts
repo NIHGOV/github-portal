@@ -294,6 +294,7 @@ export default class QueryCache {
       'watchers',
       'network_count',
       'subscribers_count',
+      'visibility',
     ];
     let outcome: QueryCacheOperation = null;
     const repositoryCacheProvider = this._providers.repositoryCacheProvider;

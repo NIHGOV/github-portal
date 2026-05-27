@@ -6,8 +6,8 @@
 import { NextFunction, Response, Router } from 'express';
 
 import { ICorporateLink, ReposApiRequest, UnlinkPurpose } from '../../interfaces/index.js';
-import { jsonError } from '../../middleware/index.js';
 import { CreateError, getProviders } from '../../lib/transitional.js';
+import { stringParam } from '../../lib/utils.js';
 
 const router: Router = Router();
 
@@ -28,7 +28,7 @@ router.use(function (req: ILinksApiRequestWithUnlink, res: Response, next: NextF
 
 router.use('/github/id/:id', async (req: ILinksApiRequestWithUnlink, res: Response, next: NextFunction) => {
   const { linkProvider } = getProviders(req);
-  const id = req.params.id;
+  const id = stringParam(req, 'id');
   try {
     const link = await linkProvider.getByThirdPartyId(id);
     if (!link) {
@@ -37,12 +37,12 @@ router.use('/github/id/:id', async (req: ILinksApiRequestWithUnlink, res: Respon
     req.unlink = link;
     return next();
   } catch (error) {
-    return next(jsonError(error));
+    return next(error);
   }
 });
 
 router.use('/*splat', (req: ILinksApiRequestWithUnlink, res: Response, next: NextFunction) => {
-  return next(req.unlink ? undefined : jsonError('No link available for operation', 404));
+  return next(req.unlink ? undefined : CreateError.NotFound('No link available for operation'));
 });
 
 router.delete('/*splat', (req: ILinksApiRequestWithUnlink, res: Response, next: NextFunction) => {
@@ -53,7 +53,7 @@ router.delete('/*splat', (req: ILinksApiRequestWithUnlink, res: Response, next: 
   try {
     purpose = apiUnlinkPurposeToEnum((req.headers['unlink-purpose'] || 'termination') as string);
   } catch (purposeError) {
-    return next(jsonError(purposeError, 400));
+    return next(CreateError.InvalidParameters(purposeError.message, purposeError));
   }
   const unlinkWithoutDrops = config?.debug?.unlinkWithoutDrops;
   const options = { purpose, unlinkWithoutDrops };
@@ -65,7 +65,7 @@ router.delete('/*splat', (req: ILinksApiRequestWithUnlink, res: Response, next: 
       });
     })
     .catch((problem) => {
-      return next(jsonError(problem, 500));
+      return next(CreateError.ServerError(problem.message, problem));
     });
 });
 

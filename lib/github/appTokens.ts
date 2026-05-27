@@ -221,7 +221,7 @@ export class GitHubAppTokens {
 
   private async remotelySignJwt(clientIdOrAppId: string | number): Promise<{ jwt: string; expiresAt: Date }> {
     const signUrl = this._remoteJwtUrl;
-    const { insights } = this.providers;
+    const { genericInsights: insights } = this.providers;
     if (!signUrl) {
       throw CreateError.InvalidParameters('Missing remote JWT signing URL from configuration');
     }

@@ -10,7 +10,8 @@ const router: Router = Router();
 import cors from 'cors';
 
 import { CreateError, getProviders } from '../lib/transitional.js';
-import { jsonError } from '../middleware/index.js';
+import { stringParam } from '../lib/utils.js';
+import { safeStringify } from '../lib/safeStringify.js';
 
 import apiWebhook from './webhook.js';
 import apiPeople from './people/index.js';
@@ -20,6 +21,7 @@ import aadApiAuthentication, {
   requireAnyAuthorizedEntraApiScope,
   requireAuthorizedEntraApiScope,
 } from '../middleware/api/authentication/index.js';
+import { getPreAuthRateLimitMiddleware, getRateLimitMiddleware } from '../middleware/rateLimit.js';
 import { createRepositoryCore, CreateRepositoryEntrypoint } from './createRepo.js';
 import jsonErrorHandler from './jsonErrorHandler.js';
 import getCompanySpecificDeployment from '../middleware/companySpecificDeployment.js';
@@ -30,9 +32,9 @@ import type { CreateRepositoryRequest } from './client/newOrgRepo.js';
 const hardcodedApiVersions = ['2019-10-01', '2019-02-01', '2017-09-01', '2017-03-08', '2016-12-01'];
 
 const MOST_RECENT_VERSION = hardcodedApiVersions[0];
-const CLIENT_ROUTE_PREFIX = '/client';
+export const CLIENT_ROUTE_PREFIX = '/client';
 
-function skipApiVersionCheck(req: ReposAppRequest, prefixes: string[]) {
+export function skipApiVersionCheck(req: ReposAppRequest, prefixes: string[]) {
   for (const prefix of prefixes) {
     if (req.path.startsWith(prefix)) {
       return true;
@@ -41,7 +43,7 @@ function skipApiVersionCheck(req: ReposAppRequest, prefixes: string[]) {
   return false;
 }
 
-function isClientRoute(req: ReposAppRequest) {
+export function isClientRoute(req: ReposAppRequest) {
   return req.path.startsWith(CLIENT_ROUTE_PREFIX);
 }
 
@@ -53,6 +55,19 @@ export default function routeApi(config: SiteConfiguration) {
   const skipApiVersionChecksForPrefixes =
     companySpecificDeployment?.routes?.api?.skipApiVersionChecksForPrefixes || [];
   const combinedSkipVersionPrefixes = [CLIENT_ROUTE_PREFIX, ...skipApiVersionChecksForPrefixes];
+
+  //-----------------------------------------------------------------------------
+  // RATE LIMITING: pre-auth audit
+  //-----------------------------------------------------------------------------
+  router.use((req: ReposApiRequest, res: Response, next: NextFunction) => {
+    if (isClientRoute(req)) {
+      // Client routes use session auth, not Entra; skip pre-auth rate
+      // limiting and rely on the post-session rate limiter instead.
+      return next();
+    }
+    const providers = getProviders(req);
+    return getPreAuthRateLimitMiddleware(providers, config)(req, res, next);
+  });
 
   router.use('/webhook', apiWebhook);
 
@@ -66,20 +81,21 @@ export default function routeApi(config: SiteConfiguration) {
     }
     const apiVersion = (req.query['api-version'] || req.headers['api-version']) as string;
     if (!apiVersion) {
-      return next(jsonError('This endpoint requires that an API Version be provided.', 422));
+      return next(CreateError.UnprocessableEntity('This endpoint requires that an API Version be provided.'));
     }
     if (apiVersion.toLowerCase() === '2016-09-22_Preview'.toLowerCase()) {
       return next(
-        jsonError(
+        CreateError.UnprocessableEntity(
           'This endpoint no longer supports the original preview version. Please update your client to use a newer version such as ' +
-            hardcodedApiVersions[0],
-          422
+            hardcodedApiVersions[0]
         )
       );
     }
     if (hardcodedApiVersions.indexOf(apiVersion.toLowerCase()) < 0) {
       return next(
-        jsonError('This endpoint does not support the API version you provided at this time.', 422)
+        CreateError.UnprocessableEntity(
+          'This endpoint does not support the API version you provided at this time.'
+        )
       );
     }
     req.apiVersion = apiVersion;
@@ -99,6 +115,17 @@ export default function routeApi(config: SiteConfiguration) {
       }
       return requireAnyAuthorizedEntraApiScope(req, res, next);
     });
+  });
+
+  // Run rate-limit middleware in the API router to ensure API coverage.
+  router.use((req: ReposApiRequest, res: Response, next: NextFunction) => {
+    if (isClientRoute(req)) {
+      // Client routes are rate-limited after session auth by the
+      // app-level middleware so the resolved identity is available.
+      return next();
+    }
+    const providers = getProviders(req);
+    return getRateLimitMiddleware(providers, config)(req, res, next);
   });
 
   // Authorized users and apps get a larger payload limit
@@ -135,12 +162,12 @@ export default function routeApi(config: SiteConfiguration) {
           )
         );
       }
-      const orgName = req.params.org;
+      const orgName = stringParam(req, 'org');
       if (!req.apiKeyToken.hasOrganizationScope) {
         return next(
-          jsonError(
-            'There is a problem with the key configuration (does not support organization scopes)',
-            412
+          CreateError.CreateStatusCodeError(
+            412,
+            'There is a problem with the key configuration (does not support organization scopes)'
           )
         );
       }
@@ -155,7 +182,7 @@ export default function routeApi(config: SiteConfiguration) {
       try {
         organization = operations.getOrganization(orgName);
       } catch (ex) {
-        return next(jsonError(ex, 400));
+        return next(CreateError.InvalidParameters(ex.message, ex));
       }
       req.organization = organization;
       return next();
@@ -215,19 +242,21 @@ export default function routeApi(config: SiteConfiguration) {
           convergedObject,
           CreateRepositoryEntrypoint.Api
         );
+        const publicRepoCreateResponse = { ...repoCreateResponse };
+        delete publicRepoCreateResponse.insights;
         res.status(201);
         activeContext?.insights?.trackEvent({
           name: 'ApiRepoCreateRequestSuccess',
           properties: {
-            request: JSON.stringify(convergedObject),
-            response: JSON.stringify(repoCreateResponse),
+            request: safeStringify(convergedObject),
+            response: safeStringify(publicRepoCreateResponse),
           },
         });
-        return res.json(repoCreateResponse) as unknown as void;
+        return res.json(publicRepoCreateResponse) as unknown as void;
       } catch (error) {
         const data = { ...convergedObject };
         data.error = error.message;
-        data.encodedError = JSON.stringify(error);
+        data.encodedError = safeStringify(error);
         activeContext?.insights?.trackEvent({ name: 'ApiRepoCreateFailed', properties: data });
         return next(error);
       }

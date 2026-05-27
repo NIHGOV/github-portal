@@ -536,6 +536,7 @@ export class GitHubApiContext extends ApiContext {
   private _redisKeys: IApiContextRedisKeys;
   private _cacheValues: IApiContextCacheValues;
   private _token: string | GetAuthorizationHeader | AuthorizationHeaderValue;
+  private _cacheKeyPrefix?: string;
 
   public fakeLink?: IGitHubLink;
 
@@ -546,18 +547,22 @@ export class GitHubApiContext extends ApiContext {
   constructor(api: any, options: any) {
     super(api, options);
 
-    const root = IntelligentEngine.redisKeyForApi(this.apiTypePrefix, api, options);
-    this._redisKeys = {
-      root: root,
-      metadata: root
-        ? root + IntelligentEngine.redisKeyAspectSuffix('headers')
-        : IntelligentEngine.redisKeyForApi(this.apiTypePrefix, api, options, 'headers'),
-    };
+    this._redisKeys = this.generateRedisKeys();
 
     this._cacheValues = {
       longtermMetadata: longtermMetadataMinutes,
       longtermResponse: longtermResponseMinutes,
       acceleratedExpiration: acceleratedExpirationMinutes,
+    };
+  }
+
+  private generateRedisKeys(): IApiContextRedisKeys {
+    const root = IntelligentEngine.redisKeyForApi(this.apiTypePrefix, this.api, this.options);
+    return {
+      root: root,
+      metadata: root
+        ? root + IntelligentEngine.redisKeyAspectSuffix('headers')
+        : IntelligentEngine.redisKeyForApi(this.apiTypePrefix, this.api, this.options, 'headers'),
     };
   }
 
@@ -570,7 +575,7 @@ export class GitHubApiContext extends ApiContext {
   }
 
   get apiTypePrefix(): string {
-    return 'github#';
+    return this._cacheKeyPrefix ? `github:${this._cacheKeyPrefix}#` : 'github#';
   }
 
   get redisKey(): IApiContextRedisKeys {
@@ -598,6 +603,10 @@ export class GitHubApiContext extends ApiContext {
 
   setLibraryContext(libraryContext: any) {
     this.libraryContext = libraryContext;
+    if (libraryContext?.cacheKeyPrefix) {
+      this._cacheKeyPrefix = libraryContext.cacheKeyPrefix;
+      this._redisKeys = this.generateRedisKeys();
+    }
   }
 
   overrideToken(token: string | GetAuthorizationHeader | AuthorizationHeaderValue) {

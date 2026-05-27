@@ -6,8 +6,7 @@
 import { NextFunction, Response, Router } from 'express';
 import { ReposAppRequest } from '../../interfaces/index.js';
 
-import { jsonError } from '../../middleware/index.js';
-import { getProviders } from '../../lib/transitional.js';
+import { CreateError, getProviders } from '../../lib/transitional.js';
 
 const router: Router = Router();
 
@@ -23,7 +22,7 @@ router.get('/', (req: ReposAppRequest, res: Response, next: NextFunction) => {
 });
 
 router.use('/*splat', (req, res: Response, next: NextFunction) => {
-  return next(jsonError('no API or function available within this banner route', 404));
+  return next(CreateError.NotFound('no API or function available within this banner route'));
 });
 
 export default router;

@@ -14,6 +14,7 @@ import type {
   SiteConfiguration,
 } from '../interfaces/index.js';
 import getCompanySpecificDeployment from './companySpecificDeployment.js';
+import { clearSessionCsrfToken } from './business/csrf.js';
 import { attachGitHubPassportRoutes } from './passport/githubRoutes.js';
 import { attachEntraPassportRoutes } from './passport/entra/routes.js';
 
@@ -58,7 +59,7 @@ function newSessionAfterAuthentication(req: ReposAppRequest, res: Response, next
   }
   // Prevent session hijacking by generating a new session once authenticated.
   const preserve = Object.assign({}, req.session);
-  ['cookie', 'id', 'OIDC', 'req', 'seen'].map((key) => delete preserve[key]);
+  ['cookie', 'id', 'OIDC', 'req', 'seen', 'csrfToken'].map((key) => delete preserve[key]);
   const keys = Object.getOwnPropertyNames(preserve);
   for (const key of keys) {
     if (typeof preserve[key] === 'function') {
@@ -211,17 +212,20 @@ export default function configurePassport(app: IReposApplication, passport, conf
     if (clone === undefined) {
       clone = shallowTruncatingCopy(req.user);
     }
+    clearSessionCsrfToken(req.session as IAppSession);
     req.login(clone, callback);
   }
 
   function signoutPage(req: ReposAppRequest, res) {
-    const { config, insights } = getProviders(req);
+    const { config } = getProviders(req);
+    const insights = req.insights;
     req.logout({ keepSessionInfo: true }, (err) => {
       if (err) {
         insights?.trackException({ exception: err });
       }
       if (req.session) {
         const session = req.session as IAppSession;
+        clearSessionCsrfToken(session);
         delete session.enableMultipleAccounts;
         delete session.selectedGithubId;
       }

@@ -12,11 +12,15 @@ const filename = fileURLToPath(import.meta.url);
 const dirname = path.dirname(filename);
 const pkg = JSON.parse(fs.readFileSync(path.join(dirname, '../package.json'), 'utf8'));
 
-export default () => {
+const DEPLOYMENT_ID_KEY_NAME = 'DEPLOYMENT_VERSION';
+
+export default (graphApi) => {
+  const environmentProvider = graphApi.environment;
   // Useful information to help understand which CI/CD pipeline the app came from
   const continuousDeployment = stripPlaceholders(pkg.continuousDeployment);
   continuousDeployment.version = pkg.version;
   continuousDeployment.name = pkg.name;
+  continuousDeployment.deploymentId = environmentProvider.get(DEPLOYMENT_ID_KEY_NAME) || null;
   return continuousDeployment;
 };
 

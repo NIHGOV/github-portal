@@ -1,0 +1,15 @@
+{
+  "mode": "env://RATE_LIMIT_MODE?default=disabled",
+  "audit": {
+    "enabled": "env://RATE_LIMIT_AUDIT_ENABLED?type=boolean&default=0&trueIf=1",
+    "windowSeconds": "env://RATE_LIMIT_AUDIT_WINDOW_SECONDS?type=int&default=60",
+    "threshold": "env://RATE_LIMIT_AUDIT_THRESHOLD?type=int&default=120",
+    "thresholdAuthenticated": "env://RATE_LIMIT_AUDIT_THRESHOLD_AUTH?type=int&default=120",
+    "thresholdSessionAuthenticated": "env://RATE_LIMIT_AUDIT_THRESHOLD_SESSION_AUTH?type=int",
+    "thresholdApiAuthorized": "env://RATE_LIMIT_AUDIT_THRESHOLD_API_AUTH?type=int",
+    "thresholdUnauthenticated": "env://RATE_LIMIT_AUDIT_THRESHOLD_UNAUTH?type=int&default=120",
+    "sampleRate": "env://RATE_LIMIT_AUDIT_SAMPLE_RATE?default=0.05",
+    "includePathInKey": "env://RATE_LIMIT_AUDIT_INCLUDE_PATH?type=boolean&default=1&trueIf=1",
+    "includeMethodInKey": "env://RATE_LIMIT_AUDIT_INCLUDE_METHOD?type=boolean&default=1&trueIf=1"
+  }
+}

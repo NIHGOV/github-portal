@@ -6,7 +6,6 @@
 import { NextFunction, Response } from 'express';
 
 import { CreateError, getProviders } from '../../lib/transitional.js';
-import { jsonError } from '../../middleware/index.js';
 import { ICorporateLink, LinkOperationSource, ReposApiRequest } from '../../interfaces/index.js';
 
 const linkScope = 'link';
@@ -34,19 +33,19 @@ export default async function postLinkApi(req: ReposApiRequest, res: Response, n
   const correlationId = req.correlationId;
   const body = req.body;
   if (!body.corporate) {
-    return next(jsonError('corporate object required', 400));
+    return next(CreateError.InvalidParameters('corporate object required'));
   }
   const corporateId = body.corporate.id;
   if (!corporateId) {
-    return next(jsonError('corporate.id required', 400));
+    return next(CreateError.InvalidParameters('corporate.id required'));
   }
   if (!body.github) {
-    return next(jsonError('github object required', 400));
+    return next(CreateError.InvalidParameters('github object required'));
   }
   const serviceAccountMail = body.corporate.serviceAccountMail;
   const thirdPartyId = body.github.id;
   if (!thirdPartyId) {
-    return next(jsonError('github.id required', 400));
+    return next(CreateError.InvalidParameters('github.id required'));
   }
   // validate that the corporate ID nor the GitHub ID are already linked
   const link: ICorporateLink = {
@@ -73,6 +72,6 @@ export default async function postLinkApi(req: ReposApiRequest, res: Response, n
     }
     return res.end();
   } catch (linkError) {
-    return next(jsonError(linkError));
+    return next(linkError);
   }
 }

@@ -246,7 +246,8 @@ export async function submitTeamJoinRequest(
   correlationId: string,
   hostname: string
 ): Promise<ITeamJoinRequestSubmitOutcome> {
-  const { approvalProvider, config, graphProvider, mailProvider, insights, operations } = providers;
+  const { approvalProvider, config, graphProvider, mailProvider, operations } = providers;
+  const insights = activeContext.insights;
   const organization = team.organization;
   const { broadAccessTeams, openAccessTeams } = organization;
   const allowSelfJoinTeams = new Set([...broadAccessTeams, ...openAccessTeams]);

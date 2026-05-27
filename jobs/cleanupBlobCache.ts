@@ -14,7 +14,7 @@ const INSIGHTS_PREFIX = 'JobCleanupBlobCache';
 job.runBackgroundJob(cleanup);
 
 async function cleanup(providers: IProviders): Promise<void> {
-  const { insights } = providers;
+  const { genericInsights: insights } = providers;
   insights?.trackEvent({
     name: `${INSIGHTS_PREFIX}Start`,
     properties: {

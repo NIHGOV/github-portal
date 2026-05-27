@@ -28,7 +28,7 @@ interface IExtendedProviders extends IProviders {
 
 export async function getStaticBlobCacheFallback(providers: IProviders) {
   const p = providers as IExtendedProviders;
-  const { config, insights } = providers;
+  const { config, genericInsights: insights } = providers;
   if (!p.staticBlobCacheFallback && config?.client?.fallback?.blob?.account) {
     insights?.trackEvent({
       name: 'web.static_blob_cache.fallback.initializing',

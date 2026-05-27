@@ -13,7 +13,6 @@ import {
   GitHubTeamRole,
 } from '../../../../interfaces/index.js';
 import { IGraphEntry } from '../../../../lib/graphProvider/index.js';
-import { jsonError } from '../../../../middleware/index.js';
 import {
   AddTeamMembershipToRequest,
   AddTeamPermissionsToRequest,
@@ -25,6 +24,7 @@ import { submitTeamJoinRequest } from '../../../../routes/org/team/index.js';
 import { postActionDecision, TeamApprovalDecision } from '../../../../routes/org/team/approval/index.js';
 import { PermissionWorkflowEngine } from '../../../../routes/org/team/approvals.js';
 import { CreateError, getProviders } from '../../../../lib/transitional.js';
+import { stringParam } from '../../../../lib/utils.js';
 import { IndividualContext } from '../../../../business/user/index.js';
 import getCompanySpecificDeployment from '../../../../middleware/companySpecificDeployment.js';
 
@@ -119,7 +119,7 @@ router.post(
       );
       return res.json(outcome) as unknown as void;
     } catch (error) {
-      return next(jsonError(error));
+      return next(error);
     }
   }
 );
@@ -128,7 +128,7 @@ router.post(
   '/join/approvals/:approvalId',
   AddTeamPermissionsToRequest,
   async (req: ReposAppRequest, res: Response, next: NextFunction) => {
-    const { approvalId: id } = req.params;
+    const id = stringParam(req, 'approvalId');
     if (!id) {
       return next(CreateError.InvalidParameters('invalid approval'));
     }
@@ -180,7 +180,7 @@ router.get(
   '/join/approvals/:approvalId',
   AddTeamPermissionsToRequest,
   async (req: ReposAppRequest, res: Response, next: NextFunction) => {
-    const { approvalId: id } = req.params;
+    const id = stringParam(req, 'approvalId');
     if (!id) {
       return next(CreateError.InvalidParameters('invalid approval'));
     }
@@ -230,7 +230,7 @@ router.post(
   AddTeamPermissionsToRequest,
   async (req: ReposAppRequest, res: Response, next: NextFunction) => {
     const { role } = req.body;
-    const { login } = req.params;
+    const login = stringParam(req, 'login');
     if (!login) {
       return next(CreateError.InvalidParameters('invalid login'));
     }
@@ -263,7 +263,7 @@ router.delete(
     if (role !== GitHubTeamRole.Member) {
       return next(CreateError.InvalidParameters('invalid role to remove'));
     }
-    const { login } = req.params;
+    const login = stringParam(req, 'login');
     if (!login) {
       return next(CreateError.InvalidParameters('invalid login'));
     }
@@ -289,7 +289,7 @@ if (deployment?.routes?.api?.context?.organization?.team) {
 }
 
 router.use('/*splat', (req, res: Response, next: NextFunction) => {
-  return next(jsonError('no API or function available for contextual team', 404));
+  return next(CreateError.NotFound('no API or function available for contextual team'));
 });
 
 export default router;

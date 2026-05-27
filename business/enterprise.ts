@@ -7,6 +7,7 @@ import type { GraphqlResponseError } from '@octokit/graphql';
 
 import { GitHubTokenType, getGitHubTokenTypeFromValue } from '../lib/github/appTokens.js';
 import { CreateError, ErrorHelper } from '../lib/transitional.js';
+import { sleep } from '../lib/utils.js';
 import {
   createPagedCacheOptions,
   GetInvisibleOrganizationOptions,
@@ -25,6 +26,7 @@ import type {
   IPagedCacheOptions,
   IProviders,
 } from '../interfaces/index.js';
+import type { RestLibrary } from '../lib/github/index.js';
 import {
   getAppPurposeId,
   GitHubAppConfiguration,
@@ -45,7 +47,7 @@ import GitHubApplication from './application.js';
 
 type AppAndInstallationIds = Omit<BasicGitHubAppInstallation, 'appPurposeId'>;
 
-type EnterpriseMemberBasics = {
+export type EnterpriseMemberBasics = {
   __typename: string;
   id: string;
   login: string;
@@ -127,12 +129,37 @@ function isStringToken(token: string | GetAuthorizationHeader): token is string 
 
 type EnterpriseOptions = {
   fixedPurpose?: AppPurposeTypes;
+  github?: RestLibrary;
   useEnterpriseTokenForOrganizations?: boolean;
+};
+
+export type GetMembersRespectfullyOptions = {
+  maxPages?: number;
+  pageSize?: number;
+  delayBetweenPagesMs?: number;
+  rateLimitBuffer?: number;
+  onProgress?: (progress: GetMembersRespectfullyProgress) => void;
+};
+
+export type GetMembersRespectfullyProgress = {
+  pagesCompleted: number;
+  totalMembers: number;
+  hasNextPage: boolean;
+  rateLimitRemaining?: number;
+  rateLimitResetAt?: string;
+};
+
+type GraphQLRateLimitInfo = {
+  cost: number;
+  limit: number;
+  remaining: number;
+  resetAt: string;
 };
 
 export default class GitHubEnterprise {
   private _billing: GitHubEnterpriseBilling;
 
+  private _github: RestLibrary;
   private _graphqlNodeId: string;
   private _knownOrgInstallations = new Map<
     string,
@@ -146,6 +173,7 @@ export default class GitHubEnterprise {
     private enterpriseToken: string | GetAuthorizationHeader,
     private options?: EnterpriseOptions
   ) {
+    this._github = options?.github || providers.github;
     if (isStringToken(enterpriseToken)) {
       if (enterpriseToken.startsWith('bearer')) {
         throw CreateError.InvalidParameters('Bearer tokens not accepted');
@@ -162,6 +190,10 @@ export default class GitHubEnterprise {
         );
       }
     }
+  }
+
+  get github(): RestLibrary {
+    return this._github;
   }
 
   setGraphqlNodeId(id: string) {
@@ -195,7 +227,7 @@ export default class GitHubEnterprise {
 
   async getId(): Promise<string> {
     // ISSUE: this is broken for enterprise-scoped GitHub Apps... JWilcox reported.
-    const github = this.providers.github;
+    const github = this.github;
     try {
       const response = await github.graphql(
         this.enterpriseToken,
@@ -368,7 +400,7 @@ export default class GitHubEnterprise {
   // People
 
   async removeEnterpriseMember(graphQlUserId: string) {
-    const github = this.providers.github;
+    const github = this.github;
     const mutation = queries.removeEnterpriseMember;
     try {
       const nodeId = this.requireGraphqlNodeId();
@@ -392,7 +424,7 @@ export default class GitHubEnterprise {
     // TODO: role
     // ISSUE: does not work with enterprise-scoped GitHub Apps, only PATs; JWilcox reported.
     const role = 'OWNER'; // or BILLING_MANAGER
-    const github = this.providers.github;
+    const github = this.github;
     const mutation = queries.inviteEnterpriseAdmin;
     try {
       const nodeId = this.requireGraphqlNodeId();
@@ -413,7 +445,7 @@ export default class GitHubEnterprise {
   async updateEnterpriseAdministratorRole(login: string, role?: string): Promise<string> {
     // ISSUE: does not work with enterprise-scoped GitHub Apps, only PATs; JWilcox reported.
     // ISSUE: does not actually meet blog post expectation which says can be used to add or downgrade
-    const github = this.providers.github;
+    const github = this.github;
     const mutation = queries.updateEnterpriseAdministratorRole;
     try {
       const nodeId = this.requireGraphqlNodeId();
@@ -436,7 +468,7 @@ export default class GitHubEnterprise {
     adminLogins: string[],
     billingEmail: string
   ): Promise<{ id: string; login: string; name: string }> {
-    const github = this.providers.github;
+    const github = this.github;
     const mutation = queries.createEnterpriseOrganization;
     const nodeId = this.requireGraphqlNodeId();
     try {
@@ -475,7 +507,7 @@ export default class GitHubEnterprise {
   async getSamlNodeFromUserPrincipalName(
     userPrincipalName: string
   ): Promise<EnterpriseSamlExternalIdentityBasics> {
-    const github = this.providers.github;
+    const github = this.github;
     try {
       const response = await github.graphql(
         this.enterpriseToken,
@@ -504,7 +536,7 @@ export default class GitHubEnterprise {
   }
 
   async getSamlNodeForGitHubLogin(login: string): Promise<EnterpriseSamlExternalIdentityBasics> {
-    const github = this.providers.github;
+    const github = this.github;
     try {
       const response = await github.graphql(
         this.enterpriseToken,
@@ -529,7 +561,7 @@ export default class GitHubEnterprise {
 
   async getSamlMemberExternalIdentities(): Promise<EnterpriseSamlExternalIdentityBasics[]> {
     const fixedFirstFieldsCount = 8;
-    const github = this.providers.github;
+    const github = this.github;
     try {
       const response = await github.graphql(
         this.enterpriseToken,
@@ -565,7 +597,7 @@ export default class GitHubEnterprise {
   }
 
   async getMembers(query?: string) {
-    const github = this.providers.github;
+    const github = this.github;
     try {
       const response = await github.graphql(
         this.enterpriseToken,
@@ -592,7 +624,7 @@ export default class GitHubEnterprise {
     if (!ENTERPRISE_ROLES.includes(role)) {
       throw CreateError.InvalidParameters('Invalid role: ' + role);
     }
-    const github = this.providers.github;
+    const github = this.github;
     try {
       const response = await github.graphql(
         this.enterpriseToken,
@@ -611,6 +643,136 @@ export default class GitHubEnterprise {
     } catch (error) {
       throw error;
     }
+  }
+
+  async getMembersRespectfully(
+    options: GetMembersRespectfullyOptions = {}
+  ): Promise<EnterpriseMemberBasics[]> {
+    const {
+      maxPages = 0,
+      pageSize = 100,
+      delayBetweenPagesMs = 1000,
+      rateLimitBuffer = 100,
+      onProgress,
+    } = options;
+    const github = this.github;
+    const members: EnterpriseMemberBasics[] = [];
+    let cursor: string | null = null;
+    let pagesCompleted = 0;
+    let hasNextPage = true;
+    let currentPageSize = pageSize;
+    while (hasNextPage) {
+      let response: {
+        enterprise: {
+          members: {
+            totalCount: number;
+            pageInfo: { hasNextPage: boolean; endCursor: string };
+            nodes: EnterpriseMemberBasics[];
+          };
+        };
+        rateLimit: GraphQLRateLimitInfo;
+      };
+      try {
+        response = await github.graphql<typeof response>(
+          this.enterpriseToken,
+          queries.getMembersWithRateLimit,
+          {
+            enterpriseName: this.slug,
+            first: currentPageSize,
+            cursor,
+          }
+        );
+      } catch (pageError) {
+        const status = (pageError as any)?.status;
+        const message = (pageError as any)?.message || '';
+        const isRetryable =
+          status === 404 || message.includes('suffixed values') || message.includes('Not Found');
+        if (isRetryable && currentPageSize > 1) {
+          // Reduce page size to isolate the problematic record
+          const nextPageSize = currentPageSize <= 10 ? 1 : Math.max(10, Math.floor(currentPageSize / 2));
+          console.warn(
+            `Enterprise members GraphQL page failed (status=${status}, pageSize=${currentPageSize}). ` +
+              `Retrying same cursor with pageSize=${nextPageSize}.`
+          );
+          currentPageSize = nextPageSize;
+          await sleep(2000);
+          continue;
+        }
+        if (isRetryable && currentPageSize === 1) {
+          // Cannot reduce further — skip this single entry by requesting 1 record
+          // and advancing the cursor past it
+          console.warn(
+            `Enterprise members GraphQL failed at pageSize=1 (status=${status}). ` +
+              `Skipping problematic record at cursor=${cursor}.`
+          );
+          // Advance cursor: request 2 items and keep only the second if it succeeds,
+          // or simply move the cursor forward by a small offset
+          try {
+            const skipResponse = await github.graphql<typeof response>(
+              this.enterpriseToken,
+              queries.getMembersWithRateLimit,
+              {
+                enterpriseName: this.slug,
+                first: 2,
+                cursor,
+              }
+            );
+            const skipData = skipResponse?.enterprise?.members;
+            if (skipData?.nodes?.length > 1) {
+              members.push(skipData.nodes[skipData.nodes.length - 1]);
+            }
+            hasNextPage = skipData?.pageInfo?.hasNextPage ?? false;
+            cursor = skipData?.pageInfo?.endCursor ?? null;
+            pagesCompleted++;
+            currentPageSize = pageSize;
+            continue;
+          } catch {
+            // Last resort: the skip also failed, give up on this page
+            console.warn('Enterprise members GraphQL: unable to skip past problematic record, stopping.');
+            break;
+          }
+        }
+        throw pageError;
+      }
+      const membersData = response?.enterprise?.members;
+      const rateLimit = response?.rateLimit;
+      if (membersData?.nodes) {
+        members.push(...membersData.nodes);
+      }
+      pagesCompleted++;
+      hasNextPage = membersData?.pageInfo?.hasNextPage ?? false;
+      cursor = membersData?.pageInfo?.endCursor ?? null;
+      // Restore original page size after a successful fetch
+      if (currentPageSize !== pageSize) {
+        console.log(
+          `Enterprise members GraphQL: recovered, restoring pageSize=${pageSize} from ${currentPageSize}.`
+        );
+        currentPageSize = pageSize;
+      }
+      if (onProgress) {
+        onProgress({
+          pagesCompleted,
+          totalMembers: members.length,
+          hasNextPage,
+          rateLimitRemaining: rateLimit?.remaining,
+          rateLimitResetAt: rateLimit?.resetAt,
+        });
+      }
+      if (maxPages > 0 && pagesCompleted >= maxPages) {
+        break;
+      }
+      if (hasNextPage) {
+        if (rateLimit && rateLimit.remaining <= rateLimitBuffer) {
+          const resetAt = new Date(rateLimit.resetAt);
+          const now = new Date();
+          const waitMs = Math.max(0, resetAt.getTime() - now.getTime()) + 1000;
+          await sleep(waitMs);
+        } else if (delayBetweenPagesMs > 0) {
+          await sleep(delayBetweenPagesMs);
+        }
+      }
+    }
+    return members;
   }
 
   private guardFixedAppPurposeRequired() {
@@ -772,7 +934,7 @@ export default class GitHubEnterprise {
   }
 
   async getOrganizations(): Promise<EnterpriseOrganizationBasics[]> {
-    const github = this.providers.github;
+    const github = this.github;
     try {
       const response = await github.graphql(
         this.enterpriseToken,
@@ -914,6 +1076,36 @@ const queries = {
             }
           }
         }
+      }
+    }
+  `,
+  getMembersWithRateLimit: `
+    query getMembersWithRateLimit($enterpriseName: String!, $first: Int!, $cursor: String) {
+      enterprise(slug: $enterpriseName) {
+        members(first: $first, after: $cursor) {
+          totalCount
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+          nodes {
+            __typename
+            ... on User {
+              id
+              login
+            }
+            ... on EnterpriseUserAccount {
+              id
+              login
+            }
+          }
+        }
+      }
+      rateLimit {
+        cost
+        limit
+        remaining
+        resetAt
       }
     }
   `,

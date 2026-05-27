@@ -14,6 +14,8 @@
       "sku": "env://WEBSITE_SKU",
       "hostname": "env://WEBSITE_HOSTNAME",
       "alwaysOn": "env://WEBSITE_SCM_ALWAYS_ON_ENABLED",
+      "isSiteContainers": "env://WEBSITE_STACK?trueIf=SITECONTAINERS",
+      "stack": "env://WEBSITE_STACK",
       "slotType": "env://SITE_SLOT_TYPE"
     }
   },

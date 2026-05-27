@@ -63,6 +63,57 @@ export type GitHubCostCenter = {
   state: 'active' | 'deleted';
 };
 
+// Usage summary types
+
+export type UsageSummaryItem = {
+  date: string;
+  product: string;
+  sku: string;
+  quantity: number;
+  unitType: string;
+  pricePerUnit: number;
+  grossAmount: number;
+  discountAmount: number;
+  netAmount: number;
+  organizationName?: string;
+  repositoryName?: string;
+};
+
+export type UsageSummaryResponse = {
+  usageItems: UsageSummaryItem[];
+};
+
+export type UsageSummaryOptions = ICacheOptions & {
+  costCenterId?: string;
+};
+
+// Usage report types (detailed usage endpoint)
+
+export type UsageReportItem = {
+  date: string;
+  product: string;
+  sku: string;
+  quantity: number;
+  unitType: string;
+  pricePerUnit: number;
+  grossAmount: number;
+  discountAmount: number;
+  netAmount: number;
+  organizationName?: string;
+  repositoryName?: string;
+};
+
+export type UsageReportResponse = {
+  usageItems: UsageReportItem[];
+};
+
+export type UsageReportOptions = ICacheOptions & {
+  costCenterId?: string;
+  day?: number;
+  month?: number;
+  year?: number;
+};
+
 export default class GitHubEnterpriseBilling {
   constructor(
     private providers: IProviders,
@@ -71,7 +122,7 @@ export default class GitHubEnterpriseBilling {
   ) {}
 
   async createCostCenter(name: string) {
-    const github = this.providers.github;
+    const github = this.enterprise.github;
     const parameters = {
       name,
       enterprise: this.enterprise.slug,
@@ -97,7 +148,7 @@ export default class GitHubEnterpriseBilling {
   }
 
   async addUsers(costCenterId: string, logins: string[]) {
-    const github = this.providers.github;
+    const github = this.enterprise.github;
     const parameters = {
       costCenterId,
       enterprise: this.enterprise.slug,
@@ -126,7 +177,7 @@ export default class GitHubEnterpriseBilling {
   async getCostCenters(options?: ICacheOptions): Promise<GitHubCostCenter[]> {
     options = options || {};
     const operations = this.providers.operations;
-    const github = operations.github;
+    const github = this.enterprise.github;
     const parameters = {
       enterprise: this.enterprise.slug,
     };
@@ -162,7 +213,7 @@ export default class GitHubEnterpriseBilling {
   async getCostCenter(costCenterId: string, options?: ICacheOptions): Promise<GitHubCostCenter> {
     options = options || {};
     const operations = this.providers.operations;
-    const github = operations.github;
+    const github = this.enterprise.github;
     const parameters = {
       enterprise: this.enterprise.slug,
       costCenterId,
@@ -198,8 +249,7 @@ export default class GitHubEnterpriseBilling {
 
   async getPremiumRequestUsage(options?: PremiumRequestUsageOptions): Promise<PremiumRequestUsageResponse> {
     options = options || {};
-    const operations = this.providers.operations;
-    const github = operations.github;
+    const github = this.enterprise.github;
     const parameters: Record<string, string | number> = {
       enterprise: this.enterprise.slug,
     };
@@ -227,8 +277,11 @@ export default class GitHubEnterpriseBilling {
     if (options.costCenterId) {
       parameters.cost_center_id = options.costCenterId;
     }
-    // SAS URLs returned should not be cached
-    const caching = NoCacheNoBackground;
+    // Default to 1 day cache with background refresh; caller can override with NoCacheNoBackground
+    const caching = {
+      maxAgeSeconds: options.maxAgeSeconds !== undefined ? options.maxAgeSeconds : 86400,
+      backgroundRefresh: options.backgroundRefresh !== undefined ? options.backgroundRefresh : true,
+    };
     try {
       const result: any = await github.requestWithRequirements(
         github.createRequirementsForRequest(
@@ -245,6 +298,41 @@ export default class GitHubEnterpriseBilling {
         caching
       );
       return symbolizeApiResponse(result) as PremiumRequestUsageResponse;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async getUsageSummary(options?: UsageSummaryOptions): Promise<UsageSummaryResponse> {
+    options = options || {};
+    const github = this.enterprise.github;
+    const parameters: Record<string, string | number> = {
+      enterprise: this.enterprise.slug,
+    };
+    if (options.costCenterId) {
+      parameters.cost_center_id = options.costCenterId;
+    }
+    // Default to 1 day cache with background refresh; caller can override with NoCacheNoBackground
+    const caching = {
+      maxAgeSeconds: options.maxAgeSeconds !== undefined ? options.maxAgeSeconds : 86400,
+      backgroundRefresh: options.backgroundRefresh !== undefined ? options.backgroundRefresh : true,
+    };
+    try {
+      const result: any = await github.requestWithRequirements(
+        github.createRequirementsForRequest(
+          this.billingWriteToken,
+          'GET /enterprises/:enterprise/settings/billing/usage/summary',
+          {
+            permissions: {
+              permission: 'enterprise',
+              access: 'manage_billing',
+            },
+          }
+        ),
+        parameters,
+        caching
+      );
+      return symbolizeApiResponse(result) as UsageSummaryResponse;
     } catch (error) {
       throw error;
     }

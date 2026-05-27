@@ -6,8 +6,8 @@
 import { NextFunction, Response } from 'express';
 
 import { ReposAppRequest } from '../../interfaces/web.js';
-import { jsonError } from '../jsonError.js';
 import { CreateError, ErrorHelper, getProviders } from '../../lib/transitional.js';
+import { stringParam } from '../../lib/utils.js';
 import { setOrganizationProfileForRequest } from '../github/ensureOrganizationProfile.js';
 
 export enum OrganizationManagementType {
@@ -33,11 +33,11 @@ export function blockIfUnmanagedOrganization(
   const managementType = getOrganizationManagementType(req);
   switch (managementType) {
     case OrganizationManagementType.Unmanaged:
-      return next(jsonError('unmanaged organization', 404));
+      return next(CreateError.NotFound('unmanaged organization'));
     case OrganizationManagementType.Managed:
       return next();
     default:
-      return next(jsonError('unknown organization management type', 500));
+      return next(CreateError.ServerError('unknown organization management type'));
   }
 }
 
@@ -47,7 +47,7 @@ export async function apiMiddlewareOrganizationsToOrganization(
   next: NextFunction
 ) {
   const { operations } = getProviders(req);
-  const { orgName } = req.params;
+  const orgName = stringParam(req, 'orgName');
   req.organizationName = orgName;
   try {
     const org = operations.getOrganization(orgName);

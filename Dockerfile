@@ -3,11 +3,15 @@
 # Licensed under the MIT license. See LICENSE file in the project root for full license information.
 #
 
-ARG IMAGE_NAME=mcr.microsoft.com/azurelinux/base/nodejs:20
+ARG IMAGE_NAME=mcr.microsoft.com/azurelinux/base/core:3.0
 
-FROM $IMAGE_NAME AS build
+FROM $IMAGE_NAME AS node24-base
 
-RUN tdnf -y update --quiet
+RUN tdnf -y update --quiet && \
+    tdnf -y install --quiet ca-certificates nodejs24 nodejs24-npm && \
+    tdnf clean all --quiet
+
+FROM node24-base AS build
 
 WORKDIR /build
 
@@ -21,6 +25,7 @@ RUN rm -rf dist frontend/build
 RUN npm install --ignore-scripts --production --verbose
 RUN npm ci
 RUN npm run-script build
+RUN npm prune --omit=dev
 RUN mv node_modules production_node_modules
 RUN rm -f .npmrc
 
@@ -37,7 +42,7 @@ RUN --mount=type=secret,id=npmrc,target=/root/.npmrc npm ci
 RUN npm run build
 RUN rm -f .npmrc
 
-FROM $IMAGE_NAME AS run
+FROM node24-base AS run
 
 ENV IS_DOCKER=1 \
     NPM_CONFIG_LOGLEVEL=warn \

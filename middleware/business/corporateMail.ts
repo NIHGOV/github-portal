@@ -3,7 +3,6 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { jsonError } from '../index.js';
 import { IProviders, ReposAppRequest } from '../../interfaces/index.js';
 import { CreateError, ErrorHelper, getProviders } from '../../lib/transitional.js';
 import { IndividualContext } from '../../business/user/index.js';

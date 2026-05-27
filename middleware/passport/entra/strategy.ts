@@ -314,7 +314,7 @@ class EntraIDStrategy extends Strategy {
 
   private async callback(req: ReposAppRequest, code: string, state: string): Promise<StrategyOutcome> {
     const providers = getProviders(req);
-    const { insights } = providers;
+    const { insights } = req;
     const { correlationId } = req;
     const session = req.session as EntraSessionAugmentation;
     if (!session.nonce || !session.state) {

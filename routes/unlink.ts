@@ -6,10 +6,9 @@
 import { NextFunction, Response, Router } from 'express';
 const router: Router = Router();
 
-import { getProviders } from '../lib/transitional.js';
+import { CreateError, getProviders } from '../lib/transitional.js';
 import { wrapError } from '../lib/utils.js';
 import { IndividualContext } from '../business/user/index.js';
-import { jsonError } from '../middleware/index.js';
 import { ReposAppRequest, OrganizationMembershipState, UnlinkPurpose } from '../interfaces/index.js';
 
 router.use(async function (req: ReposAppRequest, res: Response, next: NextFunction) {
@@ -93,7 +92,7 @@ export async function unlinkInteractive(
   if (error) {
     const errorMessage =
       'You were successfully removed from all of your organizations. However, a failure happened during a data housecleaning operation with GitHub. Double check that you are happy with your current membership status on GitHub.com before continuing.';
-    return next(isJson ? jsonError(errorMessage, 400) : wrapError(error, errorMessage));
+    return next(isJson ? CreateError.InvalidParameters(errorMessage) : wrapError(error, errorMessage));
   } else {
     if (isJson) {
       res.status(204);

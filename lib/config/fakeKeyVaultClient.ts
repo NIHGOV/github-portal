@@ -7,7 +7,7 @@ import { GetSecretOptions } from '@azure/keyvault-secrets';
 import { randomUUID } from 'crypto';
 
 import { IDictionary } from '../../interfaces/index.js';
-import { jsonError } from '../../middleware/index.js';
+import { CreateError } from '../../lib/transitional.js';
 
 type FakeSecret = {
   id: string; // old
@@ -41,7 +41,7 @@ export function createFakeVaults() {
           if (val !== undefined) {
             return val;
           }
-          throw jsonError(`Secret ${id} not found`, 404);
+          throw CreateError.NotFound(`Secret ${id} not found`);
         },
       };
     },

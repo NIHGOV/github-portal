@@ -4,6 +4,7 @@
 //
 
 import { NextFunction, Response } from 'express';
+import { randomUUID } from 'crypto';
 
 import wrapOrCreateInsightsConsoleClient from '../lib/insights.js';
 
@@ -100,12 +101,18 @@ export default function initializeAppInsights(
       return res.status(204).send() as unknown as void;
     }
 
+    if (!req.correlationId) {
+      req.correlationId = randomUUID();
+    }
+
     // Provide application insight event tracking with correlation ID
     const extraProperties = {
       correlationId: req.correlationId,
     };
     const requestInsights = wrapOrCreateInsightsConsoleClient(extraProperties, client);
-    const operationContext = client ? appinsights.startOperation(req) : null;
+    const operationContext = client
+      ? (appinsights.getCorrelationContext() ?? appinsights.startOperation(req))
+      : null;
 
     if (!operationContext) {
       req.insights = requestInsights;

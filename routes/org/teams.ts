@@ -7,7 +7,7 @@ import { NextFunction, Response, Router } from 'express';
 const router: Router = Router();
 
 import { ReposAppRequest } from '../../interfaces/index.js';
-import { popSessionVariable } from '../../lib/utils.js';
+import { popSessionVariable, stringParam } from '../../lib/utils.js';
 import lowercaser from '../../middleware/lowercaser.js';
 
 import RouteTeam from './team//index.js';
@@ -39,7 +39,7 @@ router.get('/', lowercaser(['sort', 'set']), RouteTeamsPager);
 router.use('/:teamSlug', async (req: ITeamsRequest, res: Response, next: NextFunction) => {
   const organization = req.organization;
   const orgBaseUrl = organization.baseUrl;
-  const slug = req.params.teamSlug as string;
+  const slug = stringParam(req, 'teamSlug');
   try {
     const team = await organization.getTeamFromName(slug);
     req.team2 = team;

@@ -6,12 +6,26 @@
 import { NextFunction, Request, Response } from 'express';
 import { randomUUID } from 'crypto';
 
+const CORRELATION_ID_RESPONSE_HEADER = 'x-correlation-id';
+
 export type WithCorrelationId<T> = T & {
   correlationId?: string;
 };
 
-// Generate a correlation ID
+// Generate or propagate a correlation ID
 export default function (req: WithCorrelationId<Request>, res: Response, next: NextFunction) {
-  req.correlationId = randomUUID();
+  let correlationId = req.correlationId;
+
+  if (!correlationId) {
+    const headerValue = req.header(CORRELATION_ID_RESPONSE_HEADER);
+    if (typeof headerValue === 'string' && headerValue.trim()) {
+      correlationId = headerValue.trim();
+    } else {
+      correlationId = randomUUID();
+    }
+  }
+
+  req.correlationId = correlationId;
+  res.setHeader(CORRELATION_ID_RESPONSE_HEADER, correlationId);
   return next();
 }

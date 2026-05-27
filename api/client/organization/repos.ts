@@ -5,12 +5,11 @@
 
 import { NextFunction, Response, Router } from 'express';
 
-import { jsonError } from '../../../middleware/index.js';
 import { CreateError, getProviders } from '../../../lib/transitional.js';
 import { Repository } from '../../../business/index.js';
 
 import JsonPager from '../jsonPager.js';
-import { ReposAppRequest, IProviders } from '../../../interfaces/index.js';
+import { ReposAppRequest, IProviders, GitHubRepositoryVisibility } from '../../../interfaces/index.js';
 import { sortRepositoriesByNameCaseInsensitive } from '../../../lib/utils.js';
 import { apiMiddlewareRepositoriesToRepository } from '../../../middleware/business/repository.js';
 
@@ -50,7 +49,7 @@ router.get('/', async (req: ReposAppRequest, res: Response, next: NextFunction) 
     );
   } catch (repoError) {
     console.dir(repoError);
-    return next(jsonError(repoError));
+    return next(repoError);
   }
 });
 
@@ -60,6 +59,7 @@ export enum RepoListSearchType {
   All = '',
   Public = 'public',
   Private = 'private',
+  Internal = 'internal',
   Sources = 'sources',
   Forks = 'forks',
 }
@@ -70,6 +70,8 @@ export function repoListSearchTypeToDisplayName(v: RepoListSearchType) {
       return 'All';
     case RepoListSearchType.Forks:
       return 'Forks';
+    case RepoListSearchType.Internal:
+      return 'Internal';
     case RepoListSearchType.Private:
       return 'Private';
     case RepoListSearchType.Public:
@@ -87,6 +89,7 @@ export function repoSearchTypeFilterFromStringToEnum(value: string) {
     case RepoListSearchType.All:
     case RepoListSearchType.Public:
     case RepoListSearchType.Private:
+    case RepoListSearchType.Internal:
     case RepoListSearchType.Forks:
     case RepoListSearchType.Sources:
       return value as RepoListSearchType;
@@ -119,11 +122,17 @@ function getFilter(type: RepoListSearchType): RepoFilterFunction {
       }; // ? is this what 'Sources' means on GitHub?
     case RepoListSearchType.Public:
       return (repo) => {
-        return !repo.private;
+        return repo.visibility ? repo.visibility === GitHubRepositoryVisibility.Public : !repo.private;
       };
     case RepoListSearchType.Private:
       return (repo) => {
-        return repo.private;
+        return repo.visibility
+          ? repo.visibility === GitHubRepositoryVisibility.Private
+          : repo.private === true;
+      };
+    case RepoListSearchType.Internal:
+      return (repo) => {
+        return repo.visibility === GitHubRepositoryVisibility.Internal;
       };
     case RepoListSearchType.All:
     default:

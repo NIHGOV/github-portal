@@ -6,7 +6,6 @@
 import { NextFunction, Response, Router } from 'express';
 
 import { IndividualContext } from '../../business/user/index.js';
-import { jsonError } from '../../middleware/index.js';
 import { CreateError, ErrorHelper, getProviders } from '../../lib/transitional.js';
 import { unlinkInteractive } from '../../routes/unlink.js';
 import { interactiveLinkUser } from '../../routes/link.js';
@@ -33,9 +32,9 @@ async function validateLinkOk(req: ReposAppRequest, res: Response, next: NextFun
   const graphProvider = providers.graphProvider;
   // REFACTOR: delegate the decision to the auth provider
   if (!graphProvider || !graphProvider.getUserById) {
-    return next(jsonError('No configured graph provider', 500));
+    return next(CreateError.ServerError('No configured graph provider'));
   }
-  insights.trackEvent({
+  insights?.trackEvent({
     name: 'LinkValidateNotGuestStart',
     properties: {
       aadId: aadId,
@@ -69,7 +68,7 @@ async function validateLinkOk(req: ReposAppRequest, res: Response, next: NextFun
     // If the user is a guest, block the link:
     const block = (userType as string) === 'Guest';
     const blockedRecord = block ? 'BLOCKED' : 'not blocked';
-    insights.trackEvent({
+    insights?.trackEvent({
       name: 'LinkValidateNotGuestGraphSuccess',
       properties: {
         aadId: aadId,
@@ -80,10 +79,9 @@ async function validateLinkOk(req: ReposAppRequest, res: Response, next: NextFun
       },
     });
     if (block) {
-      insights.trackMetric({ name: 'LinksBlockedForGuests', value: 1 });
-      const err = jsonError(
-        `This system is not available to guests. You are currently signed in as ${displayName} ${userPrincipalName}. Please sign out or try a private browser window.`,
-        400
+      insights?.trackMetric({ name: 'LinksBlockedForGuests', value: 1 });
+      const err = CreateError.InvalidParameters(
+        `This system is not available to guests. You are currently signed in as ${displayName} ${userPrincipalName}. Please sign out or try a private browser window.`
       );
       insights?.trackException({ exception: err });
       return next(err);
@@ -91,15 +89,14 @@ async function validateLinkOk(req: ReposAppRequest, res: Response, next: NextFun
     const manager = await providers.graphProvider.getManagerById(aadId);
     if (!manager || !manager.userPrincipalName) {
       return next(
-        jsonError(
-          'You do not have an active manager entry in the directory, so cannot yet use this app to link.',
-          400
+        CreateError.InvalidParameters(
+          'You do not have an active manager entry in the directory, so cannot yet use this app to link.'
         )
       );
     }
     return next();
   } catch (graphError) {
-    insights.trackException({
+    insights?.trackException({
       exception: graphError,
       properties: {
         aadId: aadId,
@@ -107,7 +104,11 @@ async function validateLinkOk(req: ReposAppRequest, res: Response, next: NextFun
       },
     });
     return next(
-      jsonError(graphError.toString() || 'Generic lookup error', ErrorHelper.GetStatus(graphError) || 500)
+      CreateError.CreateStatusCodeError(
+        ErrorHelper.GetStatus(graphError) || 500,
+        graphError.toString() || 'Generic lookup error',
+        graphError
+      )
     );
   }
 }
@@ -129,7 +130,7 @@ router.post('/', validateLinkOk, async (req: ReposAppRequest, res: Response, nex
 });
 
 router.use('/*splat', (req: ReposAppRequest, res: Response, next: NextFunction) => {
-  return next(jsonError('API or route not found', 404));
+  return next(CreateError.NotFound('API or route not found'));
 });
 
 export default router;

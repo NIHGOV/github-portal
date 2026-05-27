@@ -10,6 +10,7 @@ export interface IQueueMessage {
   identifier: string;
   customProperties: IDictionary<string>;
   unparsedBody: string;
+  rawBodyType?: string;
 }
 
 export interface IQueueProcessor {

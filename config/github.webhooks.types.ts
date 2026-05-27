@@ -10,6 +10,8 @@ export type ConfigGitHubRootWebhooks = {
 export type ConfigGitHubWebhooks = {
   firehoseOffline: string;
   sharedSecret: string;
+  allowInvalidSignature: boolean;
+  acceptUnsigned: boolean;
   runtimeMinutes: string;
   parallelism: string;
   emptyQueueDelaySeconds: string;

@@ -5,23 +5,25 @@
 
 import { NextFunction, Response, Router } from 'express';
 
-import { jsonError } from '../../middleware/jsonError.js';
+import { CreateError } from '../../lib/transitional.js';
+import { clearSessionCsrfToken } from '../../middleware/business/csrf.js';
 import { IAppSession, ReposAppRequest } from '../../interfaces/index.js';
-import { getProviders } from '../../lib/transitional.js';
 
 const router: Router = Router();
 
 // This route is /api/client/signout*
 
 router.post('/', (req: ReposAppRequest, res) => {
-  const { insights } = getProviders(req);
+  const { insights } = req;
   // For client apps, we keep the session active to allow
   // for a few feature flags to be present.
   req.logout({ keepSessionInfo: true }, (err) => {
     const session = req.session as IAppSession;
     if (session) {
+      clearSessionCsrfToken(session);
       delete session.enableMultipleAccounts;
       delete session.selectedGithubId;
+      delete session.sessionFlags;
     }
     if (err) {
       insights?.trackException({ exception: err });
@@ -35,6 +37,7 @@ router.post('/', (req: ReposAppRequest, res) => {
 
 router.post('/github', (req: ReposAppRequest, res) => {
   const session = req.session as IAppSession;
+  clearSessionCsrfToken(session);
   if (session?.passport?.user?.github) {
     delete session.passport.user.github;
   }
@@ -43,7 +46,7 @@ router.post('/github', (req: ReposAppRequest, res) => {
 });
 
 router.use('/*splat', (req: ReposAppRequest, res: Response, next: NextFunction) => {
-  return next(jsonError('API or route not found', 404));
+  return next(CreateError.NotFound('API or route not found'));
 });
 
 export default router;

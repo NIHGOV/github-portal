@@ -20,4 +20,5 @@ export type ConfigFeatures = {
   exposeWebhookIngestionEndpoint: boolean;
   allowFossFundElections: boolean;
   allowUsersToViewLockedOrgDetails: boolean;
+  allowSessionFeatureFlags: boolean;
 };

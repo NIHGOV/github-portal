@@ -74,8 +74,8 @@ export default async function ConnectSession(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      // TODO: 2020: consider SameSite setting requirements here that are compatible with the IdP
       maxAge: (ttlFromStore || 86400) * 1000 /* milliseconds for maxAge, not seconds */,
+      sameSite: 'lax' as const,
       secure: undefined,
       domain: undefined,
     },

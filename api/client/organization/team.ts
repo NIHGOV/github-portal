@@ -6,8 +6,7 @@
 import { NextFunction, Response, Router } from 'express';
 
 import { getContextualTeam } from '../../../middleware/github/teamPermissions.js';
-import { jsonError } from '../../../middleware/index.js';
-import { getProviders } from '../../../lib/transitional.js';
+import { CreateError, getProviders } from '../../../lib/transitional.js';
 import JsonPager from '../jsonPager.js';
 import { getLinksLightCache } from '../leakyLocalCache.js';
 import { equivalentLegacyPeopleSearch } from './people.js';
@@ -66,7 +65,7 @@ router.get('/repos', async (req: ReposAppRequest, res: Response, next: NextFunct
     );
   } catch (repoError) {
     console.dir(repoError);
-    return next(jsonError(repoError));
+    return next(repoError);
   }
 });
 
@@ -91,7 +90,7 @@ router.get('/members', async (req: ReposAppRequest, res: Response, next: NextFun
     );
   } catch (error) {
     console.dir(error);
-    return next(jsonError(error));
+    return next(error);
   }
 });
 
@@ -126,7 +125,7 @@ router.get('/maintainers', async (req: ReposAppRequest, res: Response, next: Nex
 });
 
 router.use('/*splat', (req, res: Response, next: NextFunction) => {
-  return next(jsonError('no API or function available for this specific team', 404));
+  return next(CreateError.NotFound('no API or function available for this specific team'));
 });
 
 export default router;

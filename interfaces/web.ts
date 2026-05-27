@@ -83,7 +83,7 @@ export type ApiRequestToken = {
   authenticationProvider: string;
   hasOrganizationScope: (scope: string) => boolean;
   hasScope: (scope: string) => boolean;
-  hasAnyScope: (scopes: string[]) => boolean;
+  hasAnyScope: (scopes?: string[]) => boolean;
   hasScopePrefix: (scopePrefix: string) => boolean;
   displayUsername: string;
   token: EntraApiTokenValidateResponse;
@@ -112,8 +112,10 @@ export interface IAppSession extends Session {
   selectedGithubId: string;
   passport: any;
   id: string;
+  csrfToken?: string;
   alerts?: IUserAlert[];
   referer: string;
+  sessionFlags?: string[];
 }
 
 export interface IReposRequestWithOrganization extends ReposAppRequest {

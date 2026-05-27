@@ -5,7 +5,6 @@
 
 import { NextFunction, Response, Router } from 'express';
 
-import { jsonError } from '../../../middleware/index.js';
 import { CreateError, getProviders } from '../../../lib/transitional.js';
 import LeakyLocalCache, { getLinksLightCache } from '../leakyLocalCache.js';
 import JsonPager from '../jsonPager.js';
@@ -153,12 +152,12 @@ router.get('/', async (req: ReposAppRequest, res: Response, next: NextFunction) 
     );
   } catch (repoError) {
     console.dir(repoError);
-    return next(jsonError(repoError));
+    return next(repoError);
   }
 });
 
 router.use('/*splat', (req, res: Response, next: NextFunction) => {
-  return next(jsonError('no API or function available within this people list', 404));
+  return next(CreateError.NotFound('no API or function available within this people list'));
 });
 
 export default router;

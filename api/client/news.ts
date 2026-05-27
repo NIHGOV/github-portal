@@ -5,8 +5,7 @@
 
 import { NextFunction, Response, Router } from 'express';
 
-import { jsonError } from '../../middleware/index.js';
-import { getProviders } from '../../lib/transitional.js';
+import { CreateError, getProviders } from '../../lib/transitional.js';
 import { ReposAppRequest } from '../../interfaces/index.js';
 
 const router: Router = Router();
@@ -17,7 +16,7 @@ router.get('/', async (req: ReposAppRequest, res) => {
 });
 
 router.use('/*splat', (req: ReposAppRequest, res: Response, next: NextFunction) => {
-  return next(jsonError('API or route not found within news', 404));
+  return next(CreateError.NotFound('API or route not found within news'));
 });
 
 export default router;

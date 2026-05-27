@@ -8,8 +8,9 @@ import _ from 'lodash';
 import { NextFunction, Response, Router } from 'express';
 const router: Router = Router();
 
-import { getProviders } from '../../lib/transitional.js';
-import { jsonError } from '../../middleware/jsonError.js';
+import { CreateError, ErrorHelper, getProviders } from '../../lib/transitional.js';
+import { stringParam } from '../../lib/utils.js';
+import { safeStringify } from '../../lib/safeStringify.js';
 import { Organization } from '../../business/organization.js';
 import {
   createRepositoryCore,
@@ -42,7 +43,7 @@ router.get('/metadata', (req: ILocalApiRequest, res: Response, next: NextFunctio
     const metadata = organization.getRepositoryCreateMetadata(options);
     res.json(metadata);
   } catch (error) {
-    return next(jsonError(error, 400));
+    return next(CreateError.InvalidParameters(error?.message || String(error), error));
   }
 });
 
@@ -77,7 +78,7 @@ router.get('/personalizedTeams', async (req: ILocalApiRequest, res: Response, ne
       personalizedTeams,
     }) as unknown as void;
   } catch (error) {
-    return next(jsonError(error, 400));
+    return next(CreateError.InvalidParameters(error?.message || String(error), error));
   }
 });
 
@@ -134,13 +135,15 @@ router.get('/teams', async (req: ILocalApiRequest, res: Response, next: NextFunc
       teams: simpleTeams,
     });
   } catch (getTeamsError) {
-    return next(jsonError(getTeamsError, 400));
+    return next(
+      CreateError.InvalidParameters(getTeamsError?.message || String(getTeamsError), getTeamsError)
+    );
   }
 });
 
 router.get('/repo/:repo', async (req: ILocalApiRequest, res) => {
-  const { insights } = getProviders(req);
-  const repoName = req.params.repo;
+  const { insights } = req;
+  const repoName = stringParam(req, 'repo');
   let error = null;
   try {
     const repo = await req.organization.repository(repoName).getDetails();
@@ -209,7 +212,8 @@ export async function createRepositoryFromClient(
 ) {
   const createRepositorySource = req.createRepositorySource || 'client';
   const providers = getProviders(req);
-  const { insights, diagnosticsDrop, customizedNewRepositoryLogic, graphProvider } = providers;
+  const { diagnosticsDrop, customizedNewRepositoryLogic, graphProvider } = providers;
+  const { insights } = req;
   const individualContext = req.watchdogContextOverride || req.individualContext || req.apiContext;
   const config = getProviders(req).config;
   const organization = (req.organization || (req as any).aeOrganization) as Organization;
@@ -276,20 +280,21 @@ export async function createRepositoryFromClient(
     });
     insights?.trackMetric({ name: 'CreateRepositoryBlocks', value: 1 });
     return next(
-      jsonError(
-        `The GitHub organization ${organization.name} is configured as "createRepositoriesOnGitHub": repos should be created on GitHub.com directly and not through this wizard.`,
-        400
+      CreateError.InvalidParameters(
+        `The GitHub organization ${organization.name} is configured as "createRepositoriesOnGitHub": repos should be created on GitHub.com directly and not through this wizard.`
       )
     );
   }
   const body = req.body;
   if (!body) {
-    return next(jsonError('No body', 400));
+    return next(CreateError.InvalidParameters('No body'));
   }
   try {
     await customizedNewRepositoryLogic?.validateRequest(customContext, req);
   } catch (validationError) {
-    return next(jsonError(validationError, 400));
+    return next(
+      CreateError.InvalidParameters(validationError?.message || String(validationError), validationError)
+    );
   }
   req.apiVersion = (req.query['api-version'] || req.headers['api-version'] || '2017-07-27') as string;
   if (req.apiContext && req.apiContext.getGitHubIdentity()) {
@@ -311,7 +316,9 @@ export async function createRepositoryFromClient(
         }
       });
       if (!valid) {
-        return next(jsonError('The approval type is not supported or approved at this time', 400));
+        return next(
+          CreateError.InvalidParameters('The approval type is not supported or approved at this time')
+        );
       }
     }
   }
@@ -331,7 +338,7 @@ export async function createRepositoryFromClient(
   ) {
     // Only if the organization types are configured in the settings should this gate the type of this
     if (!organization.getRepositoryCreateMetadata()?.visibilities?.includes(targetType)) {
-      const { insights } = getProviders(req);
+      const { insights } = req;
       const additionalContext =
         createRepositorySource === 'api'
           ? ' As an application or API user trying to create repositories, this behavior may be new and impacting your application. Please reach out to ospocore@microsoft.com to share more detail and see if a feature flag is required to enable your application to continue creating repositories of this type. This change landed in March 2025.'
@@ -347,9 +354,8 @@ export async function createRepositoryFromClient(
       });
       insights?.trackMetric({ name: 'api.create_repo.type_blocks', value: 1 });
       return next(
-        jsonError(
-          `The portal is not configured to allow the creation of ${targetType} repositories in the ${organization.name} organization.${additionalContext}`,
-          400
+        CreateError.InvalidParameters(
+          `The portal is not configured to allow the creation of ${targetType} repositories in the ${organization.name} organization.${additionalContext}`
         )
       );
     }
@@ -366,7 +372,7 @@ export async function createRepositoryFromClient(
   }
   if (!sufficientTeamsOk) {
     if (!body.selectedAdminTeams || !body.selectedAdminTeams.length) {
-      return next(jsonError('No administration team(s) provided in the request', 400));
+      return next(CreateError.InvalidParameters('No administration team(s) provided in the request'));
     }
   }
   translateTeams(body);
@@ -410,7 +416,7 @@ export async function createRepositoryFromClient(
   insights.trackEvent({
     name: 'ApiClientNewOrgRepoStart',
     properties: {
-      body: JSON.stringify(req.body),
+      body: safeStringify(req.body),
     },
   });
   let success: ICreateRepositoryApiResult = null;
@@ -432,11 +438,14 @@ export async function createRepositoryFromClient(
       name: 'ApiClientNewOrgRepoError',
       properties: {
         error: createRepositoryError.message,
-        encoded: JSON.stringify(createRepositoryError),
+        encoded: safeStringify(createRepositoryError),
       },
     });
-    if (!createRepositoryError.json) {
-      createRepositoryError = jsonError(createRepositoryError, 400);
+    if (!ErrorHelper.HasStatus(createRepositoryError)) {
+      createRepositoryError = CreateError.InvalidParameters(
+        createRepositoryError?.message || String(createRepositoryError),
+        createRepositoryError
+      );
     }
     return next(createRepositoryError);
   }
@@ -454,6 +463,7 @@ export async function createRepositoryFromClient(
     messages: success.tasks,
   };
   delete output.tasks;
+  delete output.insights;
   if (success.github) {
     output.url = success.github.html_url;
   }

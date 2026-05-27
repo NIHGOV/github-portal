@@ -13,6 +13,7 @@ import { TeamRepositoryPermission } from './teamRepositoryPermission.js';
 import { sortRepositoriesByNameCaseInsensitive } from '../lib/utils.js';
 import {
   GitHubRepositoryPermission,
+  GitHubRepositoryVisibility,
   IRepositorySearchOptions,
   RepositoryLockdownState,
 } from '../interfaces/index.js';
@@ -186,7 +187,12 @@ export class RepositorySearch {
         break;
       case 'private':
         filter = (r) => {
-          return r.private === true;
+          return r.private === true && r.visibility !== GitHubRepositoryVisibility.Internal;
+        };
+        break;
+      case 'internal':
+        filter = (r) => {
+          return r.visibility === GitHubRepositoryVisibility.Internal;
         };
         break;
       case 'source':

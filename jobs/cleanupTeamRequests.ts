@@ -20,7 +20,7 @@ job.runBackgroundJob(cleanup, {
 });
 
 async function cleanup(providers: IProviders) {
-  const { approvalProvider, insights, linkProvider } = providers;
+  const { approvalProvider, genericInsights: insights, linkProvider } = providers;
   insights?.trackEvent({
     name: `${INSIGHTS_PREFIX}Start`,
     properties: {

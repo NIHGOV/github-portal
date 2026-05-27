@@ -125,12 +125,6 @@ block content
                 +teamsList(permissions.admin)
               else
                 p.text-danger This repository has no admin teams defined.
-              div.alert.alert-gray(style='margin-top:16px')
-                p
-                  strong Have you lost admin access?
-                  br
-                  | The GitHub user interface can make accidental downgrade of admin access for a team a little too easy.
-                p Please try visiting #[a(href='/undo') the permission "undo" page] before contact #{config.brand.companyName} GitHub administrators for support. 
               
     if teamBasedPermissions
       .row: .col-md-12: h2 Users granted permissions by teams

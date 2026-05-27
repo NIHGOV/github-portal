@@ -8,11 +8,12 @@ import { NextFunction, Response } from 'express';
 import { ReposAppRequest, AccountJsonFormat } from '../../interfaces/index.js';
 import { IGraphEntry } from '../../lib/graphProvider/index.js';
 import { CreateError, ErrorHelper, getProviders } from '../../lib/transitional.js';
+import { stringParam } from '../../lib/utils.js';
 
 const getPerson = async (req: ReposAppRequest, res: Response, next: NextFunction) => {
   const providers = getProviders(req);
   const { operations, queryCache, graphProvider } = providers;
-  const login = req.params.login as string;
+  const login = stringParam(req, 'login');
   let corporateEntry: IGraphEntry = null;
   try {
     const account = await operations.getAccountByUsername(login);

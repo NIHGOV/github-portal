@@ -16,7 +16,7 @@ export async function blockEnterpriseManagedUsersAuthentication(
   next: NextFunction
 ) {
   const companySpecific = getCompanySpecificDeployment();
-  const { insights } = getProviders(req);
+  const { insights } = req;
   const context = req.individualContext;
   if (!context) {
     return next(new Error('Missing context'));

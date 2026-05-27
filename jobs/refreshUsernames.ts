@@ -24,7 +24,7 @@ job.runBackgroundJob(refresh, {
 });
 
 async function refresh(providers: IProviders): Promise<IReposJobResult> {
-  const { config, operations, insights, linkProvider, graphProvider } = providers;
+  const { config, operations, genericInsights: insights, linkProvider, graphProvider } = providers;
   insights?.trackEvent({
     name: `${INSIGHTS_PREFIX}Start`,
     properties: {

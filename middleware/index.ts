@@ -15,7 +15,6 @@ const debug = Debug.debug('startup');
 export * from './react.js';
 export * from './business/links.js';
 export * from './business/index.js';
-export * from './jsonError.js';
 
 import { hasStaticReactClientApp, stripDistFolderName } from '../lib/transitional.js';
 import { serveFrontendAppWithAssets } from './staticClientApp.js';
@@ -28,11 +27,13 @@ import campaign from './campaign.js';
 import { codespacesDevAssistant } from './codespaces.js';
 import officeHyperlinks from './officeHyperlinks.js';
 import rawBodyParser from './rawBodyParser.js';
+import { getRateLimitMiddleware } from './rateLimit.js';
 
 import routeScrubbedUrl from './scrubbedUrl.js';
 import routeLogger from './logger.js';
 import routeLocals from './locals.js';
 import routePassport from './passport-routes.js';
+import securityHeaders from './securityHeaders.js';
 
 import type {
   AppInsightsTelemetryClient,
@@ -67,6 +68,12 @@ export default async function initMiddleware(
 
   app.set('view cache', config.node.isProduction);
   app.disable('x-powered-by');
+  app.use(securityHeaders);
+
+  // Block legacy FrontPage server extension probe path (`/_vti_bin`)
+  app.use('/_vti_bin', (_req, res) => {
+    res.status(404).end();
+  });
 
   app.set('viewServices', providers.viewServices);
 
@@ -118,6 +125,7 @@ export default async function initMiddleware(
     }
     app.use(routeScrubbedUrl);
     app.use(routeLogger(config));
+    app.use(getRateLimitMiddleware(providers, config));
     app.use(routeLocals);
     if (!initializationError) {
       if (applicationProfile.sessions) {

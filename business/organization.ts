@@ -52,7 +52,6 @@ import {
   OrganizationMembershipRole,
 } from '../interfaces/index.js';
 import { CreateError, ErrorHelper } from '../lib/transitional.js';
-import { jsonError } from '../middleware/index.js';
 import getCompanySpecificDeployment from '../middleware/companySpecificDeployment.js';
 import { ConfigGitHubTemplates } from '../config/github.templates.types.js';
 import { GitHubTokenManager } from '../lib/github/tokenManager.js';
@@ -1071,7 +1070,7 @@ export class Organization {
       const header = this.authorize(AppPurpose.Operations);
       const value = await header();
       if (value?.installationId) {
-        throw jsonError(`GitHub Apps are being used`, 400);
+        throw CreateError.InvalidParameters('GitHub Apps are being used');
       }
       const entity = await operations.github.post(header, 'users.getAuthenticated', {});
       return entity as IAccountBasics;

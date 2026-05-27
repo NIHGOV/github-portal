@@ -6,7 +6,7 @@
 import { NextFunction, Response, Router } from 'express';
 
 import { corporateLinkToJson } from '../../business/index.js';
-import { jsonError } from '../../middleware/index.js';
+import { CreateError } from '../../lib/transitional.js';
 import { type GitHubSimpleAccount, type ICorporateLink, ReposAppRequest } from '../../interfaces/index.js';
 import JsonPager from './jsonPager.js';
 import getCompanySpecificDeployment from '../../middleware/companySpecificDeployment.js';
@@ -61,12 +61,14 @@ router.get('/', async (req: ReposAppRequest, res: Response, next: NextFunction) 
     );
   } catch (repoError) {
     console.dir(repoError);
-    return next(jsonError(repoError));
+    return next(repoError);
   }
 });
 
 router.use('/*splat', (req, res: Response, next: NextFunction) => {
-  return next(jsonError('no API or function available within this cross-organization people list', 404));
+  return next(
+    CreateError.NotFound('no API or function available within this cross-organization people list')
+  );
 });
 
 export default router;

@@ -6,20 +6,20 @@
 import { NextFunction, Response, Router } from 'express';
 const router: Router = Router();
 
-import { getProviders } from '../../lib/transitional.js';
-import { jsonError } from '../../middleware/jsonError.js';
+import { CreateError, getProviders } from '../../lib/transitional.js';
+import { stringParam } from '../../lib/utils.js';
 
 import newOrgRepo from './newOrgRepo.js';
 import { ReposAppRequest } from '../../interfaces/index.js';
 
 router.use('/org/:org', (req: ReposAppRequest, res: Response, next: NextFunction) => {
-  const orgName = req.params.org;
+  const orgName = stringParam(req, 'org');
   const { operations } = getProviders(req);
   try {
     req.organization = operations.getOrganization(orgName);
   } catch (noOrganization) {
     return next(
-      jsonError(new Error('This API endpoint is not configured for the provided organization name.'))
+      CreateError.InvalidParameters('This API endpoint is not configured for the provided organization name.')
     );
   }
   return next();

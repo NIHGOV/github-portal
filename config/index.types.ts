@@ -34,6 +34,7 @@ import type { ConfigRootNews } from './news.types.js';
 import type { ConfigRootNode } from './node.types.js';
 import type { ConfigRootNotifications } from './notifications.types.js';
 import type { ConfigRootProcess } from './process.types.js';
+import type { ConfigRootRateLimit } from './rateLimit.types.js';
 import type { ConfigRootRedis } from './redis.types.js';
 import type { ConfigRootReview } from './review.types.js';
 import type { ConfigRootServiceMessage } from './serviceMessage.types.js';
@@ -88,6 +89,7 @@ export type SiteConfiguration =
   ConfigRootNode &
   ConfigRootNotifications &
   ConfigRootProcess &
+  ConfigRootRateLimit &
   ConfigRootRedis &
   ConfigRootReview &
   ConfigRootServiceMessage &

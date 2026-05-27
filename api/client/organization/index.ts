@@ -6,9 +6,8 @@
 import { NextFunction, Response, Router } from 'express';
 
 import { ReposAppRequest } from '../../../interfaces/index.js';
-import { jsonError } from '../../../middleware/index.js';
 import getCompanySpecificDeployment from '../../../middleware/companySpecificDeployment.js';
-import { getProviders } from '../../../lib/transitional.js';
+import { CreateError, getProviders } from '../../../lib/transitional.js';
 import {
   blockIfUnmanagedOrganization,
   IReposAppRequestWithOrganizationManagementType,
@@ -92,7 +91,7 @@ router.get('/newRepoBanner', (req: ReposAppRequest, res) => {
 });
 
 router.use('/*splat', (req, res: Response, next: NextFunction) => {
-  return next(jsonError('no API or function available', 404));
+  return next(CreateError.NotFound('no API or function available'));
 });
 
 export default router;

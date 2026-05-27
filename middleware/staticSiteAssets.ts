@@ -15,6 +15,8 @@ import { CreateError } from '../lib/transitional.js';
 import type { IReposApplication } from '../interfaces/app.js';
 import type { ExpressWithStatic } from './types.js';
 
+import { setStaticAssetHeaders } from './staticHeaders.js';
+
 import Debug from 'debug';
 const debug = Debug.debug('startup');
 
@@ -36,7 +38,11 @@ export async function configureStaticAssetHosting(app: IReposApplication, expres
     // Serve/host the static site assets from our private NPM
 
     debug(`hosting site assets from ${ospoAssetsDistPath} on path '/'`);
-    app.use(express.static(ospoAssetsDistPath));
+    app.use(
+      express.static(ospoAssetsDistPath, {
+        setHeaders: setStaticAssetHeaders,
+      })
+    );
   };
 
   const serveFavoriteIcon = () => {

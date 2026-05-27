@@ -10,6 +10,7 @@ import type { IQueueMessage, IQueueProcessor } from './index.js';
 import { IDictionary, IProviders, Json } from '../../interfaces/index.js';
 import { CreateError } from '../transitional.js';
 import { tryGetEntraApplicationTokenCredential } from '../applicationIdentity.js';
+import { normalizeWebhookRawBody, requireWebhookRawBody } from '../webhookSignature.js';
 
 // NOTE: in May 2021 this file was moved to the newer generation of Azure SDK dependencies,
 // which brings in AMQP under the covers instead of the HTTP REST approach; this is therefore
@@ -17,6 +18,8 @@ import { tryGetEntraApplicationTokenCredential } from '../applicationIdentity.js
 
 const defaultMessagesPerRequest = 5; // could be configurable in the future
 const maxWaitTimeInMs = 30 /* seconds */ * 1000;
+
+type ServiceBusMessageBodyType = ServiceBusReceivedMessage['_rawAmqpMessage']['bodyType'];
 
 export interface IServiceBusQueueProcessorOptions {
   queue: string;
@@ -30,6 +33,9 @@ export interface IServiceBusQueueProcessorOptions {
 export class ServiceBusMessage implements IQueueMessage {
   #lockedMessage: ServiceBusReceivedMessage = null;
   constructor(message: ServiceBusReceivedMessage) {
+    const normalizedBody = normalizeWebhookRawBody(
+      requireWebhookRawBody(message.body, 'Service Bus webhook body')
+    );
     this.#lockedMessage = message;
     this.brokerProperties = Object.assign({}, message) as unknown as IDictionary<string>;
     if (message.enqueuedTimeUtc) {
@@ -39,14 +45,26 @@ export class ServiceBusMessage implements IQueueMessage {
     this.identifier =
       message.messageId && typeof message.messageId === 'string' ? message.messageId : undefined;
     this.customProperties = message.applicationProperties as IDictionary<string>;
-    this.unparsedBody = message.body;
-    this.body = typeof message.body === 'string' ? JSON.parse(message.body) : this.unparsedBody; // newer library parses JSON automatically
+    this.unparsedBody = normalizedBody;
+    this.rawBodyType = message._rawAmqpMessage?.bodyType;
+    try {
+      this.body = JSON.parse(normalizedBody) as Json;
+    } catch {
+      const id = this.identifier || (typeof message.messageId === 'string' ? message.messageId : undefined);
+      const bodyType = message._rawAmqpMessage?.bodyType;
+      const idPart = id ? ` ${id}` : '';
+      const bodyTypePart = bodyType ? ` (bodyType: ${bodyType})` : '';
+      throw CreateError.InvalidParameters(
+        `Invalid JSON body for Service Bus message${idPart}${bodyTypePart}`
+      );
+    }
   }
 
   body: Json;
   customProperties: IDictionary<string>;
   brokerProperties: IDictionary<string>;
-  unparsedBody: any;
+  unparsedBody: string;
+  rawBodyType?: ServiceBusMessageBodyType;
 
   identifier: string;
   enqueuedSecondsAgo?: number;
@@ -88,6 +106,7 @@ export default class ServiceBusQueueProcessor implements IQueueProcessor {
       : new ServiceBusClient(options.connectionString);
     this.#receiver = service.createReceiver(options.queue, {
       receiveMode: options.immediatelyDeleteMessages ? 'receiveAndDelete' : 'peekLock',
+      skipParsingBodyAsJson: true,
     });
     this.#initialized = true;
   }

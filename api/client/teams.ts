@@ -11,8 +11,7 @@ import {
   ReposAppRequest,
   TeamJsonFormat,
 } from '../../interfaces/index.js';
-import { jsonError } from '../../middleware/index.js';
-import { getProviders } from '../../lib/transitional.js';
+import { CreateError, getProviders } from '../../lib/transitional.js';
 import JsonPager from './jsonPager.js';
 
 const router: Router = Router();
@@ -63,12 +62,12 @@ router.get('/', async (req: ReposAppRequest, res: Response, next: NextFunction) 
     );
   } catch (repoError) {
     console.dir(repoError);
-    return next(jsonError(repoError));
+    return next(repoError);
   }
 });
 
 router.use('/*splat', (req, res: Response, next: NextFunction) => {
-  return next(jsonError('no API or function available within this cross-organization teams list', 404));
+  return next(CreateError.NotFound('no API or function available within this cross-organization teams list'));
 });
 
 export default router;

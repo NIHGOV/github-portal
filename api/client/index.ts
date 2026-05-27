@@ -10,10 +10,10 @@ import {
   tryAddLinkToRequest,
   requireAccessTokenClient,
   setIdentity,
-  jsonError,
   requireAuthenticatedUserOrSignIn,
 } from '../../middleware/index.js';
 import { CreateError, getProviders } from '../../lib/transitional.js';
+import { sessionCsrfProtection } from '../../middleware/business/csrf.js';
 
 import getCompanySpecificDeployment from '../../middleware/companySpecificDeployment.js';
 
@@ -21,6 +21,7 @@ import type { ReposAppRequest } from '../../interfaces/index.js';
 import type { IndividualContext } from '../../business/user/index.js';
 
 import routeClientNewRepo from './newRepo.js';
+import routePing from './ping.js';
 import routeContext from './context/index.js';
 import routeOrganizations from './organizations.js';
 import routeLinking from './linking.js';
@@ -57,8 +58,10 @@ router.use(requireAccessTokenClient);
 router.use(apiContextMiddleware);
 router.use(setIdentity);
 router.use(tryAddLinkToRequest);
+router.use(sessionCsrfProtection);
 
 router.use('/newRepo', routeClientNewRepo);
+router.use('/ping', routePing);
 
 router.use('/context', routeContext);
 
@@ -142,7 +145,7 @@ router.get('/', (req: ReposAppRequest, res) => {
 });
 
 router.use((req, res: Response, next: NextFunction) => {
-  return next(jsonError('The resource or endpoint you are looking for is not there', 404));
+  return next(CreateError.NotFound('The resource or endpoint you are looking for is not there'));
 });
 
 export default router;

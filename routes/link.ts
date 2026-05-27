@@ -20,7 +20,6 @@ import { isCodespacesAuthenticating, storeOriginalUrlAsReferrer, wrapError } fro
 import validator from 'validator';
 
 import unlinkRoute from './unlink.js';
-import { jsonError } from '../middleware/index.js';
 
 const blockEmuAccounts = true;
 
@@ -85,7 +84,7 @@ router.use(async (req: IRequestHacked, res: Response, next: NextFunction) => {
       )
     );
   }
-  insights.trackEvent({
+  insights?.trackEvent({
     name: 'LinkValidateNotGuestStart',
     properties: {
       aadId: aadId,
@@ -114,7 +113,7 @@ router.use(async (req: IRequestHacked, res: Response, next: NextFunction) => {
         );
       }
     }
-    insights.trackEvent({
+    insights?.trackEvent({
       name: 'LinkValidateNotGuestGraphSuccess',
       properties: {
         aadId: aadId,
@@ -125,7 +124,7 @@ router.use(async (req: IRequestHacked, res: Response, next: NextFunction) => {
       },
     });
     if (block) {
-      insights.trackMetric({ name: 'LinksBlockedForGuests', value: 1 });
+      insights?.trackMetric({ name: 'LinksBlockedForGuests', value: 1 });
       return next(
         new Error(
           `This system is not available to guests. You are currently signed in as ${displayName} ${userPrincipalName}. Please sign out or try a private browser window.`
@@ -138,7 +137,7 @@ router.use(async (req: IRequestHacked, res: Response, next: NextFunction) => {
     }
     return next();
   } catch (graphError) {
-    insights.trackException({
+    insights?.trackException({
       exception: graphError,
       properties: {
         aadId: aadId,
@@ -248,7 +247,7 @@ export async function interactiveLinkUser(
   const { operations } = getProviders(req);
   if (isServiceAccount && !validator.isEmail(serviceAccountMail)) {
     const errorMessage = 'Please enter a valid e-mail address for the Service Account maintainer.';
-    return next(isJson ? jsonError(errorMessage, 400) : wrapError(null, errorMessage, true));
+    return next(isJson ? CreateError.InvalidParameters(errorMessage) : wrapError(null, errorMessage, true));
   }
   let newLinkObject: ICorporateLink = null;
   try {
@@ -268,7 +267,7 @@ export async function interactiveLinkUser(
     newLinkObject.serviceAccountMail = serviceAccountMail;
     const address = operations.getOperationsMailAddress();
     const errorMessage = `Service Account linking is not available. Please reach out to ${address} for more information.`;
-    return next(isJson ? jsonError(errorMessage, 400) : new Error(errorMessage));
+    return next(isJson ? CreateError.InvalidParameters(errorMessage) : new Error(errorMessage));
   }
   try {
     await operations.linkAccounts({
@@ -285,7 +284,9 @@ export async function interactiveLinkUser(
     }
   } catch (createError) {
     const errorMessage = `We had trouble linking your corporate and GitHub accounts: ${createError.message}`;
-    return next(isJson ? jsonError(errorMessage, 500) : wrapError(createError, errorMessage));
+    return next(
+      isJson ? CreateError.ServerError(errorMessage, createError) : wrapError(createError, errorMessage)
+    );
   }
 }
 

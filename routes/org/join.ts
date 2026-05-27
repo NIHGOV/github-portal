@@ -14,7 +14,7 @@ import { CreateError, getProviders } from '../../lib/transitional.js';
 import { IndividualContext } from '../../business/user/index.js';
 import { sleep, storeOriginalUrlAsReferrer, wrapError } from '../../lib/utils.js';
 import RequireActiveGitHubSession from '../../middleware/github/requireActiveSession.js';
-import { jsonError } from '../../middleware/jsonError.js';
+
 import { Organization, Team } from '../../business/index.js';
 import QueryCache from '../../business/queryCache.js';
 import {
@@ -497,7 +497,7 @@ router.post('/byClient', async (req: ReposAppRequest, res: Response, next: NextF
       },
     });
   } catch (error) {
-    return next(jsonError(error, 400));
+    return next(CreateError.InvalidParameters(error?.message || String(error), error));
   }
   let xGitHubSsoUrl: string = null;
   if (shouldAttemptAcceptingInvitations) {

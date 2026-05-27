@@ -8,12 +8,13 @@ const router: Router = Router();
 
 import { ReposAppRequest, UserAlertType } from '../../interfaces/index.js';
 import { CreateError, getProviders } from '../../lib/transitional.js';
+import { stringParam } from '../../lib/utils.js';
 
 router.use('/:campaignGroupId', (req: ReposAppRequest, res: any, next) => {
   const { config } = getProviders(req);
   const knownCampaignGroups = (config?.campaigns?.groups || '').toLowerCase().split(',');
-  req.params.campaignGroupId = req.params.campaignGroupId.toLowerCase();
-  const { campaignGroupId } = req.params;
+  const campaignGroupId = stringParam(req, 'campaignGroupId').toLowerCase();
+  req.params.campaignGroupId = campaignGroupId;
   if (!knownCampaignGroups.includes(campaignGroupId)) {
     return next(
       CreateError.NotFound(`The campaign ${campaignGroupId} is not registered in this environment.`)
@@ -38,7 +39,7 @@ router.get('/:campaignGroupId', async (req: ReposAppRequest, res: Response, next
   if (!campaignStateProvider) {
     return next(new Error('This app is not configured for campaign management'));
   }
-  const { campaignGroupId } = req.params;
+  const campaignGroupId = stringParam(req, 'campaignGroupId');
   if (!campaignGroupId) {
     return next(new Error('Campaign required'));
   }
@@ -56,7 +57,7 @@ async function modifySubscription(isUnsubscribing: boolean, req: ReposAppRequest
     return next(new Error('This app is not configured for campaign management'));
   }
   const actionName = isUnsubscribing ? 'unsubscribe' : 'subscribe';
-  const { campaignGroupId } = req.params;
+  const campaignGroupId = stringParam(req, 'campaignGroupId');
   if (!campaignGroupId) {
     return next(new Error(`Campaign required to ${actionName}`));
   }

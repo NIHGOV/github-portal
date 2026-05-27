@@ -66,7 +66,7 @@ export async function requireAccessTokenClient(req: ReposAppRequest, res: Respon
 }
 
 function signoutThenSignIn(req: ReposAppRequest, res: Response) {
-  const { insights } = getProviders(req);
+  const { insights } = req;
   req.logout({ keepSessionInfo: false }, (err) => {
     if (err) {
       insights?.trackException({ exception: err });
@@ -112,7 +112,7 @@ export async function requireAuthenticatedUserOrSignIn(
         if (err) {
           return next(err);
         }
-        return res.redirect('/signin');
+        return redirectToSignIn(req, res);
       });
     }
     return next();

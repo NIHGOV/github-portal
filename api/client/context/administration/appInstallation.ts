@@ -11,6 +11,7 @@ import { AdministrativeGitHubAppInstallationResponse, RequestWithInstallation } 
 import { IGitHubAppInstallation, IProviders } from '../../../../interfaces/index.js';
 import GitHubApplication from '../../../../business/application.js';
 import { IndividualContext } from '../../../../business/user/index.js';
+import { stringParam } from '../../../../lib/utils.js';
 
 const router: Router = Router();
 
@@ -230,12 +231,13 @@ router.post('/deactivate', async (req: RequestWithInstallation, res: Response, n
 
 router.delete('/feature/:flag', async (req: RequestWithInstallation, res: Response, next: NextFunction) => {
   const { gitHubApplication, installation, organizationDynamicSettings } = req;
-  const { organizationSettingsProvider, insights } = getProviders(req);
+  const { organizationSettingsProvider } = getProviders(req);
+  const { insights } = req;
   if (!organizationDynamicSettings) {
     return next(CreateError.NotFound('No dynamic settings available for the organization.'));
   }
   const { features } = organizationDynamicSettings;
-  const flag = req.params.flag as string;
+  const flag = stringParam(req, 'flag');
   const restart = req.query.restart === '1';
   insights?.trackEvent({
     name: 'RemoveOrganizationFeatureFlagViaInstallation',

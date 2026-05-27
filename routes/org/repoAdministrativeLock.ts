@@ -41,7 +41,8 @@ router.get('/', async (req: ReposAppRequest, res: Response, next: NextFunction) 
 
 router.post('/', async (req: ReposAppRequest, res: Response, next: NextFunction) => {
   const providers = getProviders(req);
-  const { insights, operations } = providers;
+  const { operations } = providers;
+  const { insights } = req;
   const repository = req['repository'] as Repository;
   const entity = repository.getEntity();
   if (!entity.parent) {

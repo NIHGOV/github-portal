@@ -8,6 +8,7 @@ import { NextFunction, Response } from 'express';
 import { Repository } from '../../business/repository.js';
 import type { ReposAppRequest } from '../../interfaces/web.js';
 import { CreateError } from '../../lib/transitional.js';
+import { stringParam } from '../../lib/utils.js';
 
 export type RequestWithRepo = ReposAppRequest & {
   repository: Repository;
@@ -23,7 +24,7 @@ export async function apiMiddlewareRepositoriesToRepository(
     return next(CreateError.InvalidParameters('No organization instance available'));
   }
 
-  const { repoName } = req.params;
+  const repoName = stringParam(req, 'repoName');
   if (!repoName) {
     return next(CreateError.InvalidParameters('No repository name provided'));
   }

@@ -11,8 +11,12 @@
 import { RequestError } from '@octokit/request-error';
 import type { Octokit } from '@octokit/rest';
 
+import { scrubErrorForLogging } from '../utils.js';
+
 // This file is patched so that 304's do not output to the default console as errors.
 // Also ignores a few specific 404's.
+
+const LOG_502_503_DEBUG = false;
 
 export function requestLog(octokit: Octokit) {
   octokit.hook.wrap('request', (request, options) => {
@@ -72,6 +76,15 @@ export function requestLog(octokit: Octokit) {
               Date.now() - start
             }ms`
           );
+        }
+        if (LOG_502_503_DEBUG && (error?.status === 502 || error?.status === 503)) {
+          scrubErrorForLogging(error);
+          console.log(`--- ${error.status} RESPONSE DEBUG ---`);
+          console.log('Path:', path);
+          console.log('Request ID:', requestId);
+          console.log('Response headers:', JSON.stringify(error.response?.headers, null, 2));
+          console.log('Response data:', JSON.stringify(error.response?.data, null, 2));
+          console.log(`--- END ${error.status} DEBUG ---`);
         }
         throw error;
       });

@@ -10,5 +10,6 @@
   "allowApiClient": "env://FEATURE_FLAG_ALLOW_API_CLIENT?trueIf=1&default=1",
   "exposeWebhookIngestionEndpoint": "env://EXPOSE_WEBHOOK_INGESTION_ENDPOINT?trueIf=1",
   "allowFossFundElections": "env://FEATURE_FLAG_FOSS_FUND_ELECTIONS?trueIf=1",
-  "allowUsersToViewLockedOrgDetails": "env://FEATURE_FLAG_ALLOW_USERS_TO_VIEW_LOCKED_ORG_DETAILS?trueIf=1"
+  "allowUsersToViewLockedOrgDetails": "env://FEATURE_FLAG_ALLOW_USERS_TO_VIEW_LOCKED_ORG_DETAILS?trueIf=1",
+  "allowSessionFeatureFlags": "env://FEATURE_FLAG_ALLOW_SESSION_FLAGS?trueIf=1"
 }

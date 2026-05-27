@@ -645,7 +645,7 @@ async function cacheRepositoryCollaborators(
 }
 
 async function refreshQueryCache(providers: IProviders, { args }: IReposJob): Promise<IReposJobResult> {
-  const { config, insights } = providers;
+  const { config, genericInsights: insights } = providers;
   insights?.trackEvent({
     name: `${INSIGHTS_PREFIX}${args[0]}Start`,
     properties: {

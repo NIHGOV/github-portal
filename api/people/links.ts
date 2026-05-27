@@ -5,11 +5,10 @@
 
 import { NextFunction, Response, Router } from 'express';
 
-import { jsonError } from '../../middleware/index.js';
 import { Operations } from '../../business/index.js';
 import postLinkApi from './link.js';
 import { CreateError, ErrorHelper, getProviders } from '../../lib/transitional.js';
-import { wrapError } from '../../lib/utils.js';
+import { stringParam, wrapError } from '../../lib/utils.js';
 import { extendedLinkApiVersions, getAllUsers, unsupportedApiVersions } from './links.utility.js';
 
 import type { ICorporateLink, ReposApiRequest, VoidedExpressRoute } from '../../interfaces/index.js';
@@ -45,7 +44,7 @@ router.get('/:linkid', async (req: ReposApiRequest, res: Response, next: NextFun
   if (unsupportedApiVersions.includes(req.apiVersion)) {
     return next(CreateError.InvalidParameters('This API is not supported by the API version you are using.'));
   }
-  const linkid = req.params.linkid.toLowerCase();
+  const linkid = stringParam(req, 'linkid').toLowerCase();
   const { operations } = getProviders(req);
   const skipOrganizations = req.query.showOrganizations !== undefined && !!req.query.showOrganizations;
   const showTimestamps = req.query.showTimestamps !== undefined && req.query.showTimestamps === 'true';
@@ -54,7 +53,7 @@ router.get('/:linkid', async (req: ReposApiRequest, res: Response, next: NextFun
     const links = (await operations.providers.linkProvider.getAll()).filter((lid) => lid['id'] === linkid);
     const link = links.length === 1 ? links[0] : null;
     if (!link) {
-      return next(jsonError('Could not find the link', 404));
+      return next(CreateError.NotFound('Could not find the link'));
     }
     let entry = null;
     const thirdPartyId = link.thirdPartyId;
@@ -92,7 +91,7 @@ router.get('/github/:username', async (req: ReposApiRequest, res: Response, next
     return next(CreateError.InvalidParameters('This API is not supported by the API version you are using.'));
   }
   const activeContext = req.apiContext || req.individualContext;
-  const username = req.params.username.toLowerCase();
+  const username = stringParam(req, 'username').toLowerCase();
   const { operations } = getProviders(req);
   const skipOrganizations = req.query.showOrganizations !== undefined && !!req.query.showOrganizations;
   const showTimestamps = req.query.showTimestamps !== undefined && req.query.showTimestamps === 'true';
@@ -118,7 +117,13 @@ router.get('/github/:username', async (req: ReposApiRequest, res: Response, next
       activeContext?.insights?.trackMetric({ name: 'ApiRequestLinkByGitHubUsername', value: 1 });
       return res.json(entry) as unknown as void;
     } catch (entryError) {
-      return next(jsonError(entryError, ErrorHelper.GetStatus(entryError) || 500));
+      return next(
+        CreateError.CreateStatusCodeError(
+          ErrorHelper.GetStatus(entryError) || 500,
+          entryError.message,
+          entryError
+        )
+      );
     }
   }
   const results = await getAllUsers(req.apiVersion, operations, skipOrganizations, showTimestamps);
@@ -134,7 +139,7 @@ router.get('/github/:username', async (req: ReposApiRequest, res: Response, next
 
 router.get('/aad/userPrincipalName/:upn', async (req: ReposApiRequest, res: Response, next: NextFunction) => {
   const activeContext = req.apiContext || req.individualContext;
-  const upn = req.params.upn;
+  const upn = stringParam(req, 'upn');
   const { operations } = getProviders(req);
   const skipOrganizations = req.query.showOrganizations !== undefined && !!req.query.showOrganizations;
   const showTimestamps = req.query.showTimestamps !== undefined && req.query.showTimestamps === 'true';
@@ -196,7 +201,7 @@ router.get(
   '/aad/mailNickname/:mailNickname',
   async (req: ReposApiRequest, res: Response, next: NextFunction) => {
     const activeContext = req.apiContext || req.individualContext;
-    const nickname = req.params.mailNickname;
+    const nickname = stringParam(req, 'mailNickname');
     const { graphProvider, operations } = getProviders(req);
     let id: string;
     try {
@@ -244,7 +249,7 @@ router.get(
 );
 
 router.get('/aad/mail/:mail', async (req: ReposApiRequest, res: Response, next: NextFunction) => {
-  const mail = req.params.mail;
+  const mail = stringParam(req, 'mail');
   const activeContext = req.apiContext || req.individualContext;
   const { graphProvider, operations } = getProviders(req);
   let id: string;
@@ -296,7 +301,7 @@ router.get('/aad/:id', async (req: ReposApiRequest, res: Response, next: NextFun
   if (req.apiVersion == '2016-12-01') {
     return next(CreateError.InvalidParameters('This API is not supported by the API version you are using.'));
   }
-  const id = req.params.id;
+  const id = stringParam(req, 'id');
   const skipOrganizations = req.query.showOrganizations !== undefined && !!req.query.showOrganizations;
   const showTimestamps = req.query.showTimestamps !== undefined && req.query.showTimestamps === 'true';
   const { operations } = getProviders(req);
@@ -335,7 +340,7 @@ router.get('/aad/:id', async (req: ReposApiRequest, res: Response, next: NextFun
     }
   }
   if (r.length === 0) {
-    return next(jsonError('Could not find a link for the user', 404));
+    return next(CreateError.NotFound('Could not find a link for the user'));
   }
   activeContext?.insights?.trackMetric({ name: 'ApiRequestLinkByAadId', value: 1 });
   return res.json(r) as unknown as void;
@@ -355,13 +360,13 @@ async function getByThirdPartyId(
     link = await providers.linkProvider.getByThirdPartyId(thirdPartyId);
   } catch (linksError) {
     if (ErrorHelper.IsNotFound(linksError)) {
-      throw jsonError(`${thirdPartyId} is not linked`, 404);
+      throw CreateError.NotFound(`${thirdPartyId} is not linked`);
     } else {
       linksError = wrapError(
         linksError,
         'There was a problem retrieving link information to display alongside the member.'
       );
-      throw jsonError(linksError, 500);
+      throw CreateError.ServerError(linksError.message, linksError);
     }
   }
   const account = operations.getAccount(thirdPartyId);

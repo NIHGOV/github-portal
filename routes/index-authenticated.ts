@@ -226,7 +226,7 @@ router.get(
 
 router.use('/*splat', async (req: ReposAppRequest, res, next) => {
   // Helper method to allow pasting a GitHub URL into the app to go to a repo
-  const { insights } = getProviders(req);
+  const { insights } = req;
   const full = decodeURIComponent(req.baseUrl.slice(1)); // Remove leading `/`
   // eslint-disable-next-line security/detect-unsafe-regex -- as this is an authenticated route, the value this provides to our authenticated users is worth this
   const match = full.match(/^https?:\/?\/?github\.com\/([^/]+)\/([^/]+)(\/.*)?$/); // Match includes single forward slash

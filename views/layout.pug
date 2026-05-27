@@ -7,7 +7,7 @@ include ./nih/mixins
 doctype html
 html(lang="en")
   include head
-  body
+  body(data-csrf-token=csrfToken || '')
     if (googleAnalyticsKey)
       noscript.
       iframe(src="https://www.googletagmanager.com/ns.html?id=" + googleAnalyticsKey height="0" width="0" style="display:none;visibility:hidden")
@@ -26,6 +26,38 @@ html(lang="en")
     // end of content
 
     include footer
+    script.
+      (function () {
+        var body = document.body;
+        if (!body) {
+          return;
+        }
+        var csrfToken = body.getAttribute('data-csrf-token');
+        if (!csrfToken) {
+          return;
+        }
+        function needsCsrfToken(form) {
+          var method = (form.getAttribute('method') || 'get').toLowerCase();
+          return method !== 'get' && method !== 'head' && method !== 'options';
+        }
+        function ensureCsrfField(form) {
+          if (!needsCsrfToken(form) || form.querySelector('input[name="_csrf"]')) {
+            return;
+          }
+          var input = document.createElement('input');
+          input.type = 'hidden';
+          input.name = '_csrf';
+          input.value = csrfToken;
+          form.appendChild(input);
+        }
+        Array.prototype.forEach.call(document.forms || [], ensureCsrfField);
+        document.addEventListener('submit', function (event) {
+          var form = event.target;
+          if (form && form.tagName === 'FORM') {
+            ensureCsrfField(form);
+          }
+        }, true);
+      })();
     include insights
     include ga
     if config && config.continuousDeployment

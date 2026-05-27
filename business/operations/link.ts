@@ -18,7 +18,7 @@ export async function linkAccounts(
   operations: Operations,
   options: ICreateLinkOptions
 ): Promise<ICreatedLinkOutcome> {
-  const { config, linkProvider, graphProvider, insights } = operations.providers;
+  const { config, linkProvider, graphProvider, genericInsights: insights } = operations.providers;
   if (!linkProvider) {
     throw CreateError.ServerError('linkProvider required');
   }
@@ -148,7 +148,7 @@ export async function sendLinkedAccountMail(
   correlationId: string | null,
   throwIfError: boolean
 ): Promise<void> {
-  const { insights, mailProvider, mailAddressProvider, config } = operations.providers;
+  const { genericInsights: insights, mailProvider, mailAddressProvider, config } = operations.providers;
   if (!mailProvider) {
     return;
   }

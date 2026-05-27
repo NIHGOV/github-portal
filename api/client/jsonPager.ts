@@ -3,7 +3,7 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { jsonError } from '../../middleware/index.js';
+import { CreateError } from '../../lib/transitional.js';
 
 const maxPageSize = 50;
 const defaultPageSize = 30;
@@ -37,7 +37,7 @@ export default class JsonPager<T> {
     this.pageSize = Math.min(requestedPageSize, maxPageSize);
     const page = requestedPage || 0;
     if (page < 0 || isNaN(page)) {
-      throw jsonError('Invalid page', 400);
+      throw CreateError.InvalidParameters('Invalid page');
     }
     this.page = page;
   }

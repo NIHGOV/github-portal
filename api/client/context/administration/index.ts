@@ -7,9 +7,10 @@ import { NextFunction, Response, Router } from 'express';
 
 import { Organization } from '../../../../business/organization.js';
 import { ReposAppRequest } from '../../../../interfaces/index.js';
-import { getIsCorporateAdministrator, jsonError } from '../../../../middleware/index.js';
+import { getIsCorporateAdministrator } from '../../../../middleware/index.js';
 import getCompanySpecificDeployment from '../../../../middleware/companySpecificDeployment.js';
-import { ErrorHelper, getProviders } from '../../../../lib/transitional.js';
+import { CreateError, ErrorHelper, getProviders } from '../../../../lib/transitional.js';
+import { stringParam } from '../../../../lib/utils.js';
 
 import routeIndividualOrganization from './organization/index.js';
 import routeApps from './apps.js';
@@ -41,13 +42,13 @@ router.get('/', async (req: IRequestWithAdministration, res: Response) => {
 });
 
 router.use((req: IRequestWithAdministration, res: Response, next: NextFunction) => {
-  return req.isSystemAdministrator ? next() : next(jsonError('Not authorized', 403));
+  return req.isSystemAdministrator ? next() : next(CreateError.NotAuthorized('Not authorized'));
 });
 
 router.use('/apps', routeApps);
 
 router.use('/organization/:orgName', async (req: ReposAppRequest, res: Response, next: NextFunction) => {
-  const { orgName } = req.params;
+  const orgName = stringParam(req, 'orgName');
   const { operations } = getProviders(req);
   let organization: Organization = null;
   try {
@@ -60,7 +61,7 @@ router.use('/organization/:orgName', async (req: ReposAppRequest, res: Response,
       res.end();
       return;
     }
-    return next(jsonError(noOrgError, 500));
+    return next(CreateError.ServerError(noOrgError.message, noOrgError));
   }
 });
 
@@ -72,7 +73,7 @@ if (deployment?.routes?.api?.context?.administration?.index) {
 }
 
 router.use('/*splat', (req, res: Response, next: NextFunction) => {
-  return next(jsonError('no API or function available: context/administration', 404));
+  return next(CreateError.NotFound('no API or function available: context/administration'));
 });
 
 export default router;

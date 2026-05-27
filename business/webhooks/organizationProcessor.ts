@@ -3,9 +3,6 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import crypto from 'crypto';
-import secureCompare from 'secure-compare';
-
 import { Organization } from '../index.js';
 import { sleep } from '../../lib/utils.js';
 
@@ -13,11 +10,6 @@ import type { AppInsightsTelemetryClient, IProviders } from '../../interfaces/in
 
 import defaultWebhookTasks from './tasks/index.js';
 import getCompanySpecificDeployment from '../../middleware/companySpecificDeployment.js';
-
-interface IValidationError extends Error {
-  statusCode?: number;
-  computedHash?: string;
-}
 
 let companySpecificWebhookTasks: WebhookProcessor[] = null;
 
@@ -86,40 +78,13 @@ export default async function ProcessOrganizationWebhook(
   if (!event.body) {
     throw new Error('Missing event body');
   }
-  const body = event.body;
-  const rawBody = event.rawBody || JSON.stringify(body);
   const properties = event.properties;
-  // we used to also require properties.signature, but not needed now
   if (!properties || !properties.delivery || !properties.event) {
     if (options.acknowledgeValidEvent) {
       options.acknowledgeValidEvent();
     }
-    throw new Error('Missing event properties - delivery, signature, and/or event');
+    throw new Error('Missing event properties - delivery and/or event');
   }
-  // try {
-  //   await verifySignatures(properties.signature, organization.webhookSharedSecrets, rawBody);
-  // } catch (validationError) {
-  // NO LONGER VALIDATING SIG
-  // if (validationError) {
-  //   if (operations && operations.insights) {
-  //     const possibleOrganization = body && body.organization ? body.organization.login : 'unknown-org';
-  //     console.warn(`incorrect hook signature - ${possibleOrganization} organization`);
-  //     operations.insights.trackMetric({ name: 'WebhookIncorrectSecrets', value: 1 });
-  //     operations.insights.trackEvent({
-  //       name: 'WebhookIncorrectSecret',
-  //       properties: {
-  //         org: possibleOrganization,
-  //         delivery: properties.delivery,
-  //         event: properties.event,
-  //         signature: properties.signature,
-  //         approximateTime: properties.started.toISOString(),
-  //         computedHash: validationError.computedHash,
-  //       },
-  //     });
-  //   }
-  //   return callback(validationError);
-  // }
-  //}
 
   // In a bus scenario, if a short timeout window is used for queue
   // visibility, a client may want to acknowledge this being a valid
@@ -173,30 +138,4 @@ export default async function ProcessOrganizationWebhook(
     }
   }
   return interestingEvents;
-}
-
-async function verifySignatures(signature, hookSecrets: string[], rawBody): Promise<void> {
-  // To ease local development and simple scenarios, if no shared secrets are
-  // configured, they are not required.
-  if (!hookSecrets || !hookSecrets.length) {
-    return;
-  }
-  if (!signature) {
-    throw new Error('No event signature was provided');
-  }
-  const computedSignatures = [];
-  for (let i = 0; i < hookSecrets.length; i++) {
-    const sharedSecret = hookSecrets[i];
-    const sha1 = crypto.createHmac('sha1', sharedSecret);
-    sha1.update(rawBody, 'utf8');
-    const computedHash = 'sha1=' + sha1.digest('hex');
-    if (secureCompare(computedHash, signature)) {
-      return;
-    }
-    computedSignatures.push(computedHash);
-  }
-  const validationError: IValidationError = new Error('The signature could not be verified');
-  validationError.statusCode = 401;
-  validationError.computedHash = computedSignatures.join(', ');
-  throw validationError;
 }

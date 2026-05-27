@@ -99,7 +99,7 @@ export default function initializeCampaigns(app) {
       const uri = `${base}${prefixPortion}${identity}${sub}${queryPortion}`;
       res.redirect(uri);
 
-      const { insights } = getProviders(req);
+      const { insights } = req;
       if (goGithubQuery) {
         data.query = goGithubQuery;
       }

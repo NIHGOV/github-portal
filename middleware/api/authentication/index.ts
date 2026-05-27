@@ -5,8 +5,8 @@
 
 import { NextFunction, Response } from 'express';
 
-import { isJsonError, jsonError } from '../../jsonError.js';
-import { CreateError, getProviders } from '../../../lib/transitional.js';
+import { CreateError, ErrorHelper, getProviders } from '../../../lib/transitional.js';
+import { isApiRequest } from '../../../lib/utils.js';
 import getCompanySpecificDeployment from '../../companySpecificDeployment.js';
 import { ApiRequestToken, ReposApiRequest, wrapErrorForImmediateUserError } from '../../../interfaces/web.js';
 import { basicJwtValidateAndParse } from './basicJwt.js';
@@ -27,14 +27,14 @@ export function requireAuthorizedEntraApiScope(scope: string | string[]) {
   return (req: ReposApiRequest, res: Response, next: NextFunction) => {
     const { apiKeyToken } = req;
     if (!apiKeyToken) {
-      return next(jsonError('No API key token', 403));
+      return next(CreateError.NotAuthorized('No API key token'));
     }
     const scopes = typeof scope === 'string' ? [scope] : scope;
     if (!apiKeyToken.hasAnyScope(scopes)) {
       if (scopes && scopes.join) {
         res.header('x-other-scopes', scopes.join(', '));
       }
-      return next(jsonError(`Not authorized for ${scope}`, 403));
+      return next(CreateError.NotAuthorized(`Not authorized for ${scope}`));
     }
     return next();
   };
@@ -44,24 +44,24 @@ export function requireAuthorizedEntraApiScopePrefix(scopePrefix: string) {
   return (req: ReposApiRequest, res: Response, next: NextFunction) => {
     const { apiKeyToken } = req;
     if (!apiKeyToken) {
-      return next(jsonError('No API key token', 403));
+      return next(CreateError.NotAuthorized('No API key token'));
     }
     if (apiKeyToken.hasScopePrefix(scopePrefix)) {
       return next();
     }
-    return next(jsonError(`Not authorized for scope prefix ${scopePrefix}`, 403));
+    return next(CreateError.NotAuthorized(`Not authorized for scope prefix ${scopePrefix}`));
   };
 }
 
 export function requireAnyAuthorizedEntraApiScope(req: ReposApiRequest, res: Response, next: NextFunction) {
   const { apiKeyToken } = req;
   if (!apiKeyToken) {
-    return next(jsonError('No API key token', 403));
+    return next(CreateError.NotAuthorized('No API key token'));
   }
-  if (apiKeyToken.getScopes().length > 0) {
+  if (apiKeyToken.hasAnyScope()) {
     return next();
   }
-  return next(jsonError('Not authorized for any scopes', 403));
+  return next(CreateError.NotAuthorized('Not authorized for any scopes'));
 }
 
 export default function entraApiValidationMiddleware(
@@ -77,12 +77,14 @@ export default function entraApiValidationMiddleware(
       if ((err as any).immediate === true) {
         console.warn(`Entra ID API authorization failed: ${err}`);
       }
-      return isJsonError(err, req.url) ? next(err) : next(jsonError(err, 500) as unknown);
+      return isApiRequest(req) || ErrorHelper.HasStatus(err)
+        ? next(err)
+        : next(CreateError.NotAuthorized(err?.message || String(err), err) as unknown);
     });
 }
 
 async function validateToken(req: ReposApiRequest, res: Response) {
-  const { insights } = getProviders(req);
+  const { insights } = req;
   if (!apiAuthorizationProvider) {
     apiAuthorizationProvider = firstValidation(req);
   }
@@ -259,9 +261,12 @@ async function getAuthorizedApiToken(
       }
       return false;
     },
-    hasAnyScope: (scopesList: string[]) => {
+    hasAnyScope: (scopesList?: string[]) => {
       if (!scopes) {
         return false;
+      }
+      if (!scopesList?.length) {
+        return scopes.length > 0;
       }
       for (const scope of scopesList) {
         if (scopes.includes(scope)) {

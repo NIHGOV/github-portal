@@ -9,7 +9,7 @@ import {
   AddRepositoryPermissionsToRequest,
   getContextualRepositoryPermissions,
 } from '../../../../middleware/github/repoPermissions.js';
-import { jsonError } from '../../../../middleware/index.js';
+import { CreateError } from '../../../../lib/transitional.js';
 import getCompanySpecificDeployment from '../../../../middleware/companySpecificDeployment.js';
 import { ReposAppRequest } from '../../../../interfaces/index.js';
 
@@ -34,7 +34,7 @@ if (deployment?.routes?.api?.context?.organization?.repo) {
 }
 
 router.use('/*splat', (req, res: Response, next: NextFunction) => {
-  return next(jsonError(`no API or ${req.method} function available for repo`, 404));
+  return next(CreateError.NotFound(`no API or ${req.method} function available for repo`));
 });
 
 export default router;

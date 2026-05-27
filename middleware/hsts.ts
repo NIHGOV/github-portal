@@ -6,7 +6,7 @@
 import hsts from 'hsts';
 
 export default hsts({
-  maxAge: 10886400000, // Must be at least 18 weeks to be approved
+  maxAge: 31536000, // 1 year in seconds
   includeSubDomains: true, // Must be enabled to be approved
   preload: true,
 });

@@ -13,6 +13,7 @@ export * from './api/index.js';
 export type ConnectRouter = (router: Router) => void;
 
 export interface IAttachCompanySpecificRoutes {
+  connectRootRoutes?: ConnectRouter;
   connectAuthenticatedRoutes?: (router: Router, reactRoute: any) => void;
   connectHealthRoutes?: (router: Router, config: SiteConfiguration) => number;
   api?: IAttachCompanySpecificRoutesApi;

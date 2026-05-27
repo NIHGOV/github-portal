@@ -65,13 +65,11 @@ import routeHsts from './hsts.js';
 import routeSslify from './sslify.js';
 
 import middlewareIndex from './index.js';
+import { getRateLimitMiddleware } from './rateLimit.js';
 import initializeRepositoryProvider from '../business/entities/repository.js';
 import { tryGetImmutableStorageProvider } from '../lib/immutable.js';
 import { GitHubAppPurposes } from '../lib/github/appPurposes.js';
-import {
-  getEntraApplicationIdentity,
-  tryGetEntraApplicationTokenCredential,
-} from '../lib/applicationIdentity.js';
+import { tryGetEntraApplicationTokenCredential } from '../lib/applicationIdentity.js';
 import { importPathSchemeChangeIfWindows } from '../lib/utils.js';
 
 import type { ICacheHelper } from '../lib/caching/index.js';
@@ -97,6 +95,12 @@ const DefaultApplicationProfile: ApplicationProfile = {
   webServer: true,
   sessions: true,
 };
+
+export function shouldPrepareSessionMiddleware(applicationProfile: ApplicationProfile): boolean {
+  const hasWebServer = applicationProfile?.webServer === true;
+  const sessionsEnabled = applicationProfile?.sessions === true;
+  return sessionsEnabled && hasWebServer;
+}
 
 type CompanyStartupEntrypoint = (
   config: SiteConfiguration,
@@ -245,7 +249,12 @@ async function initializeAsync(
       }
     }
   }
-  await prepareSessionMiddleware(providers);
+  const shouldPrepareSessions = shouldPrepareSessionMiddleware(providers.applicationProfile);
+  if (shouldPrepareSessions) {
+    await prepareSessionMiddleware(providers);
+  } else if (executionEnvironment.isJob) {
+    debug('session middleware preparation skipped for non-web job startup');
+  }
   if (config?.diagnostics?.blob?.account) {
     providers.diagnosticsDrop = new BlobCache({
       account: config.diagnostics.blob.account,
@@ -432,6 +441,9 @@ export default async function initialize(
     applicationProfile,
   };
   executionEnvironment.providers = providers;
+  if (app) {
+    app.use(routeCorrelationId);
+  }
   const insights = appInsights(providers, executionEnvironment, app, config);
   providers.genericInsights = insights;
   if (app) {
@@ -450,9 +462,6 @@ export default async function initialize(
     if (executionEnvironment.isJob) {
       debug('Server started alongside job preparation.');
     }
-  }
-  if (app) {
-    app.use(routeCorrelationId);
   }
   if (!exception && (!config || !config.activeDirectory)) {
     exception = new Error(
@@ -507,6 +516,7 @@ export default async function initialize(
     }
   }
   const hasCustomRoutes = !!applicationProfile.customRoutes;
+  providers.rateLimitMiddleware = getRateLimitMiddleware(providers, config);
   providers.viewServices = viewServices;
   try {
     if (app) {

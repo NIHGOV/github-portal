@@ -12,6 +12,8 @@ import appPackage from '../package.json' with { type: 'json' };
 import type { IReposApplication, SiteConfiguration } from '../interfaces/index.js';
 import type { ExpressWithStatic } from './types.js';
 
+import { setStaticAssetHeaders } from './staticHeaders.js';
+
 const STATIC_REACT_BUILD_FOLDER_KEY = 'static-react-folder';
 const STATIC_REACT_FLIGHTING_PACKAGE_NAME_KEY = 'static-react-flight-package-name';
 
@@ -66,6 +68,7 @@ export async function serveFrontendAppWithAssets(
       express.static(staticClientDetails.hostingRoot, {
         index: false,
         redirect: false,
+        setHeaders: setStaticAssetHeaders,
       })
     );
     clientRuntimeConfiguration.packageName = staticClientDetails?.package?.name;
@@ -88,7 +91,12 @@ export async function serveFrontendAppWithAssets(
       const raw = fs.readFileSync(clientPackagePath, 'utf8');
       const clientPackage = JSON.parse(raw);
       debug(`Hosting flighting React client version ${clientPackage.version} from ${clientDistPath}`);
-      app.use('/', express.static(clientDistPath));
+      app.use(
+        '/',
+        express.static(clientDistPath, {
+          setHeaders: setStaticAssetHeaders,
+        })
+      );
       clientRuntimeConfiguration.flighting = {
         packageName: staticClientFlightingPackageName,
         packageVersion: clientPackage.version,

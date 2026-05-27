@@ -6,9 +6,8 @@
 import querystring from 'querystring';
 import { AxiosError } from 'axios';
 
-import { wrapError } from '../lib/utils.js';
+import { isApiRequest, scrubErrorForLogging, wrapError } from '../lib/utils.js';
 import { getProviders } from '../lib/transitional.js';
-import { isJsonError } from './index.js';
 import { NextFunction, Response } from 'express';
 import { ReposAppRequest } from '../interfaces/index.js';
 
@@ -58,9 +57,11 @@ export default function SiteErrorHandler(
   next: NextFunction
 ) {
   let err = error as any;
-  const isJson = isJsonError(err, req.url);
+  scrubErrorForLogging(err);
+  const isJson = isApiRequest(req);
   // CONSIDER: Let's eventually decouple all of our error message improvements to another area to keep the error handler intact.
-  const { applicationProfile, config, insights } = getProviders(req);
+  const { applicationProfile, config } = getProviders(req);
+  const { insights } = req;
   const correlationId = req.correlationId;
   const errorStatus = err ? err.status || err.statusCode : undefined;
   // Per GitHub: https://developer.github.com/v3/oauth/#bad-verification-code
@@ -100,7 +101,7 @@ export default function SiteErrorHandler(
     if (config.authentication.scheme !== 'github') {
       primaryUserInstance = req.user ? req.user.azure : null;
     }
-    if (config.logging.errors && err.status !== 403 && err.skipLog !== true) {
+    if (config.logging.errors && err.skipLog !== true) {
       let appSource = 'unknown';
       if (process.argv.length > 1) {
         appSource = process.argv.slice(1).join(' ');
@@ -141,12 +142,8 @@ export default function SiteErrorHandler(
             name: 'GitHubAbuseRateLimitError',
             properties: insightsProperties,
           });
-        } else {
-          if (err && err['json']) {
-            // not tracking jsonErrors or certain regular outcomes, they pollute app insights
-          } else {
-            insights?.trackException({ exception: err, properties: insightsProperties });
-          }
+        } else if (!errorStatus || errorStatus < 400 || errorStatus >= 500) {
+          insights?.trackException({ exception: err, properties: insightsProperties });
         }
       }
     }
@@ -200,7 +197,7 @@ export default function SiteErrorHandler(
   }
   if (err && err.forceSignOut === true && req && req.logout) {
     req.logout({ keepSessionInfo: false }, () => {
-      const { insights } = getProviders(req);
+      const { insights } = req;
       insights?.trackException({ exception: err });
     });
   }

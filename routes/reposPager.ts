@@ -131,10 +131,13 @@ export default async function (req: IReposAppWithTeam, res: Response, next: Next
     type &&
     type !== 'public' &&
     type !== 'private' &&
+    type !== 'internal' &&
     type !== 'source' &&
     type !== 'fork' /*&& type !== 'mirrors' - we do not do mirror stuff */
   ) {
-    return next(CreateError.InvalidParameters('type must be one of: public, private, source, fork'));
+    return next(
+      CreateError.InvalidParameters('type must be one of: public, private, internal, source, fork')
+    );
   }
 
   let metadataType = typeof req.query.mt === 'string' ? req.query.mt : null;

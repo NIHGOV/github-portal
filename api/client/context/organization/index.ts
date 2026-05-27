@@ -12,7 +12,6 @@ import {
   TeamJsonFormat,
   GitHubTeamRole,
 } from '../../../../interfaces/index.js';
-import { jsonError } from '../../../../middleware/index.js';
 import getCompanySpecificDeployment from '../../../../middleware/companySpecificDeployment.js';
 import { IndividualContext } from '../../../../business/user/index.js';
 
@@ -155,7 +154,7 @@ if (deployment?.routes?.api?.context?.organization?.index) {
 }
 
 router.use('/*splat', (req: ReposAppRequest, res: Response, next: NextFunction) => {
-  return next(jsonError('no API or function available: client>organization', 404));
+  return next(CreateError.NotFound('no API or function available: client>organization'));
 });
 
 const toSanitizedUser = (user) => {

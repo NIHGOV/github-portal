@@ -5,7 +5,6 @@
 
 import { NextFunction, Response, Router } from 'express';
 
-import { jsonError } from '../../../middleware/jsonError.js';
 import { checkIsCorporateAdministrator } from '../../../middleware/index.js';
 import {
   IReposAppRequestWithOrganizationManagementType,
@@ -24,6 +23,7 @@ import {
   authorizeOnlyPrivilegedOrganizationAnnotationsWriters,
   getCanViewPrivilegedOrganizationAnnotations,
 } from '../../../lib/annotations.js';
+import { stringParam } from '../../../lib/utils.js';
 
 const router: Router = Router();
 
@@ -84,7 +84,7 @@ async function ensureAnnotations(
       await organizationAnnotationsProvider.insertAnnotations(annotations);
       req.annotations = annotations;
     } catch (error) {
-      return next(jsonError(error));
+      return next(error);
     }
   }
   return next();
@@ -141,7 +141,7 @@ router.put(
     if (typeof newValue !== 'string') {
       return next(CreateError.InvalidParameters('body.value must be a string value'));
     }
-    const propertyName = req.params.propertyName as string;
+    const propertyName = stringParam(req, 'propertyName');
     const currentPropertyValue = annotations.properties[propertyName] || null;
     const updateDescription = `Changing property ${propertyName} value from "${currentPropertyValue}" to "${newValue}"`;
     annotations.properties[propertyName] = newValue;
@@ -161,7 +161,7 @@ router.delete(
     const providers = getProviders(req);
     const activeContext = (req.individualContext || req.apiContext) as IndividualContext;
     const changes: IOrganizationAnnotationChange[] = [];
-    const propertyName = req.params.propertyName as string;
+    const propertyName = stringParam(req, 'propertyName');
     const currentPropertyValue = annotations.properties[propertyName] || null;
     if (annotations.properties[propertyName] === undefined) {
       return next(CreateError.InvalidParameters(`property ${propertyName} is not set`));
@@ -192,7 +192,7 @@ router.put(
     const providers = getProviders(req);
     const activeContext = (req.individualContext || req.apiContext) as IndividualContext;
     const changes: IOrganizationAnnotationChange[] = [];
-    const flag = req.params.flag as string;
+    const flag = stringParam(req, 'flag');
     if (annotations.features.includes(flag)) {
       return next(CreateError.InvalidParameters(`The feature flag ${flag} is already present`));
     }
@@ -220,7 +220,7 @@ router.delete(
     const providers = getProviders(req);
     const activeContext = (req.individualContext || req.apiContext) as IndividualContext;
     const changes: IOrganizationAnnotationChange[] = [];
-    const flag = req.params.flag as string;
+    const flag = stringParam(req, 'flag');
     if (!annotations.features.includes(flag)) {
       return next(CreateError.InvalidParameters(`The feature flag ${flag} is not set`));
     }
@@ -290,7 +290,7 @@ async function applyPatch(
 // flag
 
 router.use('/*splat', (req, res: Response, next: NextFunction) => {
-  return next(jsonError('no API or function available within the organization annotations route', 404));
+  return next(CreateError.NotFound('no API or function available within the organization annotations route'));
 });
 
 export default router;

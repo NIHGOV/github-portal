@@ -125,7 +125,7 @@ function patchOverride(provider, newToAddress, htmlOrNot) {
     } else {
       mailOptions.content = `${initialContent}\n${redirectMessage}\n`;
     }
-    return sendMail(mailOptions);
+    return sendMail(insights, mailOptions);
   };
   return provider;
 }

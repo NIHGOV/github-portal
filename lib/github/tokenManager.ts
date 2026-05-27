@@ -851,7 +851,7 @@ export class GitHubTokenManager {
   }
 
   private async getAvailableInstallations(organizationName: string, installs: BasicGitHubAppInstallation[]) {
-    const { insights } = this.operations().providers;
+    const { genericInsights: insights } = this.operations().providers;
     const knownInstallations = installs
       .map((install) => this._installationInstances.get(install.installationId))
       .filter((i) => i);

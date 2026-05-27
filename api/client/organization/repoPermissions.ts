@@ -5,7 +5,6 @@
 
 import { NextFunction, Response, Router } from 'express';
 
-import { jsonError } from '../../../middleware/jsonError.js';
 import { ReposAppRequest } from '../../../interfaces/index.js';
 import { Repository } from '../../../business/repository.js';
 import { findRepoCollaboratorsExcludingOwners } from '../../../routes/org/repos.js';
@@ -37,7 +36,7 @@ router.get('/', async (req: RequestWithRepo, res: Response, next: NextFunction) 
       memberCollaborators: memberCollaborators.map((oc) => oc.asJson()),
     }) as unknown as void;
   } catch (error) {
-    return next(jsonError(error));
+    return next(error);
   }
 });
 

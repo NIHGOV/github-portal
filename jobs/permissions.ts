@@ -41,7 +41,7 @@ job.runBackgroundJob(permissionsRun, {
 });
 
 async function permissionsRun(providers: IProviders): Promise<IReposJobResult> {
-  const { config, insights, operations } = providers;
+  const { config, genericInsights: insights, operations } = providers;
   insights?.trackEvent({
     name: `${INSIGHTS_PREFIX}Start`,
     properties: {
@@ -87,7 +87,7 @@ async function reviewOrganizationSystemTeams(
   index: number,
   count: number
 ) {
-  const { insights } = providers;
+  const { genericInsights: insights } = providers;
   const prefix = `${index}/${count}: ${organization.name}: `;
 
   console.log(`${prefix} Reviewing permissions for all repos in ${organization.name}...`);
