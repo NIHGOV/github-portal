@@ -60,11 +60,6 @@ export default function routeApi(config: SiteConfiguration) {
   // RATE LIMITING: pre-auth audit
   //-----------------------------------------------------------------------------
   router.use((req: ReposApiRequest, res: Response, next: NextFunction) => {
-    if (isClientRoute(req)) {
-      // Client routes use session auth, not Entra; skip pre-auth rate
-      // limiting and rely on the post-session rate limiter instead.
-      return next();
-    }
     const providers = getProviders(req);
     return getPreAuthRateLimitMiddleware(providers, config)(req, res, next);
   });
@@ -119,11 +114,6 @@ export default function routeApi(config: SiteConfiguration) {
 
   // Run rate-limit middleware in the API router to ensure API coverage.
   router.use((req: ReposApiRequest, res: Response, next: NextFunction) => {
-    if (isClientRoute(req)) {
-      // Client routes are rate-limited after session auth by the
-      // app-level middleware so the resolved identity is available.
-      return next();
-    }
     const providers = getProviders(req);
     return getRateLimitMiddleware(providers, config)(req, res, next);
   });

@@ -159,9 +159,9 @@ function resolveNetworkIdentity(req: ReposAppRequest): string {
 }
 
 function hashValue(value: string): string {
-  // This is only used to compact an unbounded cache key into a stable identifier.
-  // It is not used for password storage or secret comparison.
-  return crypto.createHmac('sha256', 'rate-limit-cache-key').update(value).digest('hex');
+  // Compacts an unbounded cache key into a fixed-length stable identifier.
+  // NOT used for password storage, authentication, or secret comparison.
+  return crypto.createHash('sha256').update(value).digest('hex');
 }
 
 function shouldSample(sampleRate: number, count: number): boolean {
