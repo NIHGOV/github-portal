@@ -10,8 +10,11 @@ ARG IMAGE_NAME=mcr.microsoft.com/azurelinux/base/core:3.0
 FROM $IMAGE_NAME AS node24-base
 
 RUN tdnf -y update --quiet && \
-    tdnf -y install --quiet ca-certificates nodejs24 nodejs24-npm && \
+    tdnf -y install --quiet ca-certificates nodejs24 && \
     tdnf clean all --quiet
+
+# Install bun — single statically-linked binary, copied from the official image
+COPY --from=oven/bun:1 /usr/local/bin/bun /usr/local/bin/bun
 
 FROM node24-base AS build
 
@@ -19,12 +22,7 @@ WORKDIR /build
 
 COPY . .
 
-RUN rm -rf node_modules
-RUN rm -rf frontend/node_modules
-RUN npm cache clean --force
-RUN rm -rf .vite
-RUN rm -rf frontend/.vite
-RUN rm -rf dist frontend/build
+RUN rm -rf node_modules frontend/node_modules .vite frontend/.vite dist frontend/build
 
 ### Open conversion
 
@@ -36,11 +34,10 @@ RUN ./.github/build/go-open.sh
 
 ### Backend
 
-RUN npm install --ignore-scripts --production --verbose
+RUN bun install --frozen-lockfile --ignore-scripts
+RUN bun run build
+RUN rm -rf node_modules && bun install --frozen-lockfile --ignore-scripts --production
 RUN mv node_modules production_node_modules
-
-RUN npm install --ignore-scripts --verbose
-RUN npm run-script build
 
 ### Legacy static server-rendered site assets
 
@@ -50,9 +47,8 @@ RUN npm run-script build
 ### Frontend
 
 WORKDIR /build/frontend
-#RUN rm -rf package-lock.json node_modules
-RUN npm install
-RUN npm run build
+RUN bun install --frozen-lockfile --ignore-scripts
+RUN bun run build
 
 FROM node24-base AS run
 
@@ -85,4 +81,4 @@ COPY --from=build /build/config ./config
 COPY --from=build /build/views ./views
 COPY --from=build /build/package.json ./package.json
 
-ENTRYPOINT ["npm", "run-script", "start-in-container"]
+ENTRYPOINT ["node", "./bin/www"]

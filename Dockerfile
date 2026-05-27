@@ -8,8 +8,11 @@ ARG IMAGE_NAME=mcr.microsoft.com/azurelinux/base/core:3.0
 FROM $IMAGE_NAME AS node24-base
 
 RUN tdnf -y update --quiet && \
-    tdnf -y install --quiet ca-certificates nodejs24 nodejs24-npm && \
+    tdnf -y install --quiet ca-certificates nodejs24 && \
     tdnf clean all --quiet
+
+# Install bun — single statically-linked binary, copied from the official image
+COPY --from=oven/bun:1 /usr/local/bin/bun /usr/local/bin/bun
 
 FROM node24-base AS build
 
@@ -20,27 +23,24 @@ RUN rm -rf dist frontend/build
 
 ### Backend
 
-# NOTE: NIH keeps the two-step install; upstream uses Docker BuildKit secrets
-# (--mount=type=secret) which is not yet configured in NIH CI/CD.
-RUN npm install --ignore-scripts --production --verbose
-RUN npm ci
-RUN npm run-script build
-RUN npm prune --omit=dev
+# Install all deps (bun reads .npmrc for registry auth automatically)
+RUN bun install --frozen-lockfile --ignore-scripts
+RUN bun run build
+# Prune to production deps only, then snapshot for the run stage
+RUN rm -rf node_modules && bun install --frozen-lockfile --ignore-scripts --production
 RUN mv node_modules production_node_modules
-RUN rm -f .npmrc
 
 ### Legacy static server-rendered site assets
 
 # The open source project build needs: build the site assets sub-project
-RUN cd default-assets-package && npm ci && npm run build
+RUN cd default-assets-package && bun install --frozen-lockfile --ignore-scripts && bun run build
 
 ### Frontend
 
 WORKDIR /build/frontend
 
-RUN --mount=type=secret,id=npmrc,target=/root/.npmrc npm ci
-RUN npm run build
-RUN rm -f .npmrc
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc bun install --frozen-lockfile --ignore-scripts
+RUN bun run build
 
 FROM node24-base AS run
 
@@ -86,4 +86,4 @@ COPY --from=build /build/package.json ./package.json
 # COPY --from=build /build/microsoft/sites/mise-sidecar/configs ./microsoft/sites/mise-sidecar/configs
 
 
-ENTRYPOINT ["npm", "run-script", "start-in-container"]
+ENTRYPOINT ["node", "./bin/www"]
