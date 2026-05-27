@@ -682,15 +682,14 @@ async function connectRedis(
     socket: {
       host: config.redis.tls || config.redis.host,
       port: config.redis.port ? Number(config.redis.port) : config.redis.tls ? 6380 : 6379,
-      password: config.redis.key,
       tls: !!config.redis.tls,
     },
+    password: config.redis.key,
     pingInterval: 5 * 60 * 1000, // Ping Each 5min. https://learn.microsoft.com/en-us/azure/azure-cache-for-redis/cache-best-practices-connection#idle-timeout
   };
   debug(`connecting to ${purpose} Redis ${redisConfig.host || redisConfig.tls}`);
   const redisClient: RedisClientType = createClient(redisOptions);
   await redisClient.connect();
-  await redisClient.auth({ password: config.redis.key });
 
   return redisClient;
 }

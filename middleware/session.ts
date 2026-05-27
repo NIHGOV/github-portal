@@ -50,11 +50,7 @@ export default async function ConnectSession(
     }
     const redisPrefix = config.session.redis.prefix ? `${config.session.redis.prefix}.session` : 'session';
     const redisLegacy = sessionRedisClient.duplicate();
-    redisLegacy.connect();
-
-    // NIH: Replaced with direct auth call as upstream's callback-based auth does not work
-    // in the NIH environment. See session.ts conflict notes.
-    await redisLegacy.auth({ password: config.session.redis.key });
+    await redisLegacy.connect();
     const redisOptions = {
       client: redisLegacy,
       ttl: config.session.redis.ttl,
