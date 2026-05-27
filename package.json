@@ -113,7 +113,7 @@
     "gray-matter": "4.0.3",
     "highlight.js": "11.11.1",
     "hsts": "2.2.0",
-    "hyparquet": "1.25.5",
+    "hyparquet": "1.26.0",
     "hyparquet-compressors": "1.1.1",
     "jose": "6.2.2",
     "js-yaml": "4.1.0",
