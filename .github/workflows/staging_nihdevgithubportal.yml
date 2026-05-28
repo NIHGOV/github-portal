@@ -7,6 +7,14 @@ on:
   push:
     branches:
       - staging
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'test/**'
+      - '.cspell.json'
+      - '.config/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/prompts/**'
   workflow_dispatch:
 
 jobs:
