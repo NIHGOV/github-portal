@@ -23,8 +23,18 @@ jobs:
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: latest
 
-      - name: Install dependencies
+      - name: Cache bun dependencies
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install all dependencies
         run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Build
@@ -33,23 +43,35 @@ jobs:
       - name: Build default-assets-package
         run: cd ./default-assets-package && bun install --frozen-lockfile --ignore-scripts && bun run build
 
-      - name: Test
-        run: bun run test
+      # Tests are already run by the "Lint & Test" CI workflow on every push.
+      # Skipping here to avoid the duplicate ~2 min cost on every deploy.
 
       - name: Prune dev dependencies
+        # Re-use the already-populated bun cache; this is a metadata-only
+        # operation after the cache is warm — much faster than a cold install.
         run: rm -rf node_modules && bun install --frozen-lockfile --ignore-scripts --production
 
-      - name: zip application folders
+      - name: Package application for deployment
         run: |
-          cd ..
-          tar -czf output.tar.gz ./github-portal
-          ls -lah
+          tar -czf /tmp/output.tar.gz \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='test' \
+            --exclude='docs' \
+            --exclude='*.test.ts' \
+            --exclude='*.spec.ts' \
+            --exclude='default-assets-package/node_modules' \
+            --exclude='default-assets-package/src' \
+            --exclude='default-assets-package/.git' \
+            -C /home/runner/work/github-portal github-portal
+          ls -lah /tmp/output.tar.gz
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: node-app
-          path: /home/runner/work/github-portal/output.tar.gz
+          path: /tmp/output.tar.gz
+          compression-level: 0
 
   deploy:
     runs-on: ubuntu-latest
@@ -64,10 +86,8 @@ jobs:
         with:
           name: node-app
 
-      - name: Unpack tar
-        run: |
-          tar -xf output.tar.gz
-          ls -lah
+      - name: Unpack application
+        run: tar -xf output.tar.gz && ls -lah github-portal/
 
       - name: 'Deploy to Azure Web App'
         id: deploy-to-webapp
@@ -76,4 +96,4 @@ jobs:
           app-name: 'nihdevgithubportal'
           slot-name: 'Production'
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_34824FEBDA0F4C8CACF5CB97111CBFFB }}
-          package: .
+          package: github-portal
