@@ -123,9 +123,9 @@ With `WEBSITE_RUN_FROM_PACKAGE=1`, the app **cannot write to `/home/site/wwwroot
 
 See `AGENTS.md` for the debugging checklist if the production app crash-loops with this error after the staging→main merge.
 
-#### Also add the renamed Entra env vars to `nihgithubportal`
+#### Also add the renamed Entra env vars to both App Services
 
-The upstream sync (commit `55c10cfe`) completely restructured `config/activeDirectory.json`, renaming all app registration env vars from `AAD_*` to `ENTRA_*`. Production still has the old names. Add the new names **alongside** the old ones (do not rename — other config paths still reference `AAD_ISSUER`, `AAD_BLOCK_GUESTS`, etc.):
+The upstream sync (commit `55c10cfe`) completely restructured `config/activeDirectory.json`, renaming all app registration env vars from `AAD_*` to `ENTRA_*`. Both App Services need these new names **alongside** the old ones (do not rename — other config paths still reference `AAD_ISSUER`, `AAD_BLOCK_GUESTS`, etc.):
 
 | Add this new setting     | Copy value from     |
 | ------------------------ | ------------------- |
@@ -133,11 +133,25 @@ The upstream sync (commit `55c10cfe`) completely restructured `config/activeDire
 | `ENTRA_ID_CLIENT_SECRET` | `AAD_CLIENT_SECRET` |
 | `ENTRA_ID_TENANT_ID`     | `AAD_TENANT_ID`     |
 
-Without these, the app starts and binds to port 8080 but immediately throws:
+Without these, the app throws `No Entra application configuration found` on startup.
 
-```text
-Startup error: Error: No Entra application configuration found in activeDirectory.application
-```
+#### Additional required App Service settings (discovered during staging debug)
+
+The following settings are also required or the app crashes/misbehaves at runtime:
+
+| Setting                                      | Value                                                                                                                                | Why                                                                                                                   |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `AUTHENTICATION_SCHEME`                      | `entra-id`                                                                                                                           | Default `aad` throws on startup since upstream sync                                                                   |
+| `ApplicationInsightsAgent_EXTENSION_VERSION` | `disabled`                                                                                                                           | Codeless agent floods logs and slows cold starts                                                                      |
+| `FRONTEND_MODE`                              | `skip`                                                                                                                               | No `frontend/` directory in repo; default `serve` crashes during route setup                                          |
+| `REDIS_KEY`   _                              | _(Azure Ca_he for Redis primary access key)_                                                                                         | Without it, all Redis commands fail with `NOAUTH Authentication required`                                             |
+| `ENTRA_ID_AUTHENTICATION_TYPE`               | `secret`                                                                                                                             | Default `managed-identity` silently skips passport strategy registration → "Unknown authentication strategy entra-id" |
+| `ENTRA_ID_AUTHENTICATION_CLIENT_ID`          | = `AAD_CLIENT_ID`                                                                                                                    | Used by passport strategy (separate from `ENTRA_ID_CLIENT_ID`)                                                        |
+| `ENTRA_ID_AUTHENTICATION_CLIENT_SECRET`      | = `AAD_CLIENT_SECRET`                                                                                                                |                                                                                                                       |
+| `ENTRA_ID_AUTHENTICATION_TENANT_ID`          | = `AAD_TENANT_ID`                                                                                                                    |                                                                                                                       |
+| `ENTRA_ID_REDIRECT_URL`                      | `https://dev.portal.github.nih.gov/auth/entra-id/callback` (staging) / `https://portal.github.nih.gov/auth/entra-id/callback` (prod) | Must also be registered as a redirect URI in Entra app registration                                                   |
+
+See `AGENTS.md` for the full required-settings table and a known-errors quick-reference.
 
 ---
 
