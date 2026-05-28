@@ -34,7 +34,7 @@ jobs:
         run: cd ./default-assets-package && bun install --frozen-lockfile --ignore-scripts && bun run build
 
       - name: Test
-        run: bun run test --if-present
+        run: bun run test
 
       - name: Prune dev dependencies
         run: rm -rf node_modules && bun install --frozen-lockfile --ignore-scripts --production
