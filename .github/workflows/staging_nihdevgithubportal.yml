@@ -51,26 +51,36 @@ jobs:
         # operation after the cache is warm — much faster than a cold install.
         run: rm -rf node_modules && bun install --frozen-lockfile --ignore-scripts --production
 
-      - name: Package application for deployment
+      - name: Strip dev artifacts from node_modules
+        # .map and .d.ts files are only needed for compilation/debugging.
+        # Removing them cuts node_modules from ~508 MB to ~300 MB.
         run: |
-          tar -czf /tmp/output.tar.gz \
-            --exclude='.git' \
-            --exclude='.github' \
-            --exclude='test' \
-            --exclude='docs' \
-            --exclude='*.test.ts' \
-            --exclude='*.spec.ts' \
-            --exclude='default-assets-package/node_modules' \
-            --exclude='default-assets-package/src' \
-            --exclude='default-assets-package/.git' \
-            -C /home/runner/work/github-portal github-portal
-          ls -lah /tmp/output.tar.gz
+          find node_modules -name '*.map' -delete
+          find node_modules -name '*.d.ts' -delete
+
+      - name: Package application for deployment
+        # Build a zip with github-portal/ as the top-level directory so Oryx's
+        # startup command (node ./github-portal/dist/bin/www) keeps working.
+        # Deploying a .zip skips the azure/webapps-deploy re-zip step.
+        run: |
+          mkdir -p /tmp/pkg/github-portal
+          cp -r . /tmp/pkg/github-portal/
+          rm -rf /tmp/pkg/github-portal/.git \
+                 /tmp/pkg/github-portal/.github \
+                 /tmp/pkg/github-portal/test \
+                 /tmp/pkg/github-portal/docs \
+                 /tmp/pkg/github-portal/default-assets-package/node_modules \
+                 /tmp/pkg/github-portal/default-assets-package/src
+          find /tmp/pkg/github-portal -name '*.test.ts' -delete
+          find /tmp/pkg/github-portal -name '*.spec.ts' -delete
+          cd /tmp/pkg && zip -qr /tmp/node-app.zip github-portal/
+          ls -lah /tmp/node-app.zip
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: node-app
-          path: /tmp/output.tar.gz
+          path: /tmp/node-app.zip
           compression-level: 0
 
   deploy:
@@ -86,12 +96,6 @@ jobs:
         with:
           name: node-app
 
-      - name: Unpack application
-        run: |
-          mkdir -p /tmp/deploy
-          tar -xf output.tar.gz -C /tmp/deploy
-          ls -lah /tmp/deploy/github-portal/
-
       - name: 'Deploy to Azure Web App'
         id: deploy-to-webapp
         uses: azure/webapps-deploy@02a81bead70021f5284939794bcec79c271ab383 # v3
@@ -99,4 +103,4 @@ jobs:
           app-name: 'nihdevgithubportal'
           slot-name: 'Production'
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_34824FEBDA0F4C8CACF5CB97111CBFFB }}
-          package: /tmp/deploy
+          package: node-app.zip
