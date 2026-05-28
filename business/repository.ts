@@ -244,7 +244,7 @@ const safeEntityFieldsForJsonSend = [
   'stargazers_count',
   'open_issues_count',
   'id',
-  'visibility'
+  'visibility',
 ];
 
 const sortByLogin = (list) => {
@@ -1975,9 +1975,7 @@ export class Repository {
     );
 
     // No system accounts or owners
-    collaborators = collaborators.filter(
-      (c) => false === operations.isSystemAccountByUsername(c.login)
-    );
+    collaborators = collaborators.filter((c) => false === operations.isSystemAccountByUsername(c.login));
 
     if (excludeOwners) {
       collaborators = collaborators.filter((c) => false === ownersSet.has(c.login.toLowerCase()));

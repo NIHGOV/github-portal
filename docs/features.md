@@ -33,7 +33,6 @@ variable value to `1`.
   - Recommendation: use a more secure route, such as the queue-based firehose processing method.
 
 - allowUsersToViewLockedOrgDetails
-
   - Variable: `FEATURE_FLAG_ALLOW_USERS_TO_VIEW_LOCKED_ORG_DETAILS`
   - Value: set to `1` to allow users to view sanitized detail page for locked organizations (eg information about how they can join)
   - Default: `0`

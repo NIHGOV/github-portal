@@ -17,16 +17,13 @@ import RouteApps from './apps.js';
 import { json2csvAsync } from 'json-2-csv';
 import _ from 'lodash';
 
-router.use(
-  '/*splat',
-  async function (req: ReposAppRequest, res: Response, next: NextFunction) {
-    const { corporateAdministrationProfile } = getProviders(req);
-    if (corporateAdministrationProfile && corporateAdministrationProfile.urls) {
-      req.individualContext.setInitialViewProperty('_corpAdminUrls', corporateAdministrationProfile.urls);
-    }
-    return next();
+router.use('/*splat', async function (req: ReposAppRequest, res: Response, next: NextFunction) {
+  const { corporateAdministrationProfile } = getProviders(req);
+  if (corporateAdministrationProfile && corporateAdministrationProfile.urls) {
+    req.individualContext.setInitialViewProperty('_corpAdminUrls', corporateAdministrationProfile.urls);
   }
-);
+  return next();
+});
 
 try {
   const dynamicStartupInstance = getCompanySpecificDeployment();

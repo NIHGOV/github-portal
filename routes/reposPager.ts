@@ -236,7 +236,7 @@ export default async function (req: IReposAppWithTeam, res: Response, next: Next
 
   await search.search(page, sort);
 
-  await Promise.all(search.repos.map(repo => repo.getDetails()));
+  await Promise.all(search.repos.map((repo) => repo.getDetails()));
 
   req.individualContext.webContext.render({
     view: 'repos/',

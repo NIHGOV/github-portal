@@ -86,51 +86,48 @@ router.use(async (req: ILocalOrgRequest, res: Response, next: NextFunction) => {
 
 // Org membership required endpoints:
 
-router.get(
-  '/',
-  async function (req: ReposAppRequest, res: Response, next: NextFunction) {
-    const providers = getProviders(req);
-    const approvalProvider = providers.approvalProvider;
-    const organization = req.organization;
-    const username = req.individualContext.getGitHubIdentity().username;
-    const individualContext = req.individualContext;
-    const organizationAdmins = await organization.getOwnersCardData();
-    const results = {
-      orgUser: organization.memberFromEntity(await organization.getDetails()),
-      isMembershipPublic: await organization.checkPublicMembership(username),
-      organizationOverview: null as IAggregateUserSummary,
-      isAdministrator: false, // CONSIDER: UPDATE ORG SUDOERS SYSTEM UI... ... legacyUserContext.isAdministrator(callback);
-      isSudoer: false, // if (results.isAdministrator && results.isAdministrator === true) { results.isSudoer = true;
-      teamsMaintainedHash: null,
-      pendingApprovals: null as TeamJoinApprovalEntity[],
-      organizationAdmins,
-    };
-    results.organizationOverview =
-      await individualContext.aggregations.getAggregatedOrganizationOverview(organization);
-    // Check for pending approvals
-    const teamsMaintained = results.organizationOverview.teams.maintainer as Team[];
-    if (teamsMaintained && teamsMaintained.length && teamsMaintained.length > 0) {
-      const teamsMaintainedHash = {};
-      for (let i = 0; i < teamsMaintained.length; i++) {
-        teamsMaintainedHash[teamsMaintained[i].id] = teamsMaintained[i];
-      }
-      results.teamsMaintainedHash = teamsMaintainedHash;
-      results.pendingApprovals = await approvalProvider.queryPendingApprovalsForTeams(
-        teamsMaintained.map((team) => team.id.toString())
-      );
+router.get('/', async function (req: ReposAppRequest, res: Response, next: NextFunction) {
+  const providers = getProviders(req);
+  const approvalProvider = providers.approvalProvider;
+  const organization = req.organization;
+  const username = req.individualContext.getGitHubIdentity().username;
+  const individualContext = req.individualContext;
+  const organizationAdmins = await organization.getOwnersCardData();
+  const results = {
+    orgUser: organization.memberFromEntity(await organization.getDetails()),
+    isMembershipPublic: await organization.checkPublicMembership(username),
+    organizationOverview: null as IAggregateUserSummary,
+    isAdministrator: false, // CONSIDER: UPDATE ORG SUDOERS SYSTEM UI... ... legacyUserContext.isAdministrator(callback);
+    isSudoer: false, // if (results.isAdministrator && results.isAdministrator === true) { results.isSudoer = true;
+    teamsMaintainedHash: null,
+    pendingApprovals: null as TeamJoinApprovalEntity[],
+    organizationAdmins,
+  };
+  results.organizationOverview =
+    await individualContext.aggregations.getAggregatedOrganizationOverview(organization);
+  // Check for pending approvals
+  const teamsMaintained = results.organizationOverview.teams.maintainer as Team[];
+  if (teamsMaintained && teamsMaintained.length && teamsMaintained.length > 0) {
+    const teamsMaintainedHash = {};
+    for (let i = 0; i < teamsMaintained.length; i++) {
+      teamsMaintainedHash[teamsMaintained[i].id] = teamsMaintained[i];
     }
-    const organizationEntity = results && results.orgUser ? results.orgUser.getEntity() : null;
-    req.individualContext.webContext.render({
-      view: 'org/index',
-      title: organization.name,
-      state: {
-        accountInfo: results,
-        organization,
-        organizationEntity,
-      },
-    });
+    results.teamsMaintainedHash = teamsMaintainedHash;
+    results.pendingApprovals = await approvalProvider.queryPendingApprovalsForTeams(
+      teamsMaintained.map((team) => team.id.toString())
+    );
   }
-);
+  const organizationEntity = results && results.orgUser ? results.orgUser.getEntity() : null;
+  req.individualContext.webContext.render({
+    view: 'org/index',
+    title: organization.name,
+    state: {
+      accountInfo: results,
+      organization,
+      organizationEntity,
+    },
+  });
+});
 
 router.use('/membership', RouteMembership);
 router.use('/leave', RouteLeave);

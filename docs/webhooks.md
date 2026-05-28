@@ -27,7 +27,6 @@ sequenceDiagram
    `az servicebus queue create --resource-group $RESOURCEGROUP --namespace-name portal-events --name events`
 
 4. Create a shared access policies from the Azure Portal.
-
    1. Navigate to the service bus namespace.
    2. Click `Shared access policies` on the sidebar.
    3. Click "Add"
@@ -42,7 +41,6 @@ sequenceDiagram
    12. Copy down the primary connection string to be set in Logic App.
 
 5. Update parameters in [workflow.json](workflow.json).
-
    1. Replace `00000000-0000-0000-0000-000000000000` with your subscription id.
    2. In the servicebus connectionId property also update the resource group.
 

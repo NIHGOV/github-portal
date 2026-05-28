@@ -18,7 +18,9 @@ export default (graphApi) => {
   const environmentProvider = graphApi.environment;
   // Useful information to help understand which CI/CD pipeline the app came from
   const continuousDeployment = stripPlaceholders(pkg.continuousDeployment);
-  continuousDeployment.version = pkg.version;
+  const runNumber = environmentProvider.get('GITHUB_RUN_NUMBER');
+  const [major, minor] = pkg.version.split('.');
+  continuousDeployment.version = runNumber ? `${major}.${minor}.${runNumber}` : pkg.version;
   continuousDeployment.name = pkg.name;
   continuousDeployment.deploymentId = environmentProvider.get(DEPLOYMENT_ID_KEY_NAME) || null;
   return continuousDeployment;

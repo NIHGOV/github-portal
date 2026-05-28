@@ -694,7 +694,6 @@ async function connectRedis(
   return redisClient;
 }
 
-
 async function createMailAddressProvider(
   config: SiteConfiguration,
   providers: IProviders

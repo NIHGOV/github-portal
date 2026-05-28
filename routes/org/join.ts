@@ -28,7 +28,6 @@ import {
 } from '../../interfaces/index.js';
 import getCompanySpecificDeployment from '../../middleware/companySpecificDeployment.js';
 
-
 //-------------
 // Join checks
 //-------------
