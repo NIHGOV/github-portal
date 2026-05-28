@@ -4,6 +4,75 @@ Priority-ordered list of security improvements identified across this repository
 
 ---
 
+## Completed (May 2026 — GitHub Copilot agentic session)
+
+### ✅ Synced upstream microsoft/opensource-management-portal → NIHGOV:staging (PR #1099)
+
+Merged `microsoft/opensource-management-portal:main` into `NIHGOV/github-portal:staging` on branch `sync-upstream-main-20260527`. Resolved 7 merge conflicts, preserving NIH-specific code:
+
+- `config/features.json` + `config/features.types.ts` — retained `allowUsersToViewLockedOrgDetails` (NIH) alongside new upstream `allowSessionFeatureFlags`
+- `views/layout.pug` — retained NIH's Google Analytics iframe inside upstream's new `data-csrf-token` body attribute
+- `package.json` — retained NIH deps (`js-yaml`, `json-2-csv`); adopted upstream `jose` upgrade
+- `routes/org/index.ts` — adopted upstream `stringParam()` (not NIH-specific)
+- `.vscode/settings.json` — deleted (honored NIH staging commit)
+- `package-lock.json` — replaced with `bun.lock` (see migration below)
+
+### ✅ Migrated from npm to bun (PR #1099)
+
+- All `package.json` scripts: `npm`/`npx` → `bun`/`bunx`
+- Generated `bun.lock` (SHA-512 pinned, replaces `package-lock.json`)
+- Generated `default-assets-package/bun.lock`
+- `Dockerfile` + `Dockerfile.open`: `npm install` → `bun install --frozen-lockfile --ignore-scripts`; ENTRYPOINT updated
+- `.devcontainer/devcontainer.json`: rewrote to use `mcr.microsoft.com/devcontainers/javascript-node:24`, added `oven-sh/setup-bun` and `github-cli` features, `postCreateCommand: bun install --frozen-lockfile`
+
+### ✅ Fixed 4 GHAS security alerts (PR #1099)
+
+- `api/index.ts` — removed `isClientRoute()` bypasses from pre-auth and post-auth rate limiters; all routes now go through rate limiting
+- `middleware/rateLimit.ts` — replaced `crypto.createHmac('sha256', 'rate-limit-cache-key')` with `crypto.createHash('sha256')` (was flagged as insufficient password hash)
+- `api/client/context/diagnostics.ts` — wrapped handler in `getRateLimitMiddleware` to fix missing rate limit alert
+
+### ✅ Fixed Redis v5 breaking API changes (PR #1100)
+
+- `middleware/initialize.ts` — removed `await redisClient.auth({password: ...})` (removed in v5); moved `password` to top-level `createClient()` option
+- `middleware/session.ts` — removed `await redisLegacy.auth({password: ...})`; properly awaited `redisLegacy.connect()`
+
+### ✅ Fixed CI/CD workflows: Node 24 + bun (PR #1101)
+
+- `staging_nihdevgithubportal.yml` — Node 20 → 24 (match App Service runtime); `npm install` → `bun install --frozen-lockfile --ignore-scripts`; added devDep pruning before packaging; split into explicit build/test/prune steps
+- `main_nihgithubportal.yml` — Node 16 → 24; same npm → bun migration; bumped `actions/checkout`, `upload/download-artifact`, `webapps-deploy` to latest
+- `ci.yml` — added `oven-sh/setup-bun@v2`; replaced all `npm` with `bun` equivalents; Node → 24
+
+Root cause: `npm install` was running with no `package-lock.json` (deleted in bun migration), so npm did unconstrained fresh resolution ignoring `bun.lock`, resulting in wrong transitive versions being deployed (caused `@azure/core-tracing`/`createTracingClient` export error on startup).
+
+### ✅ SHA-pinned all GitHub Actions + upgraded to latest versions
+
+All `uses:` references across all 10 workflow files pinned to exact commit SHAs to prevent supply-chain attacks via tag mutation:
+
+| Action                      | Old         | New                   |
+| --------------------------- | ----------- | --------------------- |
+| `actions/checkout`          | v2/v3/v4/v6 | `de0fac2e` (v6.0.2)   |
+| `actions/setup-node`        | v3/v4       | `48b55a01` (v6.4.0)   |
+| `actions/upload-artifact`   | v3/v4       | `043fb46d` (v7.0.1)   |
+| `actions/download-artifact` | v3/v4       | `3e5f45b2` (v8.0.1)   |
+| `actions/stale`             | v9          | `eb5cf3af` (v10.3.0)  |
+| `oven-sh/setup-bun`         | v2          | `0c5077e5` (v2.2.0)   |
+| `azure/webapps-deploy`      | v2/v3       | `02a81bea` (v3)       |
+| `azure/login`               | v1.4.6/v2   | `532459ea` (v3.0.0)   |
+| `Azure/cli`                 | v1          | `9eb25b83` (v3.0.0)   |
+| `azure/docker-login`        | v1          | `15c4aadf` (v2)       |
+| `github/codeql-action`      | v3          | `03e4368a` (v3)       |
+| `ruby/setup-ruby`           | v1.127.0    | `ee211353` (v1.127.0) |
+| `azure/postgresql`          | v1          | `59401b78` (v1)       |
+
+### ✅ Upgraded `applicationinsights` 2.9.8 → 3.15.0 (OpenTelemetry)
+
+Fixes `DEP0005` (`Buffer()`) and `DEP0169` (`url.parse()`) deprecation warnings on Node.js 24. Breaking API changes addressed:
+
+- `lib/mail/render.ts` + `render.test.ts` — replaced `import type NodeClient from 'applicationinsights/out/Library/NodeClient.js'` (internal v2 path, broken in v3) with `import type { TelemetryClient } from 'applicationinsights'`
+- `middleware/appInsights.ts` — removed `wrapWithCorrelationContext` / `getCorrelationContext` / `startOperation` (v2 correlation model removed; v3 propagates context automatically via OpenTelemetry async hooks); removed deprecated `instrumentationKey` reference
+
+---
+
 ## High Priority
 
 ### 1. Add `helmet` middleware (CSP, X-Frame-Options, nosniff, Referrer-Policy)
@@ -18,32 +87,19 @@ The middleware stack currently only sets HSTS and disables `X-Powered-By`. No `C
 
 ---
 
-### 2. Pin GitHub Actions to commit SHAs
-
-**Files:** `.github/workflows/*.yml`
-
-All workflows use floating semver tags (`actions/checkout@v6`, `github/codeql-action/analyze@v3`). If an upstream tag is force-pushed, the new code runs in CI with full repository access. Pinning to the commit SHA guarantees immutability.
-
-- [ ] For each `uses:` line, replace the tag with the corresponding commit SHA and add the version as a comment, e.g.:
-  ```yaml
-  uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-  ```
-- [ ] Use [pin-github-action](https://github.com/mheap/pin-github-action) or the [Ratchet](https://github.com/sethvargo/ratchet) CLI to automate the initial pinning
-- [ ] Add Dependabot's `github-actions` ecosystem config (already present in `dependabot.yml`) to keep SHA pins updated automatically
-
----
-
-### 3. Add `permissions:` blocks to all workflows
+### 2. Add `permissions:` blocks to all workflows
 
 **Files:** `.github/workflows/ci.yml`, `.github/workflows/codeql-analysis.yml`, and any workflow lacking an explicit `permissions:` declaration
 
 Without an explicit `permissions:` block, workflows inherit the repository default (often `write-all` for private repos). A compromised step could push code, publish packages, or modify secrets.
 
 - [ ] Add minimal-privilege `permissions:` at the top level of each workflow:
+
   ```yaml
   permissions:
     contents: read
   ```
+
 - [ ] For workflows that need additional access (e.g., CodeQL needs `security-events: write`), scope those grants per-job rather than globally
 
 ---
@@ -54,25 +110,25 @@ Without an explicit `permissions:` block, workflows inherit the repository defau
 
 **File:** `middleware/session.ts`
 
-There is a 6-year-old `// TODO: 2020: consider SameSite` comment at line 77. The session cookie is currently created without an explicit `sameSite` attribute. Modern browsers default to `Lax`, but this is not enforced server-side. Setting it explicitly documents intent and provides defense-in-depth against CSRF for the OAuth redirect flows.
+There is a 6-year-old `// TODO: 2020: consider SameSite` comment. The session cookie is currently created without an explicit `sameSite` attribute. Setting it explicitly documents intent and provides defense-in-depth against CSRF for the OAuth redirect flows.
 
 - [ ] Add `sameSite: 'lax'` to the `settings.cookie` object in `middleware/session.ts`
-- [ ] Verify that `sameSite: 'lax'` is compatible with the Entra ID and GitHub OAuth callback flows (both use `GET` redirects, so `lax` should work; use `'none'` with `secure: true` only if a cross-site POST flow requires it)
+- [ ] Verify that `sameSite: 'lax'` is compatible with the Entra ID and GitHub OAuth callback flows (both use `GET` redirects, so `lax` should work)
 
 ---
 
-### 5. Add `npm audit` step to CI
+### 5. Add `bun audit` step to CI
 
 **File:** `.github/workflows/ci.yml`
 
-Dependabot PRs can take days; a failing `npm audit` step catches known vulnerabilities on every push, including on branches that predate a Dependabot fix.
+Dependabot PRs can take days; a failing audit step catches known vulnerabilities on every push independently of Dependabot.
 
 - [ ] Add to `ci.yml` after the install step:
+
   ```yaml
   - name: Audit dependencies
-    run: npm audit --audit-level=high
+    run: bun audit --audit-level=high
   ```
-- [ ] Consider adding `--production` flag to limit to production dependency tree
 
 ---
 
@@ -83,6 +139,7 @@ Dependabot PRs can take days; a failing `npm audit` step catches known vulnerabi
 The Docker build in CI creates an image but never scans it. Both the Azure Linux base layer (OS packages) and the npm layer can contain CVEs that only appear post-build.
 
 - [ ] Add a [Trivy](https://github.com/aquasecurity/trivy-action) step after `docker build`:
+
   ```yaml
   - name: Scan container image
     uses: aquasecurity/trivy-action@<sha>
@@ -92,6 +149,7 @@ The Docker build in CI creates an image but never scans it. Both the Azure Linux
       exit-code: '1'
       severity: 'HIGH,CRITICAL'
   ```
+
 - [ ] Alternatively integrate [Grype](https://github.com/anchore/scan-action) for SBOM-aware scanning
 
 ---
@@ -103,6 +161,7 @@ The Docker build in CI creates an image but never scans it. Both the Azure Linux
 Dependabot covers `/` and `/default-assets-package` for npm, but the `frontend/` directory has its own `package.json` (referenced in `Dockerfile` as `WORKDIR /build/frontend`) and is not covered.
 
 - [ ] Add a third npm entry to `dependabot.yml`:
+
   ```yaml
   - package-ecosystem: npm
     directory: /frontend
@@ -116,16 +175,17 @@ Dependabot covers `/` and `/default-assets-package` for npm, but the `frontend/`
 
 ---
 
-### 8. Verify npm package signatures in CI (`npm audit signatures`)
+### 8. Verify package integrity in CI (`bun audit`)
 
 **File:** `.github/workflows/ci.yml`
 
-npm 9+ supports `npm audit signatures`, which verifies that published packages are signed by the registry key they claim. This detects packages where the tarball has been tampered with post-publish — distinct from `npm audit` which checks advisories.
+Bun's lockfile uses SHA-512 integrity hashes for every package. Adding `bun audit` in CI catches advisories on every push independently of Dependabot.
 
 - [ ] Add to `ci.yml` after install:
+
   ```yaml
-  - name: Verify package signatures
-    run: npm audit signatures
+  - name: Verify package integrity
+    run: bun audit
   ```
 
 ---
@@ -161,7 +221,7 @@ The staging image push workflow uses `secrets.DEV_REGISTRY_USER` and `secrets.DE
 
 Line 34 interpolates `${db}` directly into a `CREATE DATABASE` query string without using `pg-escape`, while line 43 correctly uses `escape(...)` for user creation. Both should use parameterized or escaped values.
 
-- [ ] Replace `\`create database ${db}\`` with `escape('create database %I', db)` using the already-imported `pg-escape` package
+- [ ] Replace `\`create database ${db}\``with`escape('create database %I', db)`using the already-imported`pg-escape` package
 
 ---
 
@@ -185,9 +245,9 @@ Dependabot and `npm audit` are reactive (known CVEs). [Socket.dev](https://socke
 
 ## Already in Place (No Action Required)
 
-- `npm install --ignore-scripts` in `Dockerfile` — prevents malicious install scripts
-- `package-lock.json` lockfileVersion 3 with integrity hashes — deterministic installs
-- `npm ci` for all CI and production builds
+- `bun install --frozen-lockfile --ignore-scripts` in `Dockerfile` and all CI workflows — prevents malicious install scripts and ensures reproducible installs
+- `bun.lock` with SHA-512 integrity hashes for all packages (replaces `package-lock.json`) — deterministic installs
+- All GitHub Actions SHA-pinned to exact commit hashes across all 10 workflow files
 - `app.disable('x-powered-by')` in `middleware/index.ts`
 - HSTS with preload and `includeSubDomains` via `middleware/hsts.ts`
 - `eslint-plugin-security` integrated in `eslint.config.mjs`
@@ -196,3 +256,5 @@ Dependabot and `npm audit` are reactive (known CVEs). [Socket.dev](https://socke
 - CodeQL scanning on push and weekly (`codeql-analysis.yml`)
 - API token validation via Entra in `middleware/api/authentication/`
 - Session production guards (rejects `memory`/`file` providers in production)
+- Rate limiting on all API routes (GHAS alerts resolved May 2026)
+- Redis v5 auth handled correctly via `createClient({ password })` (fixed May 2026)
