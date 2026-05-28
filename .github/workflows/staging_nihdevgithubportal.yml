@@ -59,22 +59,33 @@ jobs:
           find node_modules -name '*.d.ts' -delete
 
       - name: Package application for deployment
-        # Build a zip with github-portal/ as the top-level directory so Oryx's
-        # startup command (node ./github-portal/dist/bin/www) keeps working.
-        # Deploying a .zip skips the azure/webapps-deploy re-zip step.
+        # Oryx's startup script always looks for node_modules.tar.gz at the
+        # wwwroot root and extracts it to /node_modules, then symlinks
+        # /home/site/wwwroot/node_modules → /node_modules before running the
+        # app.  Shipping our own node_modules.tar.gz replaces the stale
+        # Oryx-generated one so the correct package versions are always used.
+        # github-portal/ contains source + dist but NOT node_modules (Oryx
+        # provides them via the tar → symlink mechanism).
         run: |
           mkdir -p /tmp/pkg/github-portal
-          cp -r . /tmp/pkg/github-portal/
-          rm -rf /tmp/pkg/github-portal/.git \
-                 /tmp/pkg/github-portal/.github \
-                 /tmp/pkg/github-portal/test \
-                 /tmp/pkg/github-portal/docs \
-                 /tmp/pkg/github-portal/default-assets-package/node_modules \
-                 /tmp/pkg/github-portal/default-assets-package/src
+
+          # Copy app (source + compiled dist) — exclude node_modules; Oryx
+          # will supply them from node_modules.tar.gz below.
+          rsync -a --exclude='.git' --exclude='.github' \
+            --exclude='node_modules' --exclude='test' --exclude='docs' \
+            --exclude='default-assets-package/node_modules' \
+            --exclude='default-assets-package/src' \
+            . /tmp/pkg/github-portal/
           find /tmp/pkg/github-portal -name '*.test.ts' -delete
           find /tmp/pkg/github-portal -name '*.spec.ts' -delete
-          cd /tmp/pkg && zip -qr /tmp/node-app.zip github-portal/
-          ls -lah /tmp/node-app.zip
+
+          # Build the node_modules.tar.gz that Oryx expects at wwwroot root.
+          # Content is flat (node_modules/* at the root of the tar) so that
+          # `tar -xzf node_modules.tar.gz -C /node_modules` unpacks correctly.
+          tar -czf /tmp/pkg/node_modules.tar.gz -C node_modules .
+
+          cd /tmp/pkg && zip -qr /tmp/node-app.zip .
+          ls -lah /tmp/node-app.zip /tmp/pkg/node_modules.tar.gz
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
