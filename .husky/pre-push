@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+# Mirror the "Lint & Test" CI workflow checks so failures are caught locally
+# before reaching the remote. Tests and container build are intentionally
+# excluded here — run `bun test` manually before pushing if needed.
+
+bun run lint:md
+bun run lint:js
+bun run lint:spell
