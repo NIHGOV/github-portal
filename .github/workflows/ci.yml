@@ -18,24 +18,27 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          cache: npm
+          node-version: '24.x'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
 
       - name: Install Dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Run Markdownlint
-        run: npm run lint:md
+        run: bun run lint:md
 
       - name: Run ESLint
-        run: npm run lint:js
+        run: bun run lint:js
 
       - name: Run cSpell
         run: |
           echo "::add-matcher::.github/workflows/cspell-problem-matcher.json"
-          npm run lint:spell
+          bun run lint:spell
 
       - name: Run tests
-        run: npm test
+        run: bun test
 
       - name: Build container
         run: |
