@@ -14,7 +14,8 @@ import getCompanySpecificDeployment from '../../middleware/companySpecificDeploy
 import RouteApp from './app.js';
 import RouteApps from './apps.js';
 
-import { json2csvAsync } from 'json-2-csv';
+import json2csvModule from 'json-2-csv';
+const { json2csvAsync } = json2csvModule;
 import _ from 'lodash';
 
 router.use('/*splat', async function (req: ReposAppRequest, res: Response, next: NextFunction) {
