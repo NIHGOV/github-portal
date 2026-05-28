@@ -75,6 +75,56 @@ Fixes `DEP0005` (`Buffer()`) and `DEP0169` (`url.parse()`) deprecation warnings 
 
 ## High Priority
 
+### 0. **When `staging` merges to `main`: apply `WEBSITE_RUN_FROM_PACKAGE=1` to production**
+
+**Background — read this first if production is crash-looping after the merge.**
+
+The staging deploy workflow (`.github/workflows/staging_nihdevgithubportal.yml`) was switched to Azure's run-from-package deployment model to fix a persistent crash loop on `nihdevgithubportal`. The production workflow (`.github/workflows/main_nihgithubportal.yml`) and the production App Service (`nihgithubportal`) still use the legacy Kudu additive zip deploy and **will hit the exact same crash the first time `main` is updated with the bun-based deploy artifact.**
+
+**The crash (for context):**
+
+```text
+SyntaxError: The requested module '@azure/core-tracing' does not provide an export named 'createTracingClient'
+  at file:///home/site/wwwroot/github-portal/node_modules/@azure/storage-blob/dist/esm/utils/tracing.js:3
+```
+
+**Root cause:** Kudu zip deploy is _additive_ — it only overlays files and never deletes anything. The original npm-based deployment left deeply nested copies of `@azure/core-tracing@1.0.0-preview.11` (legacy CJS preview, no `createTracingClient` export) under sibling `@azure/*` packages' own `node_modules/` directories. Our bun-installed layout hoists flat and never writes files at those nested paths, so Kudu has nothing to overwrite them with. Node.js resolution from `@azure/storage-blob` walks up and finds the OLD nested copy before reaching our correct `@azure/core-tracing@1.3.1`. **No amount of file-shipping fixes this** — the persistent `wwwroot` keeps accumulating cruft from every previous deploy forever.
+
+**Fix:** switch the production App Service to `WEBSITE_RUN_FROM_PACKAGE=1`. The zip is mounted _read-only and immutable_ at `/home/site/wwwroot` on every cold start, so there is no persistent filesystem to accumulate stale files. Every deploy is a complete, atomic state.
+
+#### Production App Service settings to add (one-time, in Azure portal → `nihgithubportal` → Configuration)
+
+| Name                               | Value                                                |
+| ---------------------------------- | ---------------------------------------------------- |
+| `WEBSITE_RUN_FROM_PACKAGE`         | `1`                                                  |
+| `SCM_DO_BUILD_DURING_DEPLOYMENT`   | `false`                                              |
+| `ENABLE_ORYX_BUILD`                | `false`                                              |
+| Startup Command (General settings) | `node /home/site/wwwroot/github-portal/dist/bin/www` |
+
+Or via Azure CLI:
+
+```bash
+az webapp config appsettings set --name nihgithubportal --resource-group <RG> \
+  --settings WEBSITE_RUN_FROM_PACKAGE=1 SCM_DO_BUILD_DURING_DEPLOYMENT=false ENABLE_ORYX_BUILD=false
+az webapp config set --name nihgithubportal --resource-group <RG> \
+  --startup-file "node /home/site/wwwroot/github-portal/dist/bin/www"
+```
+
+#### Workflow changes needed (mirror what was done to `staging_nihdevgithubportal.yml`)
+
+- [ ] Drop the `output.tar.gz` step and the "Unpack tar" step — produce a zip with `github-portal/` as the root entry containing `dist/`, `node_modules/`, etc.
+- [ ] Strip `*.map` and `*.d.ts` from `node_modules` to keep the zip small (~200 MB savings).
+- [ ] Pass the zip directly to `azure/webapps-deploy` via `package: node-app.zip` (no re-zipping by the action).
+- [ ] Remove any `node_modules.tar.gz` Oryx hack if present — with run-from-package, Oryx is fully bypassed.
+
+#### Caveat — read-only `wwwroot`
+
+With `WEBSITE_RUN_FROM_PACKAGE=1`, the app **cannot write to `/home/site/wwwroot`**. Anything writable must live under `/home/` (the persistent share, separate from `wwwroot`). Audit any code that writes to its own directory (logs, uploads, caches) before flipping the switch in production.
+
+See `AGENTS.md` for the debugging checklist if the production app crash-loops with this error after the staging→main merge.
+
+---
+
 ### 1. Add `helmet` middleware (CSP, X-Frame-Options, nosniff, Referrer-Policy)
 
 **Files:** `middleware/index.ts`, `package.json`

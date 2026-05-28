@@ -42,6 +42,15 @@ Most of the experience is eventually consistent; however, operational actions
 such as joining teams, orgs, sudo operations, etc., are fully consistent at the time
 they are requested.
 
+## Deployment notes (NIH fork)
+
+This NIH fork deploys to two Azure App Services:
+
+- **Staging** (`nihdevgithubportal`) — built and deployed by `.github/workflows/staging_nihdevgithubportal.yml` on every push to the `staging` branch. Uses `WEBSITE_RUN_FROM_PACKAGE=1`, so `/home/site/wwwroot` is mounted **read-only and immutable** from the deploy zip on every cold start.
+- **Production** (`nihgithubportal`) — built and deployed by `.github/workflows/main_nihgithubportal.yml` on every push to `main`. **Still uses the legacy Kudu additive zip deploy** and needs to be migrated to `WEBSITE_RUN_FROM_PACKAGE=1` the next time `staging` is merged to `main` — see `PLAN.md` (High Priority item 0) and `AGENTS.md` for the full migration steps and the required Azure App Service settings.
+
+**If the app is crash-looping on startup with a `SyntaxError` about `@azure/core-tracing` not exporting `createTracingClient` (or a similar `@azure/*` ESM named-export error), read `AGENTS.md` first.** That document explains exactly why this happens, what _doesn't_ fix it (shipping more files, bumping versions, re-running the deploy), and the actual fix.
+
 ## LICENSE
 
 [MIT License](LICENSE)
