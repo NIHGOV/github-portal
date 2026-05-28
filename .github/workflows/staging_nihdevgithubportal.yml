@@ -59,16 +59,20 @@ jobs:
           find node_modules -name '*.d.ts' -delete
 
       - name: Package application for deployment
-        # Kudu zip deploy is additive — it never deletes files that aren't in
-        # the new zip. The ORIGINAL npm-based deployment left an old
-        # github-portal/node_modules in wwwroot that persists across every
-        # subsequent deploy and shadows our correct bun-installed packages.
+        # Deployed with WEBSITE_RUN_FROM_PACKAGE=1: the zip is mounted
+        # READ-ONLY and IMMUTABLE at /home/site/wwwroot on each cold start.
+        # There is no persistent filesystem to accumulate stale files from
+        # prior deployments — every release is an atomic, complete state.
+        # This eliminates the entire class of "Kudu additive deploy leaves
+        # stale nested node_modules behind" bugs that plagued earlier
+        # deploys (e.g. the @azure/core-tracing createTracingClient crash).
         #
-        # Shipping github-portal/node_modules in the zip forces Kudu to
-        # overwrite those files with our correct production packages.
-        # node_modules.tar.gz is also included at the wwwroot root so Oryx's
-        # startup script extracts our packages to /node_modules and creates
-        # the expected symlink (belt-and-suspenders).
+        # No node_modules.tar.gz needed — Oryx is bypassed entirely.
+        # Required Azure App Service settings (configure once in portal):
+        #   WEBSITE_RUN_FROM_PACKAGE=1
+        #   SCM_DO_BUILD_DURING_DEPLOYMENT=false
+        #   ENABLE_ORYX_BUILD=false
+        # Startup Command: node /home/site/wwwroot/github-portal/dist/bin/www
         run: |
           mkdir -p /tmp/pkg/github-portal
 
@@ -80,11 +84,8 @@ jobs:
           find /tmp/pkg/github-portal -name '*.test.ts' -delete
           find /tmp/pkg/github-portal -name '*.spec.ts' -delete
 
-          # node_modules.tar.gz for Oryx (flat — packages at root of tar)
-          tar -czf /tmp/pkg/node_modules.tar.gz -C node_modules .
-
           cd /tmp/pkg && zip -qr /tmp/node-app.zip .
-          ls -lah /tmp/node-app.zip /tmp/pkg/node_modules.tar.gz
+          ls -lah /tmp/node-app.zip
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
