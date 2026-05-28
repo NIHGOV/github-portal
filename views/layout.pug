@@ -13,7 +13,7 @@ html(lang="en")
       iframe(src="https://www.googletagmanager.com/ns.html?id=" + googleAnalyticsKey height="0" width="0" style="display:none;visibility:hidden")
     include alerts
     - var scheme = primaryAuthenticationScheme || (config ? config.authentication.scheme : null)
-    if scheme === 'aad'
+    if scheme === 'aad' || scheme === 'entra-id'
       include nav2
     else
       include nav
