@@ -52,6 +52,10 @@ export function getFrontendMode() {
 }
 
 export function hasStaticReactClientApp() {
+  const mode = getFrontendMode();
+  if (mode === FrontendMode.Skip || mode === FrontendMode.Proxied) {
+    return false;
+  }
   const staticClientFolderName = appPackage[reactFolderVariableName];
   return !!staticClientFolderName;
 }
