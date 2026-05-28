@@ -8,12 +8,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - uses: azure/docker-login@v1
-      with:
-        login-server: ${{ secrets.DEV_REGISTRY_SERVER }}
-        username: ${{ secrets.DEV_REGISTRY_USER }}
-        password: ${{ secrets.DEV_REGISTRY_PASS }}
-    - run: |
-        docker build . -t ${{ secrets.DEV_REGISTRY_SERVER }}/portal
-        docker push ${{ secrets.DEV_REGISTRY_SERVER }}/portal
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: azure/docker-login@15c4aadf093404726ab2ff205b2cdd33fa6d054c # v2
+        with:
+          login-server: ${{ secrets.DEV_REGISTRY_SERVER }}
+          username: ${{ secrets.DEV_REGISTRY_USER }}
+          password: ${{ secrets.DEV_REGISTRY_PASS }}
+      - run: |
+          docker build . -t ${{ secrets.DEV_REGISTRY_SERVER }}/portal
+          docker push ${{ secrets.DEV_REGISTRY_SERVER }}/portal
