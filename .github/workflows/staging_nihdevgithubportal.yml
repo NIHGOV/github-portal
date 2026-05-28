@@ -59,29 +59,28 @@ jobs:
           find node_modules -name '*.d.ts' -delete
 
       - name: Package application for deployment
-        # Oryx's startup script always looks for node_modules.tar.gz at the
-        # wwwroot root and extracts it to /node_modules, then symlinks
-        # /home/site/wwwroot/node_modules → /node_modules before running the
-        # app.  Shipping our own node_modules.tar.gz replaces the stale
-        # Oryx-generated one so the correct package versions are always used.
-        # github-portal/ contains source + dist but NOT node_modules (Oryx
-        # provides them via the tar → symlink mechanism).
+        # Kudu zip deploy is additive — it never deletes files that aren't in
+        # the new zip. The ORIGINAL npm-based deployment left an old
+        # github-portal/node_modules in wwwroot that persists across every
+        # subsequent deploy and shadows our correct bun-installed packages.
+        #
+        # Shipping github-portal/node_modules in the zip forces Kudu to
+        # overwrite those files with our correct production packages.
+        # node_modules.tar.gz is also included at the wwwroot root so Oryx's
+        # startup script extracts our packages to /node_modules and creates
+        # the expected symlink (belt-and-suspenders).
         run: |
           mkdir -p /tmp/pkg/github-portal
 
-          # Copy app (source + compiled dist) — exclude node_modules; Oryx
-          # will supply them from node_modules.tar.gz below.
           rsync -a --exclude='.git' --exclude='.github' \
-            --exclude='node_modules' --exclude='test' --exclude='docs' \
+            --exclude='test' --exclude='docs' \
             --exclude='default-assets-package/node_modules' \
             --exclude='default-assets-package/src' \
             . /tmp/pkg/github-portal/
           find /tmp/pkg/github-portal -name '*.test.ts' -delete
           find /tmp/pkg/github-portal -name '*.spec.ts' -delete
 
-          # Build the node_modules.tar.gz that Oryx expects at wwwroot root.
-          # Content is flat (node_modules/* at the root of the tar) so that
-          # `tar -xzf node_modules.tar.gz -C /node_modules` unpacks correctly.
+          # node_modules.tar.gz for Oryx (flat — packages at root of tar)
           tar -czf /tmp/pkg/node_modules.tar.gz -C node_modules .
 
           cd /tmp/pkg && zip -qr /tmp/node-app.zip .
