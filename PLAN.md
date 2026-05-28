@@ -123,6 +123,22 @@ With `WEBSITE_RUN_FROM_PACKAGE=1`, the app **cannot write to `/home/site/wwwroot
 
 See `AGENTS.md` for the debugging checklist if the production app crash-loops with this error after the staging→main merge.
 
+#### Also add the renamed Entra env vars to `nihgithubportal`
+
+The upstream sync (commit `55c10cfe`) completely restructured `config/activeDirectory.json`, renaming all app registration env vars from `AAD_*` to `ENTRA_*`. Production still has the old names. Add the new names **alongside** the old ones (do not rename — other config paths still reference `AAD_ISSUER`, `AAD_BLOCK_GUESTS`, etc.):
+
+| Add this new setting     | Copy value from     |
+| ------------------------ | ------------------- |
+| `ENTRA_ID_CLIENT_ID`     | `AAD_CLIENT_ID`     |
+| `ENTRA_ID_CLIENT_SECRET` | `AAD_CLIENT_SECRET` |
+| `ENTRA_ID_TENANT_ID`     | `AAD_TENANT_ID`     |
+
+Without these, the app starts and binds to port 8080 but immediately throws:
+
+```text
+Startup error: Error: No Entra application configuration found in activeDirectory.application
+```
+
 ---
 
 ### 1. Add `helmet` middleware (CSP, X-Frame-Options, nosniff, Referrer-Policy)
