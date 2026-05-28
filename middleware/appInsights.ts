@@ -78,14 +78,8 @@ export default function initializeAppInsights(
     defaultClient.addTelemetryProcessor(filterTelemetry);
     instance.start();
     client = defaultClient;
-    const configuredInstrumentationKey = client?.config?.instrumentationKey;
     const configuredEndpoint = client?.config?.endpointUrl;
-    debugStartup(
-      `insights telemetry will use identifier: ${configuredInstrumentationKey.substr(
-        0,
-        6
-      )}* and endpoint ${configuredEndpoint}`
-    );
+    debugStartup(`insights telemetry configured, endpoint ${configuredEndpoint}`);
   } else {
     debugStartup('insights telemetry is not configured with a key or connection string');
   }
@@ -109,20 +103,8 @@ export default function initializeAppInsights(
     const extraProperties = {
       correlationId: req.correlationId,
     };
-    const requestInsights = wrapOrCreateInsightsConsoleClient(extraProperties, client);
-    const operationContext = client
-      ? (appinsights.getCorrelationContext() ?? appinsights.startOperation(req))
-      : null;
-
-    if (!operationContext) {
-      req.insights = requestInsights;
-      return next();
-    }
-
-    return appinsights.wrapWithCorrelationContext(() => {
-      req.insights = requestInsights;
-      return next();
-    }, operationContext)();
+    req.insights = wrapOrCreateInsightsConsoleClient(extraProperties, client);
+    return next();
   });
 
   return wrapOrCreateInsightsConsoleClient({}, client);

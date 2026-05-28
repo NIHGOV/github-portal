@@ -5,7 +5,7 @@
 import path from 'path';
 import pug from 'pug';
 import { promises as fs } from 'fs';
-import type NodeClient from 'applicationinsights/out/Library/NodeClient.js';
+import type { TelemetryClient as NodeClient } from 'applicationinsights';
 
 import { CreateError } from '../transitional.js';
 

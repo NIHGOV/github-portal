@@ -5,7 +5,7 @@
 
 import { describe, expect, it, test } from 'vitest';
 
-import type NodeClient from 'applicationinsights/out/Library/NodeClient.js';
+import type { TelemetryClient as NodeClient } from 'applicationinsights';
 
 import { getTypeScriptAppDirectory } from '../../lib/appDirectory.js';
 import { renderHtmlMail } from '../../lib/mail/render.js';
