@@ -591,7 +591,8 @@ th.w-10 {
 
 /* Nav: second level (shown on .active) */
 .wiki-sidebar .nav .nav {
-  display: none; /* Hide by default, but at >768px, show it */
+  display: none;
+  /* Hide by default, but at >768px, show it */
   padding-bottom: 10px;
 }
 
@@ -650,12 +651,14 @@ th.w-10 {
   }
 
   .wiki-sidebar.affix {
-    position: fixed; /* Undo the static from mobile first approach */
+    position: fixed;
+    /* Undo the static from mobile first approach */
     top: 20px;
   }
 
   .wiki-sidebar.affix-bottom {
-    position: absolute; /* Undo the static from mobile first approach */
+    position: absolute;
+    /* Undo the static from mobile first approach */
   }
 
   .wiki-sidebar.affix-bottom .wiki-sidenav,
