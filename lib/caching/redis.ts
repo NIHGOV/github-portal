@@ -36,7 +36,9 @@ export default class RedisHelper implements ICacheHelper {
     this._redis = options.redisClient;
     this._redisForBuffers = this._redis.withCommandOptions({
       // v5 breaking change: https://github.com/redis/node-redis/blob/master/docs/v4-to-v5.md#command-options
-      [RESP_TYPES.BLOB_STRING as unknown as any]: Buffer,
+      typeMapping: {
+        [RESP_TYPES.BLOB_STRING]: Buffer,
+      },
     });
   }
 
