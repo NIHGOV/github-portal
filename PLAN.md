@@ -71,6 +71,50 @@ Fixes `DEP0005` (`Buffer()`) and `DEP0169` (`url.parse()`) deprecation warnings 
 - `lib/mail/render.ts` + `render.test.ts` — replaced `import type NodeClient from 'applicationinsights/out/Library/NodeClient.js'` (internal v2 path, broken in v3) with `import type { TelemetryClient } from 'applicationinsights'`
 - `middleware/appInsights.ts` — removed `wrapWithCorrelationContext` / `getCorrelationContext` / `startOperation` (v2 correlation model removed; v3 propagates context automatically via OpenTelemetry async hooks); removed deprecated `instrumentationKey` reference
 
+### ✅ Suppressed OTel/require-in-the-middle verbose log flood (May 2026)
+
+`applicationinsights` v3 is built on OpenTelemetry and logs every `require()` intercept to stderr at VERBOSE level, flooding Azure's ERROR log stream.
+
+- `middleware/appInsights.ts` — added `diag.setLogger({…}, DiagLogLevel.NONE)` from `@opentelemetry/api` before SDK setup to silence all OTel diagnostic output
+- `package.json` — added `@opentelemetry/api` as a direct dependency (was transitive-only; lint rule requires explicit declaration)
+
+**Note:** The `DEBUG` Azure App Service env var (if set to `*` or a broad pattern) separately causes `debug`-module output from `router`, `body-parser`, `express-session`, etc. to appear as ERROR-level logs. Remove the `DEBUG` app setting in the portal to silence that flood.
+
+### ✅ Guarded per-request JSON.parse failures with logging + safe fallback (May 2026)
+
+The app was crashing on every authenticated page with `SyntaxError: Unexpected token '', "❬U+FFFD❭"…` but the error was going to stdout (INFO), invisible in Azure's ERROR log stream.
+
+- `middleware/business/authentication.ts` — wrapped `JSON.parse(oauthToken)` in try/catch; logs to `console.error` with correlation ID and token prefix; falls back to `signoutThenSignIn()` to clear corrupted session
+- `middleware/errorHandler.ts` — changed primary error log from `console.log` → `console.error` so all error messages appear in Azure's ERROR stream; wrapped `JSON.parse(err.data)` in try/catch to prevent the error handler itself from crashing mid-response
+
+### ✅ Fixed CI test runner (vitest vs bun native runner) (May 2026)
+
+All 3 CI test failures were caused by `ci.yml` running `bun test` (Bun's native Jest-compatible runner) while the test files explicitly `import { describe, expect, test } from 'vitest'` and the project is configured with `vitest.config.ts`. The two runners handle `.not.toThrow()` and Chai-style assertions differently.
+
+- `.github/workflows/ci.yml` — changed `bun test` → `bun run test` (runs `vitest run` per `package.json` scripts)
+- `AGENTS.md` — updated documented test command to match
+
+### ✅ Fixed Redis v5 `withCommandOptions` typeMapping for compressed cache (May 2026)
+
+Every request hitting a cached GitHub API result (org members, repos, teams) was throwing `SyntaxError: Unexpected token '', "❬U+FFFD❭"` traced to `RedisHelper.getObjectCompressed`.
+
+**Root cause:** `_redisForBuffers` was created with `{ [RESP_TYPES.BLOB_STRING]: Buffer }` but redis v5 requires the type override under a `typeMapping` key. Without it the client decoded gzip-compressed binary as UTF-8 (producing U+FFFD replacement chars), which then failed `JSON.parse` after the corrupt string bypassed gunzip via the `Z_DATA_ERROR` fallback path.
+
+- `lib/caching/redis.ts` — changed `withCommandOptions({ [RESP_TYPES.BLOB_STRING]: Buffer })` → `withCommandOptions({ typeMapping: { [RESP_TYPES.BLOB_STRING]: Buffer } })`
+
+### ✅ Fixed missing and crashing octicon + hardened helper (May 2026)
+
+`@primer/octicons` v19 removed `primitive-dot` (renamed to `dot-fill`). The octicon helper threw an uncaught `Error` on any unknown icon name, crashing the entire Pug render and returning a 500.
+
+- `views/repos/index.pug`, `views/repos/repo.pug`, `views/org/team/index.pug` — `primitive-dot` → `dot-fill`
+- `lib/pugViewServices.ts` — changed throw → `console.warn` + `return ''` so an unknown icon name renders as empty rather than crashing the page
+
+### ✅ Suppressed mouse-click focus ring (Edge Chromium accessibility change) (May 2026)
+
+Edge 102+ strengthened the default `:focus` ring to a thick double-ring (blue + white offset) for WCAG 2.1 AA compliance. Bootstrap 3 triggers `:focus` on mouse clicks (not just keyboard), making every anchor click show the heavy ring.
+
+- `default-assets-package/resources/repos-css/oss.css` — added `a:focus:not(:focus-visible) { outline: none; }` to suppress the ring for pointer clicks while preserving it for keyboard navigation
+
 ---
 
 ## High Priority
@@ -144,7 +188,7 @@ The following settings are also required or the app crashes/misbehaves at runtim
 | `AUTHENTICATION_SCHEME`                      | `entra-id`                                                                                                                           | Default `aad` throws on startup since upstream sync                                                                   |
 | `ApplicationInsightsAgent_EXTENSION_VERSION` | `disabled`                                                                                                                           | Codeless agent floods logs and slows cold starts                                                                      |
 | `FRONTEND_MODE`                              | `skip`                                                                                                                               | No `frontend/` directory in repo; default `serve` crashes during route setup                                          |
-| `REDIS_KEY`   _                              | _(Azure Ca_he for Redis primary access key)_                                                                                         | Without it, all Redis commands fail with `NOAUTH Authentication required`                                             |
+| `REDIS_KEY` \_                               | _(Azure Ca_he for Redis primary access key)_                                                                                         | Without it, all Redis commands fail with `NOAUTH Authentication required`                                             |
 | `ENTRA_ID_AUTHENTICATION_TYPE`               | `secret`                                                                                                                             | Default `managed-identity` silently skips passport strategy registration → "Unknown authentication strategy entra-id" |
 | `ENTRA_ID_AUTHENTICATION_CLIENT_ID`          | = `AAD_CLIENT_ID`                                                                                                                    | Used by passport strategy (separate from `ENTRA_ID_CLIENT_ID`)                                                        |
 | `ENTRA_ID_AUTHENTICATION_CLIENT_SECRET`      | = `AAD_CLIENT_SECRET`                                                                                                                |                                                                                                                       |
