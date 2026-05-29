@@ -6,7 +6,7 @@ Notes for AI coding agents working on this repository.
 
 - **Package manager:** bun only. Never `npm install`. Lockfile: `bun.lock`.
 - **Node:** 24.x. Do not downgrade.
-- **Tests:** `bun test` (vitest). Not `npm test`.
+- **Tests:** `bun run test` (vitest). Not `bun test` (that's Bun's native runner — incompatible). Not `npm test`.
 - **Lint** (also enforced by pre-push hook): `bun run lint:md && bun run lint:js && bun run lint:spell`
 - **Prettier** enforced via ESLint. Run `bunx prettier --write <files>` after large edits.
 - **cSpell** allowlist: `.cspell.json`. Add real words that CI flags.
