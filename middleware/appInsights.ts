@@ -12,6 +12,12 @@ import debug from 'debug';
 const debugStartup = debug('startup');
 
 import appinsights from 'applicationinsights';
+import { DiagLogLevel, diag } from '@opentelemetry/api';
+// Suppress verbose OTel/require-in-the-middle diagnostic messages that flood Azure stderr logs
+diag.setLogger(
+  { error: () => {}, warn: () => {}, info: () => {}, debug: () => {}, verbose: () => {} },
+  DiagLogLevel.NONE
+);
 import type {
   IReposApplication,
   IProviders,
