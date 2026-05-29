@@ -5,6 +5,12 @@ on:
     branches-ignore:
       - 'dependabot/**'
       - trunk
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.vscode/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/prompts/**'
   pull_request:
 
 jobs:
