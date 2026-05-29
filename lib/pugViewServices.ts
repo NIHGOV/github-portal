@@ -18,7 +18,8 @@ export default {
   octicon: function (name, optionalWidth, classes, optionalAria) {
     const icon = octicons[name];
     if (!icon || typeof icon.toSVG !== 'function') {
-      throw new Error(`Missing octicon ${name}`);
+      console.warn(`Missing octicon: ${name}`);
+      return '';
     }
     const options: {
       width?: string | number;
