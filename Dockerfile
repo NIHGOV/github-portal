@@ -62,9 +62,7 @@ COPY --from=build /build/data ./data
 # Copy built assets, app, config map
 COPY --from=build /build/dist ./
 
-# Copy frontend app
-COPY --from=build /build/frontend/build ./frontend/build
-COPY --from=build /build/frontend/package.json ./frontend/package.json
+# No frontend/ directory in this fork (FRONTEND_MODE=skip); omit those COPY steps.
 
 # The open source project build needs: default assets should be placed
 COPY --from=build /build/default-assets-package ./default-assets-package
