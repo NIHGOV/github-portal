@@ -6,6 +6,12 @@
 */
 
 /* BEGIN NIH OVERRIDE */
+
+/* Suppress focus ring on mouse/pointer clicks; keep it for keyboard navigation */
+a:focus:not(:focus-visible) {
+  outline: none;
+}
+
 .navbar-default .navbar-nav > .active > a {
   color: #fff;
   background-color: #20558a;
