@@ -49,8 +49,16 @@ export async function requireAccessTokenClient(req: ReposAppRequest, res: Respon
   // Build an OAuth Access Token instance for the request, refreshing as needed
   const { oauthToken } = req.user.azure;
   if (authorizationCodeClient && oauthToken) {
-    const hydratedToken = JSON.parse(oauthToken);
-    let oauthTokenInstance = authorizationCodeClient.createToken(hydratedToken);
+    let hydratedToken: unknown;
+    try {
+      hydratedToken = JSON.parse(oauthToken);
+    } catch (parseError) {
+      console.error(
+        `[requireAccessTokenClient] JSON.parse(oauthToken) failed (correlationId=${req.correlationId}): ${parseError?.message ?? parseError}. oauthToken prefix: ${typeof oauthToken === 'string' ? oauthToken.slice(0, 40) : typeof oauthToken}`
+      );
+      return signoutThenSignIn(req, res);
+    }
+    let oauthTokenInstance = authorizationCodeClient.createToken(hydratedToken as any);
     if (oauthTokenInstance.expired()) {
       oauthTokenInstance = await oauthTokenInstance.refresh();
       const session = req.session as IAppSession;

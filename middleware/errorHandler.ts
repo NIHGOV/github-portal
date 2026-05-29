@@ -149,7 +149,7 @@ export default function SiteErrorHandler(
     }
   }
   if (err !== undefined && err.skipLog !== true) {
-    console.log('Error: ' + (err && err.message ? err.message : 'Error is undefined.'));
+    console.error('Error: ' + (err && err.message ? err.message : 'Error is undefined.'));
     if (err.stack && !isJson) {
       console.error(err.stack);
     }
@@ -172,10 +172,19 @@ export default function SiteErrorHandler(
     const detailed = err.message;
     err = err.oauthError;
     err.status = err.statusCode;
-    const data = JSON.parse(err.data);
-    if (data && data.message) {
-      err.message = err.statusCode + ': ' + data.message;
-    } else {
+    try {
+      const data = JSON.parse(err.data);
+      if (data && data.message) {
+        err.message = err.statusCode + ': ' + data.message;
+      } else {
+        err.message =
+          err.statusCode +
+          ' Unauthorized received. You may have exceeded your GitHub API rate limit or have an invalid auth token at this time.';
+      }
+    } catch (parseError) {
+      console.error(
+        `[errorHandler] JSON.parse(oauthError.data) failed: ${parseError?.message ?? parseError}`
+      );
       err.message =
         err.statusCode +
         ' Unauthorized received. You may have exceeded your GitHub API rate limit or have an invalid auth token at this time.';
