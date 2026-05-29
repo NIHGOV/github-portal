@@ -66,6 +66,17 @@ jobs:
           find node_modules -name '*.map' -delete
           find node_modules -name '*.d.ts' -delete
 
+      - name: Stamp build number into package.json
+        # continuousDeployment.js reads GITHUB_RUN_NUMBER at startup to build the
+        # version string (major.minor.runNumber), but that env var is only present
+        # during the workflow run — not on the deployed App Service. Baking it into
+        # package.json (matching the same placeholder as container.yml) makes the
+        # displayed version reflect the actual GitHub Actions run number.
+        run: |
+          sed -i "s/__Build_BuildNumber__/${{ github.run_number }}/" package.json
+          sed -i "s/__Build_BranchName__/${{ github.ref_name }}/" package.json
+          sed -i "s/__Build_SourceVersion__/${{ github.sha }}/" package.json
+
       - name: Package application for deployment
         # Deployed with WEBSITE_RUN_FROM_PACKAGE=1: the zip is mounted
         # READ-ONLY and IMMUTABLE at /home/site/wwwroot on each cold start.
