@@ -5,6 +5,7 @@ Notes for AI coding agents working on this repository.
 ## Dev environment
 
 - **Package manager:** bun only. Never `npm install`. Lockfile: `bun.lock`.
+- **Before committing:** Update `PLAN.md` with a summary of any fix or change made in that commit.
 - **Node:** 24.x. Do not downgrade.
 - **Tests:** `bun run test` (vitest). Not `bun test` (that's Bun's native runner — incompatible). Not `npm test`.
 - **Lint** (also enforced by pre-push hook): `bun run lint:md && bun run lint:js && bun run lint:spell`
@@ -41,6 +42,10 @@ All settings apply to both `nihdevgithubportal` and `nihgithubportal` unless not
 | `REDIS_KEY`                                  | _(Redis access key)_                                                                                                                 | Azure Cache for Redis → Access keys → Primary                                                                |
 
 Keep old `AAD_*` settings — `AAD_ISSUER`, `AAD_BLOCK_GUESTS`, `AAD_BLOCK_GUEST_LINKING`, `AAD_MULTI_TENANT` are still read by other config paths.
+
+**`DEBUG` setting:** Do not set this (or leave blank) on either App Service. If set to a broad pattern (e.g. `*`), the `debug` module sends router/body-parser/express-session traces to stderr, which appears in Azure's ERROR log stream and makes real errors hard to find.
+
+**Production workflow migration pending:** `main_nihgithubportal.yml` still uses the legacy `tar.gz` Kudu additive deploy and will hit the `createTracingClient` crash loop when `staging` merges to `main`. See PLAN.md §0 for the full checklist.
 
 ## Known startup errors → fix
 

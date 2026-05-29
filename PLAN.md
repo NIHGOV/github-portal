@@ -6,6 +6,12 @@ Priority-ordered list of security improvements identified across this repository
 
 ## Completed (May 2026 — GitHub Copilot agentic session)
 
+### ✅ Fixed version always showing 8.5.0 instead of 8.5.\<build\> (May 2026)
+
+`continuousDeployment.js` constructs the displayed version as `major.minor.GITHUB_RUN_NUMBER`, but `GITHUB_RUN_NUMBER` is only set during a GitHub Actions run — not on the deployed App Service. The packaging step never stamped the placeholder in `package.json`, so `stripPlaceholders()` deleted it and the code fell back to the literal `pkg.version` string `8.5.0`.
+
+- `.github/workflows/staging_nihdevgithubportal.yml` — added a "Stamp build number" step before packaging that runs `sed` to replace `__Build_BuildNumber__`, `__Build_BranchName__`, and `__Build_SourceVersion__` with `github.run_number`, `github.ref_name`, and `github.sha` respectively (same approach already used by `container.yml`)
+
 ### ✅ Synced upstream microsoft/opensource-management-portal → NIHGOV:staging (PR #1099)
 
 Merged `microsoft/opensource-management-portal:main` into `NIHGOV/github-portal:staging` on branch `sync-upstream-main-20260527`. Resolved 7 merge conflicts, preserving NIH-specific code:
@@ -160,6 +166,18 @@ az webapp config set --name nihgithubportal --resource-group <RG> \
 - [ ] Strip `*.map` and `*.d.ts` from `node_modules` to keep the zip small (~200 MB savings).
 - [ ] Pass the zip directly to `azure/webapps-deploy` via `package: node-app.zip` (no re-zipping by the action).
 - [ ] Remove any `node_modules.tar.gz` Oryx hack if present — with run-from-package, Oryx is fully bypassed.
+- [ ] Add a "Stamp build number" step (before packaging) matching the step added to `staging_nihdevgithubportal.yml`:
+
+  ```yaml
+  - name: Stamp build number into package.json
+    run: |
+      sed -i "s/__Build_BuildNumber__/${{ github.run_number }}/" package.json
+      sed -i "s/__Build_BranchName__/${{ github.ref_name }}/" package.json
+      sed -i "s/__Build_SourceVersion__/${{ github.sha }}/" package.json
+  ```
+
+  Without this the displayed version is always `8.5.0` — `continuousDeployment.js` reads `GITHUB_RUN_NUMBER` at startup but that env var is only present during the Actions run, not on App Service.
+- [ ] Remove the `DEBUG` app setting from `nihgithubportal` (or leave it blank). If set to any broad pattern (e.g. `*`), the `debug` module floods the ERROR log stream with router/body-parser/express-session traces that look like real errors.
 
 #### Caveat — read-only `wwwroot`
 
