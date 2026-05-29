@@ -18,7 +18,10 @@ export default (graphApi) => {
   const environmentProvider = graphApi.environment;
   // Useful information to help understand which CI/CD pipeline the app came from
   const continuousDeployment = stripPlaceholders(pkg.continuousDeployment);
-  const runNumber = environmentProvider.get('GITHUB_RUN_NUMBER');
+  // Prefer the live env var (set during Actions runs); fall back to the value
+  // baked into package.json by the workflow's "Stamp build number" step so
+  // that the deployed App Service shows e.g. "8.5.103" rather than "8.5.0".
+  const runNumber = environmentProvider.get('GITHUB_RUN_NUMBER') || continuousDeployment.build;
   const [major, minor] = pkg.version.split('.');
   continuousDeployment.version = runNumber ? `${major}.${minor}.${runNumber}` : pkg.version;
   continuousDeployment.name = pkg.name;
