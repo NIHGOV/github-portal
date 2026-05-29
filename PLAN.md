@@ -11,6 +11,20 @@ Priority-ordered list of security improvements identified across this repository
 `continuousDeployment.js` constructs the displayed version as `major.minor.GITHUB_RUN_NUMBER`, but `GITHUB_RUN_NUMBER` is only set during a GitHub Actions run — not on the deployed App Service. The packaging step never stamped the placeholder in `package.json`, so `stripPlaceholders()` deleted it and the code fell back to the literal `pkg.version` string `8.5.0`.
 
 - `.github/workflows/staging_nihdevgithubportal.yml` — added a "Stamp build number" step before packaging that runs `sed` to replace `__Build_BuildNumber__`, `__Build_BranchName__`, and `__Build_SourceVersion__` with `github.run_number`, `github.ref_name`, and `github.sha` respectively (same approach already used by `container.yml`)
+- `.github/workflows/main_nihgithubportal.yml` — same stamp step added
+
+### ✅ Migrated production workflow to `WEBSITE_RUN_FROM_PACKAGE=1` (May 2026)
+
+`main_nihgithubportal.yml` still used the legacy Kudu additive `tar.gz` deploy, which accumulates stale nested `node_modules` across deploys and causes `createTracingClient` ESM export crashes. Updated to match `staging_nihdevgithubportal.yml`:
+
+- Removed `tar -czf output.tar.gz` + "Unpack tar" steps; replaced with `rsync` + `zip` into `/tmp/node-app.zip` with `github-portal/` as the root entry
+- Added bun dependency cache step
+- Added `Strip dev artifacts` step (`find node_modules -name '*.map' -delete` + `*.d.ts`)
+- Added `Stamp build number` step (fixes version display, same as staging)
+- Passes `package: node-app.zip` directly to `azure/webapps-deploy` (no re-zip)
+- Added bun-version: latest + comments mirroring staging
+
+**Still required (one-time manual action in Azure portal):** Apply the `WEBSITE_RUN_FROM_PACKAGE=1` App Service settings to `nihgithubportal` before the first deploy from `main` — see §0 below.
 
 ### ✅ Synced upstream microsoft/opensource-management-portal → NIHGOV:staging (PR #1099)
 
@@ -125,24 +139,19 @@ Edge 102+ strengthened the default `:focus` ring to a thick double-ring (blue + 
 
 ## High Priority
 
-### 0. **When `staging` merges to `main`: apply `WEBSITE_RUN_FROM_PACKAGE=1` to production**
+### 0. **Before merging `staging` to `main`: apply `WEBSITE_RUN_FROM_PACKAGE=1` to `nihgithubportal` App Service**
 
-**Background — read this first if production is crash-looping after the merge.**
+The production **workflow** (`main_nihgithubportal.yml`) has been updated to use zip packaging + run-from-package (see Completed section above). But the **Azure App Service itself** still needs its settings updated — otherwise the first deploy from `main` will crash because the App Service still expects the old Kudu additive model.
 
-The staging deploy workflow (`.github/workflows/staging_nihdevgithubportal.yml`) was switched to Azure's run-from-package deployment model to fix a persistent crash loop on `nihdevgithubportal`. The production workflow (`.github/workflows/main_nihgithubportal.yml`) and the production App Service (`nihgithubportal`) still use the legacy Kudu additive zip deploy and **will hit the exact same crash the first time `main` is updated with the bun-based deploy artifact.**
-
-**The crash (for context):**
+**If the app crash-loops with:**
 
 ```text
 SyntaxError: The requested module '@azure/core-tracing' does not provide an export named 'createTracingClient'
-  at file:///home/site/wwwroot/github-portal/node_modules/@azure/storage-blob/dist/esm/utils/tracing.js:3
 ```
 
-**Root cause:** Kudu zip deploy is _additive_ — it only overlays files and never deletes anything. The original npm-based deployment left deeply nested copies of `@azure/core-tracing@1.0.0-preview.11` (legacy CJS preview, no `createTracingClient` export) under sibling `@azure/*` packages' own `node_modules/` directories. Our bun-installed layout hoists flat and never writes files at those nested paths, so Kudu has nothing to overwrite them with. Node.js resolution from `@azure/storage-blob` walks up and finds the OLD nested copy before reaching our correct `@azure/core-tracing@1.3.1`. **No amount of file-shipping fixes this** — the persistent `wwwroot` keeps accumulating cruft from every previous deploy forever.
+the App Service settings below were not yet applied. Apply them and redeploy.
 
-**Fix:** switch the production App Service to `WEBSITE_RUN_FROM_PACKAGE=1`. The zip is mounted _read-only and immutable_ at `/home/site/wwwroot` on every cold start, so there is no persistent filesystem to accumulate stale files. Every deploy is a complete, atomic state.
-
-#### Production App Service settings to add (one-time, in Azure portal → `nihgithubportal` → Configuration)
+#### Required one-time settings (Azure portal → `nihgithubportal` → Configuration)
 
 | Name                               | Value                                                |
 | ---------------------------------- | ---------------------------------------------------- |
@@ -159,25 +168,6 @@ az webapp config appsettings set --name nihgithubportal --resource-group <RG> \
 az webapp config set --name nihgithubportal --resource-group <RG> \
   --startup-file "node /home/site/wwwroot/github-portal/dist/bin/www"
 ```
-
-#### Workflow changes needed (mirror what was done to `staging_nihdevgithubportal.yml`)
-
-- [ ] Drop the `output.tar.gz` step and the "Unpack tar" step — produce a zip with `github-portal/` as the root entry containing `dist/`, `node_modules/`, etc.
-- [ ] Strip `*.map` and `*.d.ts` from `node_modules` to keep the zip small (~200 MB savings).
-- [ ] Pass the zip directly to `azure/webapps-deploy` via `package: node-app.zip` (no re-zipping by the action).
-- [ ] Remove any `node_modules.tar.gz` Oryx hack if present — with run-from-package, Oryx is fully bypassed.
-- [ ] Add a "Stamp build number" step (before packaging) matching the step added to `staging_nihdevgithubportal.yml`:
-
-  ```yaml
-  - name: Stamp build number into package.json
-    run: |
-      sed -i "s/__Build_BuildNumber__/${{ github.run_number }}/" package.json
-      sed -i "s/__Build_BranchName__/${{ github.ref_name }}/" package.json
-      sed -i "s/__Build_SourceVersion__/${{ github.sha }}/" package.json
-  ```
-
-  Without this the displayed version is always `8.5.0` — `continuousDeployment.js` reads `GITHUB_RUN_NUMBER` at startup but that env var is only present during the Actions run, not on App Service.
-- [ ] Remove the `DEBUG` app setting from `nihgithubportal` (or leave it blank). If set to any broad pattern (e.g. `*`), the `debug` module floods the ERROR log stream with router/body-parser/express-session traces that look like real errors.
 
 #### Caveat — read-only `wwwroot`
 

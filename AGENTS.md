@@ -45,7 +45,7 @@ Keep old `AAD_*` settings — `AAD_ISSUER`, `AAD_BLOCK_GUESTS`, `AAD_BLOCK_GUEST
 
 **`DEBUG` setting:** Do not set this (or leave blank) on either App Service. If set to a broad pattern (e.g. `*`), the `debug` module sends router/body-parser/express-session traces to stderr, which appears in Azure's ERROR log stream and makes real errors hard to find.
 
-**Production workflow migration pending:** `main_nihgithubportal.yml` still uses the legacy `tar.gz` Kudu additive deploy and will hit the `createTracingClient` crash loop when `staging` merges to `main`. See PLAN.md §0 for the full checklist.
+**Production workflow migration done:** `main_nihgithubportal.yml` now uses the same zip + `WEBSITE_RUN_FROM_PACKAGE=1` model as staging. Before the first deploy from `main`, apply the one-time App Service settings in PLAN.md §0.
 
 ## Known startup errors → fix
 
