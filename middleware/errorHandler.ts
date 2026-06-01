@@ -228,7 +228,7 @@ export default function SiteErrorHandler(
     title: err.title || (err.status === 404 ? 'Not Found' : defaultErrorTitle),
     primaryUser: primaryUserInstance,
     user: req.user,
-    config: config && config.obfuscatedConfig ? config.obfuscatedConfig : null,
+    config: config || null,
   };
 
   // Depending on the library in use, we get everything from non-numeric textual status
