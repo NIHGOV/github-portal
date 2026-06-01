@@ -51,7 +51,6 @@ const linkInterfacePropertyMapping: IMemoryLinkProperties = {
   corporateUsername: 'aadupn',
   corporateDisplayName: 'aadname',
   corporateMailAddress: 'corporateMailAddress',
-  corporateAlias: 'corporateAlias',
 
   thirdPartyId: 'ghid',
   thirdPartyUsername: 'ghu',

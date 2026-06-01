@@ -57,7 +57,6 @@ const linkInterfacePropertyMapping: IPostgresLinkProperties = {
   corporateUsername: 'corporateusername',
   corporateDisplayName: 'corporatename',
   corporateMailAddress: 'corporatemail',
-  corporateAlias: 'corporatealias',
 
   isServiceAccount: 'serviceaccount',
   serviceAccountMail: 'serviceaccountmail',
@@ -76,7 +75,6 @@ const coreColumns = [
   'corporateusername',
   'corporatename',
   'corporatemail',
-  'corporatealias',
   'serviceaccount',
   'serviceaccountmail',
   'created',

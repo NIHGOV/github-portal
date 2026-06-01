@@ -201,26 +201,6 @@ export class Account {
     return null;
   }
 
-  corporateAlias() {
-    // NOTE: this is a hack
-    if (this.contactEmail()) {
-      const email = this.contactEmail();
-      const i = email.indexOf('@');
-      if (i >= 0) {
-        return email.substring(0, i);
-      }
-    }
-  }
-
-  corporateProfileUrl() {
-    const config = this._operations.providers.config;
-    const alias = this.corporateAlias();
-    const corporateSettings = config.corporate;
-    if (alias && corporateSettings && corporateSettings.profile && corporateSettings.profile.prefix) {
-      return corporateSettings.profile.prefix + alias;
-    }
-  }
-
   avatar(optionalSize) {
     if (this._avatar_url) {
       return this._avatar_url + '&s=' + (optionalSize || 80);

@@ -179,7 +179,6 @@ export class MemberSearch {
   async getCorporateProfiles(): Promise<MemberSearch> {
     // const projectLinkAsCorporateProfile = this.type !== 'former';
     // corporate.alias -> corporateMailAddress (?)
-    // corporate.emailAddress -> corporateAlias
     return this;
   }
 
@@ -318,7 +317,7 @@ function translateMembers(members, isOrganizationScoped, optionalLinks) {
 function memberMatchesPhrase(member: OrganizationMember, phrase: string) {
   const link = member.link as ICorporateLink;
   const linkIdentity = link
-    ? `${link.corporateUsername} ${link.corporateDisplayName} ${link.corporateId} ${link.thirdPartyUsername} ${link.thirdPartyId} ${link.corporateMailAddress} ${link.corporateAlias}`
+    ? `${link.corporateUsername} ${link.corporateDisplayName} ${link.corporateId} ${link.thirdPartyUsername} ${link.thirdPartyId} ${link.corporateMailAddress}`
     : '';
   const accountIdentity = member?.login || '';
   const combined = (linkIdentity + ' ' + accountIdentity).toLowerCase();

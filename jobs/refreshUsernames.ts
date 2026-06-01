@@ -36,19 +36,11 @@ async function refresh(providers: IProviders): Promise<IReposJobResult> {
     return;
   }
 
-  const backfillAliasesOnly = config.process.get('BACKFILL_ALIASES') === '1';
   const terminateLinksAndMemberships = config.process.get('REFRESH_USERNAMES_TERMINATE_ACCOUNTS') === '1';
 
   console.log('reading all links');
-  let allLinks = shuffle(await linkProvider.getAll());
+  const allLinks = shuffle(await linkProvider.getAll());
   console.log(`READ: ${allLinks.length} links`);
-
-  let backfilledCount = 0;
-  if (backfillAliasesOnly) {
-    console.log(`backfilling aliases only`);
-    allLinks = allLinks.filter((link) => !link.corporateAlias);
-    console.log(`FILTERED: ${allLinks.length} links needing aliases`);
-  }
 
   insights.trackEvent({
     name: 'JobRefreshUsernamesReadLinks',
@@ -64,7 +56,7 @@ async function refresh(providers: IProviders): Promise<IReposJobResult> {
   let updatedAvatars = 0;
   let updatedAadNames = 0;
   let updatedCorporateMails = 0;
-  let updatedAadUpns = 0; // should be super rare
+  let updatedAadUpns = 0;
 
   const userDetailsThroatCount = 1;
   const secondsDelayAfterError = 5;
@@ -143,15 +135,6 @@ async function refresh(providers: IProviders): Promise<IReposJobResult> {
                 changed = true;
                 ++updatedCorporateMails;
               }
-              if (graphInfo.mailNickname && link.corporateAlias !== graphInfo.mailNickname.toLowerCase()) {
-                link.corporateAlias = graphInfo.mailNickname.toLowerCase();
-                changed = true;
-                if (backfillAliasesOnly) {
-                  ++backfilledCount;
-                }
-              } else if (!graphInfo.mailNickname && backfillAliasesOnly) {
-                console.warn(`No mailNickname for ${link.corporateId} (${link.corporateUsername})`);
-              }
             }
           } catch (graphLookupError) {
             // Ignore graph lookup issues, other jobs handle terminated employees
@@ -215,12 +198,6 @@ async function refresh(providers: IProviders): Promise<IReposJobResult> {
       })
     )
   );
-
-  if (backfillAliasesOnly) {
-    console.log();
-    console.log(`Backfilled ${backfilledCount} aliases`);
-    console.log();
-  }
 
   console.log('All done with', errors, 'errors. Not found errors:', notFoundErrors);
   console.dir(errorList);

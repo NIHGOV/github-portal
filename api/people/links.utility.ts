@@ -96,7 +96,6 @@ export async function getAllUsers(
       if (corporate) {
         const corporatePropertyName = apiVersion === '2016-12-01' ? 'corporate' : 'aad'; // This was renamed to be provider name-based
         entry[corporatePropertyName] = {
-          alias: corporate.corporateAlias,
           preferredName: corporate.corporateDisplayName,
           userPrincipalName: corporate.corporateUsername,
           emailAddress: corporate.corporateMailAddress,

@@ -41,9 +41,7 @@ block content
                       br
                       small This user may have been added by a GitHub administrator for the organization. The user is not registered in the table of identities.
                 if teamMember.link
-                  td
-                    a.btn.btn-sm.btn-muted(href=teamMember.corporateProfileUrl(), target='_new')
-                      = teamMember.corporateAlias() || teamMember.link.aadupn
+                  td= teamMember.link.corporateUsername
                 else
                   td ?
                 td.twentypercent

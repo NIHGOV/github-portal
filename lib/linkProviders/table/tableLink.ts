@@ -64,14 +64,6 @@ export class CorporateTableLink implements ICorporateLinkExtended {
     _updateColumn(this, this._provider.propertyMapping.corporateMailAddress, value);
   }
 
-  get corporateAlias() {
-    return this._entity[this._provider.propertyMapping.corporateAlias];
-  }
-
-  set corporateAlias(value: string) {
-    _updateColumn(this, this._provider.propertyMapping.corporateAlias, value);
-  }
-
   get corporateUsername(): string {
     return this._entity[this._provider.propertyMapping.corporateUsername];
   }

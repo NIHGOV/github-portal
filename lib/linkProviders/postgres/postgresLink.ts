@@ -84,14 +84,6 @@ export class CorporateLinkPostgres implements ICorporateLink {
     _updateColumn(this, this._provider.propertyMapping.corporateMailAddress, value);
   }
 
-  get corporateAlias() {
-    return this._entity[this._provider.propertyMapping.corporateAlias];
-  }
-
-  set corporateAlias(value: string) {
-    _updateColumn(this, this._provider.propertyMapping.corporateAlias, value);
-  }
-
   get thirdPartyUsername(): string {
     return this._entity[this._provider.propertyMapping.thirdPartyUsername];
   }

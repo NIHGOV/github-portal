@@ -56,7 +56,6 @@ export default async function postLinkApi(req: ReposApiRequest, res: Response, n
     corporateUsername: null,
     corporateDisplayName: null,
     corporateMailAddress: null,
-    corporateAlias: null,
     isServiceAccount: false,
     serviceAccountMail,
   };

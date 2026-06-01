@@ -400,7 +400,6 @@ router.post('/whois/link/', async function (req: ReposAppRequest, res: Response,
     serviceAccountMail: req.body['serviceAccountMail'],
     // these both values are currently not transferred, but required by the link object
     corporateMailAddress: '',
-    corporateAlias: '',
   };
 
   const messages = [];

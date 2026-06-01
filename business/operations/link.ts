@@ -77,10 +77,6 @@ export async function linkAccounts(
       link.corporateDisplayName = corporateAccount.displayName;
       link.corporateUsername = corporateAccount.userPrincipalName;
       link.corporateMailAddress = corporateAccount.mail;
-      // NOTE: strongly typed to the AAD graph info response right now instead of more generic
-      if (corporateAccount.mailNickname) {
-        link.corporateAlias = corporateAccount.mailNickname.toLowerCase();
-      }
       // Validate that the corporate account can be linked
       if (corporateInfo.type === SupportedLinkType.ServiceAccount) {
         if (!link.serviceAccountMail) {

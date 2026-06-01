@@ -22,7 +22,6 @@ export const CorporatePropertyNames = [
 export function corporateLinkToJson(link: ICorporateLink): ICorporateLink {
   return (
     link && {
-      corporateAlias: link.corporateAlias,
       corporateDisplayName: link.corporateDisplayName,
       corporateId: link.corporateId,
       corporateMailAddress: link.corporateMailAddress,

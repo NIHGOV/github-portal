@@ -409,15 +409,9 @@ async function getByThirdPartyId(
       entry.serviceAccountContact = link.serviceAccountMail;
     }
   }
-  if (
-    link?.corporateAlias ||
-    link?.corporateDisplayName ||
-    link?.corporateMailAddress ||
-    link?.corporateUsername
-  ) {
+  if (link?.corporateDisplayName || link?.corporateMailAddress || link?.corporateUsername) {
     const corporatePropertyName = apiVersion === '2016-12-01' ? 'corporate' : 'aad'; // This was renamed to be provider name-based
     entry[corporatePropertyName] = {
-      alias: link?.corporateAlias,
       preferredName: link?.corporateDisplayName,
       userPrincipalName: link?.corporateUsername,
       emailAddress: link?.corporateMailAddress,

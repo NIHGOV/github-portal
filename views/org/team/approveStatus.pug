@@ -163,17 +163,10 @@ block content
               a.btn.btn-sm.btn-muted(href='https://github.com/' + requestingUser.login, target='_new')= requestingUser.login
           td
             p
-              if requestingUser.link && requestingUser.corporateAlias()
-                if requestingUser.link.aadname
-                  a.btn.btn-sm.btn-muted(href=requestingUser.corporateProfileUrl(), target='_new')= requestingUser.link.aadname
-                if requestingUser.corporateAlias()
-                  a.btn.btn-sm.btn-muted-more(href=requestingUser.corporateProfileUrl(), target='_new')
-                    = requestingUser.corporateAlias() + ' '
-                    i.glyphicon.glyphicon-share-alt
-                else if requestingUser.link.aadupn
-                  = requestingUser.link.aadupn
-                else
-                  | UNKNOWN ALIAS
+              if requestingUser.link
+                if requestingUser.link.corporateDisplayName
+                  = requestingUser.link.corporateDisplayName + ' '
+                = requestingUser.link.corporateUsername
               | &nbsp;
               if metadata.email
                 a.btn.btn-sm.btn-default(href='mailto:' + metadata.email) Send Mail

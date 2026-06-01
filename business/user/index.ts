@@ -568,8 +568,7 @@ export class IndividualContext {
       corporateId: corporateIdentity.id,
       corporateUsername: corporateIdentity.username,
       corporateDisplayName: corporateIdentity.displayName,
-      corporateMailAddress: null,
-      corporateAlias: null,
+      corporateMailAddress: corporateIdentity.username ?? null,
       isServiceAccount: false,
       serviceAccountMail: undefined,
     };

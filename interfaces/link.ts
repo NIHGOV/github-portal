@@ -11,7 +11,6 @@ export interface ICorporateLinkProperties {
   corporateUsername: any;
   corporateDisplayName: any;
   corporateMailAddress: any;
-  corporateAlias: any;
 
   thirdPartyId: any;
   thirdPartyUsername: any;
@@ -26,7 +25,6 @@ export interface ICorporateLink extends ICorporateLinkProperties {
   corporateUsername: string;
   corporateDisplayName: string;
   corporateMailAddress: string;
-  corporateAlias: string;
 
   thirdPartyId: string;
   thirdPartyUsername: string;

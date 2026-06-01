@@ -96,7 +96,6 @@ router.get('/users-report', async (req: ReposAppRequest, res, next) => {
                 corporateId: CorporateId,
                 corporateMailAddress: CorporateMailAddress,
                 corporateUsername: CorporateUsername,
-                corporateAlias: CorporateAlias,
                 corporateDisplayName: CorporateDisplayName,
               } = memberLink;
 
@@ -105,7 +104,6 @@ router.get('/users-report', async (req: ReposAppRequest, res, next) => {
                 ...{
                   CorporateId,
                   CorporateUsername,
-                  CorporateAlias,
                   CorporateDisplayName,
                   CorporateMailAddress,
                 },
@@ -126,7 +124,7 @@ router.get('/users-report', async (req: ReposAppRequest, res, next) => {
     await Promise.all(checks);
     // Define the header row for the CSV
     const header =
-      'UserLogin,UserId,Organizations,OwnedOrganizations,IsLinked,CorporateId,CorporateMailAddress,CorporateUsername,CorporateAlias,CorporateDisplayName';
+      'UserLogin,UserId,Organizations,OwnedOrganizations,IsLinked,CorporateId,CorporateMailAddress,CorporateUsername,CorporateDisplayName';
 
     // Sort the users object by user login and convert the values back into an array
     const cleanedObjects: object[] = _.sortBy(Object.values(users), 'UserLogin');

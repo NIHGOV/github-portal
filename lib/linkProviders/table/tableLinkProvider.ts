@@ -78,7 +78,6 @@ const linkInterfacePropertyMapping: ITableLinkProperties = {
   corporateUsername: 'aadupn',
   corporateDisplayName: 'aadname',
   corporateMailAddress: 'corporateMailAddress', // NOTE: this was not part of the original table entity
-  corporateAlias: 'corporateAlias', // NOTE: this was not part of the original table entity
 
   thirdPartyId: 'ghid',
   thirdPartyUsername: 'ghu',
