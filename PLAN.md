@@ -4,6 +4,24 @@ Priority-ordered list of security improvements identified across this repository
 
 ---
 
+## Completed (June 2026 — GitHub Copilot agentic session)
+
+### ✅ Fixed admin apps page showing wrong GitHub App slug and broken "Install in new org" link (June 2026)
+
+`/administration/apps` displayed the slug from `GITHUB_APP_OPERATIONS_SLUG` as both the "GitHub App" and "Purpose" columns, and used that slug to build the "Install in new org" link. Two issues combined to cause the broken link and misleading display:
+
+1. **Wrong env var value**: `GITHUB_APP_OPERATIONS_SLUG` was set to `nihdevgithubportal-app-ops` (the old/renamed app name) instead of the current slug `dev-nih-github-management-portal`. Fix: update the App Service setting to match the actual slug shown at `github.com/organizations/NIHGOV/settings/apps/…`.
+
+2. **Code bug**: `initializeAppById` in `business/operations/core.ts` called `tokenManager.getSlugById()` for _both_ the `slug` and `friendlyName` parameters, so the "Purpose" column showed the raw slug instead of the human-readable description (e.g. "GitHub Operations") from the app's JSON config.
+
+Code fix:
+
+- `lib/github/tokenManager.ts` — added `_appFriendlyNames` map; populated it alongside `_appSlugs` in `initializeApp`; added `getFriendlyNameById()` accessor
+- `business/operations/core.ts` — `initializeAppById` now calls `getFriendlyNameById()` for the friendlyName, falling back to the slug only when no description is configured
+- `AGENTS.md` — documented `GITHUB_APP_OPERATIONS_SLUG` in the required App Service settings table
+
+**⚠️ Required before merging to main:** Verify `GITHUB_APP_OPERATIONS_SLUG` is set correctly on both App Services (`nihdevgithubportal` and `nihgithubportal`). The value must exactly match the slug shown at `github.com/organizations/NIHGOV/settings/apps/…` (e.g. `dev-nih-github-management-portal` on staging). An incorrect slug causes broken "Install in new org" links and silently misidentifies bot commits in `getApplicationsAsLogins()`.
+
 ## Completed (May 2026 — GitHub Copilot agentic session)
 
 ### ✅ Fixed version always showing 8.5.0 instead of 8.5.\<build\> (May 2026)
@@ -202,6 +220,8 @@ The following settings are also required or the app crashes/misbehaves at runtim
 | `ENTRA_ID_AUTHENTICATION_CLIENT_SECRET`      | = `AAD_CLIENT_SECRET`                                                                                                                |                                                                                                                       |
 | `ENTRA_ID_AUTHENTICATION_TENANT_ID`          | = `AAD_TENANT_ID`                                                                                                                    |                                                                                                                       |
 | `ENTRA_ID_REDIRECT_URL`                      | `https://dev.portal.github.nih.gov/auth/entra-id/callback` (staging) / `https://portal.github.nih.gov/auth/entra-id/callback` (prod) | Must also be registered as a redirect URI in Entra app registration                                                   |
+| `ENTRA_ID_MULTI_TENANT`                      | `1`                                                                                                                                  | Set on NIH App Service; enables multitenant MSAL authority so non-NIH Entra users (e.g. ARPA-H) can sign in           |
+| `ENTRA_ID_ALLOWED_TENANT_IDS`                | `{NIH-tenant-id};{ARPA-H-tenant-id}`                                                                                                 | Set on NIH App Service; NIH tenant ID = value of `ENTRA_ID_AUTHENTICATION_TENANT_ID`; semicolon-separated             |
 
 See `AGENTS.md` for the full required-settings table and a known-errors quick-reference.
 

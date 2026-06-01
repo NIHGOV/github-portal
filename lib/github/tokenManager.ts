@@ -167,6 +167,7 @@ export class GitHubTokenManager {
   private _appsById = new Map<number, GitHubAppTokens>();
   private _appIdToPurpose = new Map<number, AppPurposeTypes>();
   private _appSlugs = new Map<number, string>();
+  private _appFriendlyNames = new Map<number, string>();
   private _forceInstanceTokensToPurpose: AppPurposeTypes;
   private _allowReadOnlyFallbackToOtherInstallations: boolean;
   private _insights: TelemetryClient;
@@ -269,6 +270,11 @@ export class GitHubTokenManager {
   getSlugById(id: number): string {
     debug(`getSlugById(${id})`);
     return this._appSlugs.get(id);
+  }
+
+  getFriendlyNameById(id: number): string {
+    debug(`getFriendlyNameById(${id})`);
+    return this._appFriendlyNames.get(id);
   }
 
   private getPurposeDisplayId(purpose: AppPurposeTypes) {
@@ -1078,6 +1084,7 @@ export class GitHubTokenManager {
     }
     this._appsById.set(appId, app);
     this._appSlugs.set(appId, appConfig.slug);
+    this._appFriendlyNames.set(appId, friendlyName);
     this._appIdToPurpose.set(appId, purpose);
     if (customPurpose?.isCustomAppPurpose === true) {
       debug(

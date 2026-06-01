@@ -1000,8 +1000,8 @@ export class Operations {
 
   initializeAppById(appId: number) {
     const tokenManager = this.tokenManager;
-    const friendlyName = tokenManager.getSlugById(appId);
     const slug = tokenManager.getSlugById(appId);
+    const friendlyName = tokenManager.getFriendlyNameById(appId) || slug;
     const app = new GitHubApplication(
       this,
       appId,
