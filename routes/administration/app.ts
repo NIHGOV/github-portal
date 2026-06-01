@@ -70,7 +70,7 @@ router.use(
     const { operations, organizationSettingsProvider } = getProviders(req);
     const installationId = Number(installationIdString);
     const installation = await githubApplication.getInstallation(installationId);
-    const isUninstallingApp = req.body['burn-org-app'] && req.method === 'POST';
+    const isUninstallingApp = req.method === 'POST' && req.body?.['burn-org-app'];
     const invalidReasons = isUninstallingApp ? [] : GitHubApplication.isInvalidInstallation(installation);
     if (invalidReasons.length) {
       throw new Error(invalidReasons.join(', '));
