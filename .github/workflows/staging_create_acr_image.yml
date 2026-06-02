@@ -2,6 +2,19 @@ name: NIH GHMP Container (Dev) - Build & Register
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - staging
+    paths:
+      - 'Dockerfile'
+      - 'jobs/**'
+      - 'business/**'
+      - 'lib/**'
+      - 'config/**'
+      - 'interfaces/**'
+      - 'package.json'
+      - 'bun.lock'
+      - 'tsconfig.json'
 
 jobs:
   build:
