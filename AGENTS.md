@@ -43,6 +43,7 @@ All settings apply to both `nihdevgithubportal` and `nihgithubportal` unless not
 | `FRONTEND_MODE`                              | `skip`                                                                                                                               | No `frontend/` directory in repo; default `serve` crashes on startup                                                                  |
 | `REDIS_KEY`                                  | _(Redis access key)_                                                                                                                 | Azure Cache for Redis → Access keys → Primary                                                                                         |
 | `GITHUB_APP_OPERATIONS_SLUG`                 | GitHub App slug for the operations app (e.g. `dev-nih-github-management-portal` on staging)                                          | Must match the actual slug shown at `github.com/organizations/NIHGOV/settings/apps/…`; used for install links and bot-login detection |
+| `IS_CONTAINER_DEPLOYMENT`                    | `1`                                                                                                                                  | Enables Express `trust proxy`; required so `req.protocol` = `https` (reads `x-forwarded-proto`). Without it, POST forms return 403.   |
 
 Keep old `AAD_*` settings — `AAD_ISSUER`, `AAD_BLOCK_GUESTS`, `AAD_BLOCK_GUEST_LINKING`, `AAD_MULTI_TENANT` are still read by other config paths.
 
@@ -60,3 +61,4 @@ Keep old `AAD_*` settings — `AAD_ISSUER`, `AAD_BLOCK_GUESTS`, `AAD_BLOCK_GUEST
 | `Unknown authentication strategy "entra-id"`                          | Set `ENTRA_ID_AUTHENTICATION_TYPE=secret` and the `ENTRA_ID_AUTHENTICATION_*` vars above.               |
 | `The static-react-folder…does not exist: …/frontend`                  | Set `FRONTEND_MODE=skip`.                                                                               |
 | `NOAUTH Authentication required` (Redis)                              | Set `REDIS_KEY` to the Redis access key.                                                                |
+| All POST forms return HTTP 403 "Invalid request origin"               | Set `IS_CONTAINER_DEPLOYMENT=1`; enables `trust proxy` so CSRF origin check passes.                     |
