@@ -9,7 +9,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: ruby/setup-ruby@ee2113536afb7f793eed4ce60e8d3b26db912da4 # v1.127.0
+      - uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # v1.310.0
         with:
           ruby-version: '3.0' # Not needed with a .ruby-version file
 
@@ -60,7 +60,7 @@ jobs:
           creds: '{"clientId":"${{ secrets.AAD_CLIENT_ID }}","clientSecret":"${{ secrets.AAD_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AAD_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AAD_TENANT_ID }}"}'
 
       - name: PSQL update
-        uses: azure/postgresql@59401b7890419c83f372819a1c37f5aecf57ac92 # v1
+        uses: azure/postgresql@59401b7890419c83f372819a1c37f5aecf57ac92 # v1.2.0
         with:
           connection-string: ${{ secrets.DEV_PSQL_CONN }}
           server-name: $${{ secrets.DEV_PSQL_SERVER }}

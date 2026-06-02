@@ -98,9 +98,25 @@ All `uses:` references across all 10 workflow files pinned to exact commit SHAs 
 | `azure/login`               | v1.4.6/v2   | `532459ea` (v3.0.0)   |
 | `Azure/cli`                 | v1          | `9eb25b83` (v3.0.0)   |
 | `azure/docker-login`        | v1          | `15c4aadf` (v2)       |
-| `github/codeql-action`      | v3          | `03e4368a` (v3)       |
+| `github/codeql-action`      | v3          | `03e4368a` (v3.36.0)  |
 | `ruby/setup-ruby`           | v1.127.0    | `ee211353` (v1.127.0) |
-| `azure/postgresql`          | v1          | `59401b78` (v1)       |
+| `azure/postgresql`          | v1          | `59401b78` (v1.2.0)   |
+
+### ✅ Updated GitHub Actions: Node 20 → 24, fresher pins (June 2026)
+
+Follow-up pass on all 10 workflow files to eliminate Node 20 runtime warnings and bring outdated pins to current:
+
+| Action                     | Old                           | New                                | Reason                               |
+| -------------------------- | ----------------------------- | ---------------------------------- | ------------------------------------ |
+| `azure/docker-login`       | `15c4aadf` (v2, Node 20)      | replaced — see below               | Still uses Node 20; no v3 planned    |
+| `docker/login-action`      | _(not used)_                  | `650006c6` (v4.2.0, Node 24)       | First-party Docker action; Node 24   |
+| `ruby/setup-ruby`          | `ee211353` (v1.127.0)         | `afeafc3d` (v1.310.0)              | 183 patch releases behind            |
+| `github/codeql-action`     | comment said `v3`             | comment updated to `v3.36.0`       | SHA was correct; comment imprecise   |
+| `azure/webapps-deploy`     | comment said `v3`             | comment updated to `v3.0.8`        | SHA was correct; comment imprecise   |
+| `azure/postgresql`         | comment said `v1`             | comment updated to `v1.2.0`        | SHA was correct; comment imprecise   |
+| `docker/build-push-action` | `@v3` (no SHA, commented out) | `f9f3042f` (v7.2.0, commented out) | SHA-pinned for when it is re-enabled |
+
+`azure/docker-login@v2` was the sole source of Node 20 deprecation warnings — its `action.yml` specifies `using: node20`. All other actions confirmed on Node 24. Replaced with `docker/login-action@v4.2.0` which is the official Docker-maintained equivalent; only interface change is `login-server:` → `registry:`.
 
 ### ✅ Upgraded `applicationinsights` 2.9.8 → 3.15.0 (OpenTelemetry)
 

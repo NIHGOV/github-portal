@@ -53,9 +53,9 @@ jobs:
           rm env-orgs.json
           cat orgs.json >> env-orgs.json
           cat env-orgs.json
-      - uses: azure/docker-login@15c4aadf093404726ab2ff205b2cdd33fa6d054c # v2
+      - uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
         with:
-          login-server: ${{ secrets.PROD_REGISTRY_SERVER }}
+          registry: ${{ secrets.PROD_REGISTRY_SERVER }}
           username: ${{ secrets.PROD_REGISTRY_USER }}
           password: ${{ secrets.PROD_REGISTRY_PASS }}
       - run: |
