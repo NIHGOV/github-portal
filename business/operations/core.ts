@@ -1354,6 +1354,9 @@ export class Operations {
         settings.properties['type'] = organizationDetails.plan.name === 'free' ? 'public' : 'publicprivate';
       }
     }
+    if (organizationDetails?.description && !settings.portalDescription) {
+      settings.portalDescription = organizationDetails.description;
+    }
     return settings;
   }
 
