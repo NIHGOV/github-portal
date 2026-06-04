@@ -1,0 +1,78 @@
+name: NIH GHMP (Dev) - Deploy Firehose Container
+
+on:
+  schedule:
+    # Restart daily at 01:00 UTC — firehose has a 48h kill bit; daily restart ensures continuity.
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Azure Login
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        with:
+          creds: '{"clientId":"${{ secrets.AAD_CLIENT_ID }}","clientSecret":"${{ secrets.AAD_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AAD_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AAD_TENANT_ID }}"}'
+
+      - name: Delete existing container group
+        run: |
+          az container delete \
+            --resource-group "${{ secrets.DEV_RG }}" \
+            --name nihdevgithubportalfh \
+            --yes 2>/dev/null || true
+
+      - name: Create firehose container
+        env:
+          REGISTRY_SERVER: ${{ secrets.DEV_REGISTRY_SERVER }}
+          REGISTRY_USER: ${{ secrets.DEV_REGISTRY_USER }}
+          REGISTRY_PASS: ${{ secrets.DEV_REGISTRY_PASS }}
+          REDIS_TLS_HOST: ${{ secrets.DEV_REDIS_TLS_HOST }}
+          REDIS_KEY: ${{ secrets.DEV_REDIS_KEY }}
+          POSTGRES_HOST: ${{ secrets.DEV_POSTGRES_HOST }}
+          POSTGRES_DB: ${{ secrets.DEV_POSTGRES_DB }}
+          POSTGRES_USER: ${{ secrets.DEV_POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.DEV_POSTGRES_PASSWORD }}
+          SERVICEBUS_CONN: ${{ secrets.DEV_SERVICEBUS_CONNECTIONSTRING }}
+          RG: ${{ secrets.DEV_RG }}
+        run: |
+          az container create \
+            --resource-group "$RG" \
+            --name nihdevgithubportalfh \
+            --location centralus \
+            --image "$REGISTRY_SERVER/portal:latest" \
+            --registry-server "$REGISTRY_SERVER" \
+            --registry-username "$REGISTRY_USER" \
+            --registry-password "$REGISTRY_PASS" \
+            --command-line "node /usr/src/repos/jobs/firehose.js" \
+            --restart-policy OnFailure \
+            --os-type Linux \
+            --cpu 1 \
+            --memory 1.5 \
+            --ip-address Public \
+            --ports 443 \
+            --environment-variables \
+              REDIS_TLS_HOST="$REDIS_TLS_HOST" \
+              REDIS_PORT=6380 \
+              REPOS_POSTGRES_DATABASE="$POSTGRES_DB" \
+              REPOS_POSTGRES_HOST="$POSTGRES_HOST" \
+              REPOS_POSTGRES_USER="$POSTGRES_USER" \
+              REPOS_POSTGRES_SSL=false \
+              GITHUB_ORGANIZATIONS_FILE=../env-orgs.json \
+              GITHUB_ORGANIZATIONS_SOURCE=postgres \
+              GITHUB_WEBHOOKS_PROVIDER=servicebus \
+              GITHUB_WEBHOOKS_SERVICEBUS_QUEUE=events \
+            --secure-environment-variables \
+              REDIS_KEY="$REDIS_KEY" \
+              REPOS_POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+              GITHUB_WEBHOOKS_SERVICEBUS_CONNECTIONSTRING="$SERVICEBUS_CONN" \
+            --tags \
+              'Creator=petersonjd@nih.gov' \
+              Customer=NIH \
+              Impact=Low \
+              Project=GitHub \
+            --no-wait
