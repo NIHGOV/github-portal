@@ -4,6 +4,45 @@ Priority-ordered list of security improvements identified across this repository
 
 ---
 
+## ACI Container Deployment (June 2026)
+
+Replaced hardcoded-secret YAML files with GitHub Actions workflows and `infra/aci/` reference configs.
+
+### Staging
+
+- [x] Add GitHub Secret `DEV_REDIS_TLS_HOST`
+- [x] Add GitHub Secret `DEV_REDIS_KEY`
+- [x] Add GitHub Secret `DEV_POSTGRES_HOST`
+- [x] Add GitHub Secret `DEV_POSTGRES_DB`
+- [x] Add GitHub Secret `DEV_POSTGRES_USER`
+- [x] Add GitHub Secret `DEV_POSTGRES_PASSWORD`
+- [x] Add GitHub Secret `DEV_SERVICEBUS_CONNECTIONSTRING`
+- [x] Add GitHub Secret `DEV_GITHUB_APP_OPERATIONS_APP_ID`
+- [x] Add GitHub Secret `DEV_GITHUB_APP_OPERATIONS_KEY`
+- [x] Add GitHub Secret `DEV_GITHUB_APP_OPERATIONS_SLUG`
+- [ ] Run `staging_nihdevgithubportalfh.yml` manually — verify firehose container starts and logs appear
+- [ ] Run `staging_nihdevgithubportalcb.yml` manually — verify cache builder runs and `portaldescription` is written to DB for ARPA-H
+- [ ] Restart `nihdevgithubportal` App Service — confirm ARPA-H org description shows on homepage
+
+### Production
+
+- [ ] Add GitHub Secret `PROD_RG` → `GitHub_OpenSource_Portal`
+- [ ] Add GitHub Secrets `PROD_AAD_CLIENT_ID`, `PROD_AAD_CLIENT_SECRET`, `PROD_AAD_SUBSCRIPTION_ID`, `PROD_AAD_TENANT_ID` (may match existing `AAD_*` values)
+- [ ] Add GitHub Secret `PROD_REDIS_TLS_HOST`
+- [ ] Add GitHub Secret `PROD_REDIS_KEY`
+- [ ] Add GitHub Secret `PROD_POSTGRES_HOST`
+- [ ] Add GitHub Secret `PROD_POSTGRES_DB`
+- [ ] Add GitHub Secret `PROD_POSTGRES_USER`
+- [ ] Add GitHub Secret `PROD_POSTGRES_PASSWORD`
+- [ ] Add GitHub Secret `PROD_SERVICEBUS_CONNECTIONSTRING`
+- [ ] Add GitHub Secret `PROD_GITHUB_APP_OPERATIONS_APP_ID`
+- [ ] Add GitHub Secret `PROD_GITHUB_APP_OPERATIONS_KEY`
+- [ ] Add GitHub Secret `PROD_GITHUB_APP_OPERATIONS_SLUG`
+- [ ] Run `main_nihgithubportalfh.yml` manually — verify firehose starts
+- [ ] Run `main_nihgithubportalcb.yml` manually — verify cache builder runs
+
+---
+
 ## Completed (June 2026 — GitHub Copilot agentic session)
 
 ### ✅ Fixed admin apps page showing wrong GitHub App slug and broken "Install in new org" link (June 2026)
@@ -240,6 +279,54 @@ The following settings are also required or the app crashes/misbehaves at runtim
 | `ENTRA_ID_ALLOWED_TENANT_IDS`                | `{NIH-tenant-id};{ARPA-H-tenant-id}`                                                                                                 | Set on NIH App Service; NIH tenant ID = value of `ENTRA_ID_AUTHENTICATION_TENANT_ID`; semicolon-separated             |
 
 See `AGENTS.md` for the full required-settings table and a known-errors quick-reference.
+
+---
+
+### ARPA-H User Migration Procedure
+
+When a user migrates from an NIH identity (`user@nih.gov`) to an ARPA-H identity (`user@arpa-h.gov`), their `links` row must be updated manually in both databases (`nihdevgithubportal` and `nihgithubportal`).
+
+#### Step 1 — Get the ARPA-H home-tenant OID
+
+```bash
+az login --tenant <arpa-h-tenant-id>
+az ad user show --id user@arpa-h.gov --query id -o tsv
+```
+
+This must be the **ARPA-H home-tenant OID** — not the NIH guest OID. The portal uses `oid` from the MSAL token (issued by the home tenant) as the corporate ID.
+
+#### Step 2 — Update the links row
+
+```sql
+UPDATE links
+SET corporateid = '<arpa-h-oid>',
+    corporateusername = 'user@arpa-h.gov',
+    corporatemail = 'user@arpa-h.gov',
+    corporatename = 'Display Name (ARPA-H)'
+WHERE thirdpartytype = 'github'
+  AND lower(thirdpartyusername) = '<github-login-lowercase>';
+```
+
+Confirm `UPDATE 1` before proceeding. Run this on both the staging and production databases.
+
+#### Step 3 — Verify the ARPA-H tenant is allowed
+
+Confirm the ARPA-H tenant ID is present in `ENTRA_ID_ALLOWED_TENANT_IDS` on both App Services (semicolon-separated). Without it, the sign-in is rejected before the link lookup runs.
+
+#### Step 4 — Have the user sign in
+
+The user signs in with their ARPA-H identity. No further action is needed — the 30-second Redis links cache expires quickly, and `AddLinkToRequest` queries Postgres directly by `corporateid`.
+
+#### Ongoing: display name staleness
+
+The `refreshUsernames` job keeps NIH users' `corporatename` in sync automatically by calling `graphProvider.getUserById(corporateId)`. For ARPA-H users, the NIH tenant's Graph client cannot resolve the ARPA-H OID, so the job silently skips them. If an ARPA-H user changes their display name (e.g. due to a title/org change within ARPA-H), it must be updated manually:
+
+```sql
+UPDATE links
+SET corporatename = 'New Display Name'
+WHERE thirdpartytype = 'github'
+  AND lower(thirdpartyusername) = '<github-login-lowercase>';
+```
 
 ---
 

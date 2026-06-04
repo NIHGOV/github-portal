@@ -1,0 +1,76 @@
+name: NIH GHMP (Dev) - Deploy Cache Builder Container
+
+on:
+  schedule:
+    # Run every 6 hours to keep query cache fresh.
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Azure Login
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        with:
+          creds: '{"clientId":"${{ secrets.AAD_CLIENT_ID }}","clientSecret":"${{ secrets.AAD_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AAD_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AAD_TENANT_ID }}"}'
+
+      - name: Delete existing container group
+        run: |
+          az container delete \
+            --resource-group "${{ secrets.DEV_RG }}" \
+            --name nihdevgithubportalcb \
+            --yes 2>/dev/null || true
+
+      - name: Create cache builder container
+        env:
+          REGISTRY_SERVER: ${{ secrets.DEV_REGISTRY_SERVER }}
+          REGISTRY_USER: ${{ secrets.DEV_REGISTRY_USER }}
+          REGISTRY_PASS: ${{ secrets.DEV_REGISTRY_PASS }}
+          REDIS_TLS_HOST: ${{ secrets.DEV_REDIS_TLS_HOST }}
+          REDIS_KEY: ${{ secrets.DEV_REDIS_KEY }}
+          POSTGRES_HOST: ${{ secrets.DEV_POSTGRES_HOST }}
+          POSTGRES_DB: ${{ secrets.DEV_POSTGRES_DB }}
+          POSTGRES_USER: ${{ secrets.DEV_POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.DEV_POSTGRES_PASSWORD }}
+          APP_ID: ${{ secrets.DEV_GITHUB_APP_OPERATIONS_APP_ID }}
+          APP_KEY: ${{ secrets.DEV_GITHUB_APP_OPERATIONS_KEY }}
+          APP_SLUG: ${{ secrets.DEV_GITHUB_APP_OPERATIONS_SLUG }}
+          RG: ${{ secrets.DEV_RG }}
+        run: |
+          az container create \
+            --resource-group "$RG" \
+            --name nihdevgithubportalcb \
+            --location centralus \
+            --image "$REGISTRY_SERVER/portal:latest" \
+            --registry-server "$REGISTRY_SERVER" \
+            --registry-username "$REGISTRY_USER" \
+            --registry-password "$REGISTRY_PASS" \
+            --command-line "node /usr/src/repos/jobs/refreshQueryCache.js" \
+            --restart-policy OnFailure \
+            --os-type Linux \
+            --cpu 1 \
+            --memory 1.5 \
+            --ip-address Public \
+            --ports 443 \
+            --environment-variables \
+              REDIS_TLS_HOST="$REDIS_TLS_HOST" \
+              REDIS_PORT=6380 \
+              REPOS_POSTGRES_DATABASE="$POSTGRES_DB" \
+              REPOS_POSTGRES_HOST="$POSTGRES_HOST" \
+              REPOS_POSTGRES_USER="$POSTGRES_USER" \
+              REPOS_POSTGRES_SSL=false \
+              GITHUB_ORGANIZATIONS_SOURCE=postgres \
+              GITHUB_APP_OPERATIONS_APP_ID="$APP_ID" \
+              GITHUB_APP_OPERATIONS_SLUG="$APP_SLUG" \
+            --secure-environment-variables \
+              REDIS_KEY="$REDIS_KEY" \
+              REPOS_POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+              GITHUB_APP_OPERATIONS_KEY="$APP_KEY" \
+            --tags \
+              'Creator=petersonjd@nih.gov' \
+              Customer=NIH \
+              Impact=Low \
+              Project=GitHub \
+            --no-wait
