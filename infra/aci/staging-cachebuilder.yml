@@ -5,7 +5,7 @@
 # GitHub Secrets required for deployment:
 #   DEV_REGISTRY_PASS               ACR password
 #   DEV_REDIS_KEY                   Redis access key
-#   DEV_POSTGRES_PASSWORD           Postgres password for citcs user
+#   DEV_POSTGRES_PASSWORD           Postgres password
 #   DEV_GITHUB_APP_OPERATIONS_KEY   GitHub App private key (PEM)
 apiVersion: '2021-09-01'
 location: centralus
