@@ -1,0 +1,70 @@
+# Reference configuration for nihgithubportalcb (production cache builder)
+# Deployed by .github/workflows/main_nihgithubportalcb.yml
+# Do not deploy this file directly — secrets must come from GitHub Secrets.
+#
+# GitHub Secrets required for deployment:
+#   PROD_REGISTRY_SERVER, PROD_REGISTRY_USER, PROD_REGISTRY_PASS
+#   PROD_REDIS_TLS_HOST, PROD_REDIS_KEY
+#   PROD_POSTGRES_HOST, PROD_POSTGRES_DB, PROD_POSTGRES_USER, PROD_POSTGRES_PASSWORD
+#   PROD_GITHUB_APP_OPERATIONS_APP_ID, PROD_GITHUB_APP_OPERATIONS_KEY, PROD_GITHUB_APP_OPERATIONS_SLUG
+apiVersion: '2021-09-01'
+location: centralus
+name: nihgithubportalcb
+properties:
+  containers:
+    - name: nihgithubportalcb
+      properties:
+        command:
+          - node
+          - /usr/src/repos/jobs/refreshQueryCache.js
+        environmentVariables:
+          - name: REDIS_TLS_HOST
+            value: <PROD_REDIS_TLS_HOST>
+          - name: REDIS_PORT
+            value: '6380'
+          - name: REPOS_POSTGRES_DATABASE
+            value: <PROD_POSTGRES_DB>
+          - name: REPOS_POSTGRES_HOST
+            value: <PROD_POSTGRES_HOST>
+          - name: REPOS_POSTGRES_USER
+            value: <PROD_POSTGRES_USER>
+          - name: REPOS_POSTGRES_SSL
+            value: 'false'
+          - name: GITHUB_ORGANIZATIONS_SOURCE
+            value: postgres
+          - name: GITHUB_APP_OPERATIONS_APP_ID
+            value: <PROD_GITHUB_APP_OPERATIONS_APP_ID>
+          - name: GITHUB_APP_OPERATIONS_SLUG
+            value: <PROD_GITHUB_APP_OPERATIONS_SLUG>
+          - name: REDIS_KEY
+            secureValue: <PROD_REDIS_KEY>
+          - name: REPOS_POSTGRES_PASSWORD
+            secureValue: <PROD_POSTGRES_PASSWORD>
+          - name: GITHUB_APP_OPERATIONS_KEY
+            secureValue: <PROD_GITHUB_APP_OPERATIONS_KEY>
+        image: <PROD_REGISTRY_SERVER>/portal:latest
+        ports:
+          - port: 443
+            protocol: TCP
+        resources:
+          requests:
+            cpu: 1.0
+            memoryInGB: 1.5
+  imageRegistryCredentials:
+    - server: <PROD_REGISTRY_SERVER>
+      username: <PROD_REGISTRY_USER>
+      password: <PROD_REGISTRY_PASS>
+  initContainers: []
+  ipAddress:
+    ports:
+      - port: 443
+        protocol: TCP
+    type: Public
+  osType: Linux
+  restartPolicy: OnFailure
+  sku: Standard
+tags:
+  Creator: petersonjd@nih.gov
+  Customer: NIH
+  Impact: Low
+  Project: GitHub
