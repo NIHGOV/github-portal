@@ -1,0 +1,68 @@
+name: NIH GHMP (Dev) - Terraform
+
+on:
+  push:
+    branches:
+      - staging
+    paths:
+      - 'infra/terraform/dev/**'
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Terraform action to run'
+        required: true
+        default: 'plan'
+        type: choice
+        options:
+          - plan
+          - apply
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+
+    env:
+      ARM_CLIENT_ID: ${{ secrets.AAD_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.AAD_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AAD_SUBSCRIPTION_ID }}
+      ARM_USE_OIDC: 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        with:
+          client-id: ${{ secrets.AAD_CLIENT_ID }}
+          tenant-id: ${{ secrets.AAD_TENANT_ID }}
+          subscription-id: ${{ secrets.AAD_SUBSCRIPTION_ID }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        working-directory: infra/terraform/dev
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ secrets.DEV_RG }}" \
+            -backend-config="storage_account_name=${{ secrets.DEV_TF_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=${{ secrets.DEV_TF_STORAGE_CONTAINER }}" \
+            -backend-config="key=dev/terraform.tfstate"
+
+      - name: Terraform Plan
+        working-directory: infra/terraform/dev
+        run: |
+          terraform plan \
+            -var="resource_group_name=${{ secrets.DEV_RG }}"
+
+      - name: Terraform Apply
+        if: ${{ github.event_name == 'push' || github.event.inputs.action == 'apply' }}
+        working-directory: infra/terraform/dev
+        run: |
+          terraform apply -auto-approve \
+            -var="resource_group_name=${{ secrets.DEV_RG }}"

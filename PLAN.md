@@ -4,6 +4,41 @@ Priority-ordered list of security improvements identified across this repository
 
 ---
 
+## Terraform Infrastructure (June 2026)
+
+`infra/terraform/dev/` manages Azure resources in `GitHub_OpenSource_Portal_Dev`.
+Long-term goal: represent the entire `GitHub_OpenSource_Portal_Dev` (and eventually
+`GitHub_OpenSource_Portal`) resource group in Terraform.
+
+### Bootstrap (one-time, manual)
+
+Before the workflow can run, a storage account for Terraform state must exist:
+
+1. Create a storage account in `GitHub_OpenSource_Portal_Dev` (e.g. `nihdevgithubportaltf`)
+2. Create a blob container in it (e.g. `tfstate`)
+3. Add GitHub Secrets:
+   - `DEV_TF_STORAGE_ACCOUNT` → storage account name
+   - `DEV_TF_STORAGE_CONTAINER` → container name (e.g. `tfstate`)
+
+### Resources managed
+
+- [ ] `azurerm_log_analytics_workspace` — `nihdevgithubportal-logs`
+- [ ] After first apply: copy outputs to GitHub Secrets
+  - `DEV_LOG_ANALYTICS_WORKSPACE_ID` ← `terraform output workspace_id`
+  - `DEV_LOG_ANALYTICS_WORKSPACE_KEY` ← `terraform output -raw primary_shared_key`
+
+### Future: full resource group coverage
+
+- [ ] Redis Cache (`nihdevgithubportal`)
+- [ ] PostgreSQL Flexible Server (`nihdevgithubportaldb`)
+- [ ] Service Bus namespace
+- [ ] Container Registry
+- [ ] App Service (`nihdevgithubportal`)
+- [ ] ACI container groups (firehose, cache builder)
+- [ ] Repeat for `GitHub_OpenSource_Portal` (prod)
+
+---
+
 ## ACI Container Deployment (June 2026)
 
 Replaced hardcoded-secret YAML files with GitHub Actions workflows and `infra/aci/` reference configs.
