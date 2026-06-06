@@ -14,28 +14,30 @@ Long-term goal: represent the entire `GitHub_OpenSource_Portal_Dev` (and eventua
 
 Before the workflow can run, a storage account for Terraform state must exist:
 
-1. Create a storage account in `GitHub_OpenSource_Portal_Dev` (e.g. `nihdevgithubportaltf`)
-2. Create a blob container in it (e.g. `tfstate`)
-3. Add GitHub Secrets:
-   - `DEV_TF_STORAGE_ACCOUNT` → storage account name
+1. ~~Create a storage account in `GitHub_OpenSource_Portal_Dev` (e.g. `nihdevgithubportaltf`)~~ ✅ Done
+2. Create a blob container in it (e.g. `tfstate`) — or confirm it exists
+3. Grant service principal **Storage Blob Data Contributor** on `nihdevgithubportaltf`
+4. Add GitHub Secrets:
+   - `DEV_TF_STORAGE_ACCOUNT` → `nihdevgithubportaltf`
    - `DEV_TF_STORAGE_CONTAINER` → container name (e.g. `tfstate`)
 
 ### Resources managed
 
 - [ ] `azurerm_log_analytics_workspace` — `nihdevgithubportal-logs`
-- [ ] After first apply: copy outputs to GitHub Secrets
-  - `DEV_LOG_ANALYTICS_WORKSPACE_ID` ← `terraform output workspace_id`
-  - `DEV_LOG_ANALYTICS_WORKSPACE_KEY` ← `terraform output -raw primary_shared_key`
+- [ ] After first apply: add outputs as GitHub Secrets
+  - `DEV_LOG_ANALYTICS_WORKSPACE_ID` ← Terraform Apply step log: `workspace_id = "..."`
+  - `DEV_LOG_ANALYTICS_WORKSPACE_KEY` ← workflow writes it automatically via GitHub API
+  - Then wire into ACI workflows: add `--log-analytics-workspace` + `--log-analytics-workspace-key` to `az container create`
 
-### Future: full resource group coverage
+### Future: full resource group coverage (tracked in GitHub Issues)
 
-- [ ] Redis Cache (`nihdevgithubportal`)
-- [ ] PostgreSQL Flexible Server (`nihdevgithubportaldb`)
-- [ ] Service Bus namespace
-- [ ] Container Registry
-- [ ] App Service (`nihdevgithubportal`)
-- [ ] ACI container groups (firehose, cache builder)
-- [ ] Repeat for `GitHub_OpenSource_Portal` (prod)
+- [ ] Redis Cache (`nihdevgithubportal`) — see issue
+- [ ] PostgreSQL Flexible Server (`nihdevgithubportaldb`) — see issue
+- [ ] Service Bus namespace — see issue
+- [ ] Container Registry — see issue
+- [ ] App Service (`nihdevgithubportal`) — see issue
+- [ ] ACI container groups (firehose, cache builder) — see issue
+- [ ] Repeat entire stack for `GitHub_OpenSource_Portal` (prod) — see issue
 
 ---
 
