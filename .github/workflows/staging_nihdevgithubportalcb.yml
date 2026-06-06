@@ -74,5 +74,4 @@ jobs:
               REDIS_KEY="$REDIS_KEY" \
               REPOS_POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
               GITHUB_APP_OPERATIONS_KEY="$APP_KEY" \
-            --tags 'Creator=petersonjd@nih.gov' Customer=NIH Impact=Low Project=GitHub \
             --no-wait
