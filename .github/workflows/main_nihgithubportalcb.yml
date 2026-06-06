@@ -50,7 +50,7 @@ jobs:
             --name nihgithubportalcb \
             --location centralus \
             --image "$REGISTRY_SERVER/portal:latest" \
-            --registry-server "$REGISTRY_SERVER" \
+            --registry-login-server "$REGISTRY_SERVER" \
             --registry-username "$REGISTRY_USER" \
             --registry-password "$REGISTRY_PASS" \
             --command-line "node /usr/src/repos/jobs/refreshQueryCache.js" \
@@ -74,9 +74,5 @@ jobs:
               REDIS_KEY="$REDIS_KEY" \
               REPOS_POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
               GITHUB_APP_OPERATIONS_KEY="$APP_KEY" \
-            --tags \
-              'Creator=petersonjd@nih.gov' \
-              Customer=NIH \
-              Impact=Low \
-              Project=GitHub \
+            --tags 'Creator=petersonjd@nih.gov' Customer=NIH Impact=Low Project=GitHub \
             --no-wait
