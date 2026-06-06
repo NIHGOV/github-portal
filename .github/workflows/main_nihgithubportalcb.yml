@@ -60,6 +60,7 @@ jobs:
             --memory 1.5 \
             --ip-address Public \
             --ports 443 \
+            --tags Creator=petersonjd@nih.gov Customer=NIH Impact=Low Project=GitHub \
             --environment-variables \
               REDIS_TLS_HOST="$REDIS_TLS_HOST" \
               REDIS_PORT=6380 \
@@ -74,5 +75,4 @@ jobs:
               REDIS_KEY="$REDIS_KEY" \
               REPOS_POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
               GITHUB_APP_OPERATIONS_KEY="$APP_KEY" \
-            --tags 'Creator=petersonjd@nih.gov' Customer=NIH Impact=Low Project=GitHub \
             --no-wait
