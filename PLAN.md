@@ -20,13 +20,14 @@ Before the workflow can run, a storage account for Terraform state must exist:
 4. Add GitHub Secrets:
    - `DEV_TF_STORAGE_ACCOUNT` → `nihdevgithubportaltf`
    - `DEV_TF_STORAGE_CONTAINER` → container name (e.g. `tfstate`)
+   - `GH_SECRETS_PAT` → fine-grained PAT with **Secrets: read/write** and **Contents: read** on this repo (used to auto-export Terraform outputs back as GitHub Secrets)
 
 ### Resources managed
 
 - [ ] `azurerm_log_analytics_workspace` — `nihdevgithubportal-logs`
-- [ ] After first apply: add outputs as GitHub Secrets
-  - `DEV_LOG_ANALYTICS_WORKSPACE_ID` ← Terraform Apply step log: `workspace_id = "..."`
-  - `DEV_LOG_ANALYTICS_WORKSPACE_KEY` ← workflow writes it automatically via GitHub API
+- [ ] After first apply: workflow automatically sets these GitHub Secrets:
+  - `DEV_LOG_ANALYTICS_WORKSPACE_ID`
+  - `DEV_LOG_ANALYTICS_WORKSPACE_KEY`
   - Then wire into ACI workflows: add `--log-analytics-workspace` + `--log-analytics-workspace-key` to `az container create`
 
 ### Future: full resource group coverage (tracked in GitHub Issues)
