@@ -4,6 +4,42 @@ Priority-ordered list of security improvements identified across this repository
 
 ---
 
+## GitHub Actions Secret Reduction (June 2026)
+
+Audit of all workflow secrets against Entra ID Workload Federation (OIDC) coverage.
+The repo's service principal has Contributor on both subscriptions, so stored credentials
+can be replaced with dynamic Azure API calls made within the already-authenticated session.
+
+### ✅ Purge immediately — workflows already updated
+
+Delete these secrets from both repos (NIHGOV/github-portal + staging env):
+
+| Secret               | Was used in                    | Replacement                               |
+| -------------------- | ------------------------------ | ----------------------------------------- |
+| `DEV_REGISTRY_USER`  | Build + all 2 dev ACI deploys  | `az acr credential show` after OIDC login |
+| `DEV_REGISTRY_PASS`  | Build + all 2 dev ACI deploys  | same                                      |
+| `PROD_REGISTRY_USER` | Build + all 2 prod ACI deploys | `az acr credential show` after OIDC login |
+| `PROD_REGISTRY_PASS` | Build + all 2 prod ACI deploys | same                                      |
+
+Prerequisite: ACR admin user must be enabled on both registries (needed by `az acr credential show`).
+Alternative if admin is disabled: assign a user-assigned managed identity with AcrPull to ACI groups instead.
+
+### ✅ Replace with OIDC — done (issue #1122)
+
+| Secret                                                            | Workflow                         | Replacement                                          |
+| ----------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------- |
+| `AZUREAPPSERVICE_PUBLISHPROFILE_34824FEBDA0F4C8CACF5CB97111CBFFB` | `staging_nihdevgithubportal.yml` | Add `azure/login` OIDC step; drop `publish-profile:` |
+| `AZUREAPPSERVICE_PUBLISHPROFILE_990190F22A5149AC859307273BAE196C` | `main_nihgithubportal.yml`       | Same                                                 |
+
+### Keeping as secrets (decision: June 2026)
+
+`AAD_CLIENT_ID`, `AAD_TENANT_ID`, `AAD_SUBSCRIPTION_ID`, `PROD_AAD_CLIENT_ID`,
+`PROD_AAD_TENANT_ID`, `PROD_AAD_SUBSCRIPTION_ID` — remain as encrypted secrets.
+Although these are GUIDs rather than credentials, the team prefers to keep them
+in the secrets store to avoid any risk of accidental exposure.
+
+---
+
 ## Terraform Infrastructure (June 2026)
 
 `infra/terraform/dev/` manages Azure resources in `GitHub_OpenSource_Portal_Dev`.
