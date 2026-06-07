@@ -1,10 +1,11 @@
 name: NIH GHMP (Prod) - Deploy Cache Builder Container
 
 on:
-  schedule:
-    # Run every 6 hours to keep query cache fresh.
-    - cron: '0 */6 * * *'
   workflow_dispatch:
+  workflow_run:
+    workflows: ['NIH GHMP Container (Prod) - Build & Register']
+    types: [completed]
+    branches: [main]
 
 permissions:
   id-token: write
@@ -12,6 +13,7 @@ permissions:
 
 jobs:
   deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
 
     steps:
@@ -32,8 +34,6 @@ jobs:
       - name: Create cache builder container
         env:
           REGISTRY_SERVER: ${{ secrets.PROD_REGISTRY_SERVER }}
-          REGISTRY_USER: ${{ secrets.PROD_REGISTRY_USER }}
-          REGISTRY_PASS: ${{ secrets.PROD_REGISTRY_PASS }}
           REDIS_TLS_HOST: ${{ secrets.PROD_REDIS_TLS_HOST }}
           REDIS_KEY: ${{ secrets.PROD_REDIS_KEY }}
           POSTGRES_HOST: ${{ secrets.PROD_POSTGRES_HOST }}
@@ -45,6 +45,9 @@ jobs:
           APP_SLUG: ${{ secrets.PROD_GITHUB_APP_OPERATIONS_SLUG }}
           RG: ${{ secrets.PROD_RG }}
         run: |
+          ACR_NAME="${REGISTRY_SERVER%%.*}"
+          REGISTRY_USER=$(az acr credential show --name "$ACR_NAME" --query username --output tsv)
+          REGISTRY_PASS=$(az acr credential show --name "$ACR_NAME" --query "passwords[0].value" --output tsv)
           az container create \
             --resource-group "$RG" \
             --name nihgithubportalcb \
