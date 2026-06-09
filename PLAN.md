@@ -52,19 +52,16 @@ Before the workflow can run, a storage account for Terraform state must exist:
 
 1. ~~Create a storage account in `GitHub_OpenSource_Portal_Dev` (e.g. `nihdevgithubportaltf`)~~ ✅ Done
 2. Create a blob container in it (e.g. `tfstate`) — or confirm it exists
-3. Grant service principal **Storage Blob Data Contributor** on `nihdevgithubportaltf`
+3. ~~Grant service principal **Storage Blob Data Contributor** on `nihdevgithubportaltf`~~ ✅ Done
 4. Add GitHub Secrets:
    - `DEV_TF_STORAGE_ACCOUNT` → `nihdevgithubportaltf`
    - `DEV_TF_STORAGE_CONTAINER` → container name (e.g. `tfstate`)
-   - `GH_SECRETS_PAT` → fine-grained PAT with **Secrets: read/write** and **Contents: read** on this repo (used to auto-export Terraform outputs back as GitHub Secrets)
+   - ~~`GH_SECRETS_PAT`~~ — not needed; ACI workflows look up Log Analytics from Azure at deploy time via `az monitor`
 
 ### Resources managed
 
 - [ ] `azurerm_log_analytics_workspace` — `nihdevgithubportal-logs`
-- [ ] After first apply: workflow automatically sets these GitHub Secrets:
-  - `DEV_LOG_ANALYTICS_WORKSPACE_ID`
-  - `DEV_LOG_ANALYTICS_WORKSPACE_KEY`
-  - Then wire into ACI workflows: add `--log-analytics-workspace` + `--log-analytics-workspace-key` to `az container create`
+- [x] Log Analytics ID/key wired into ACI deploys: looked up at runtime via `az monitor log-analytics workspace show/get-shared-keys` — no secrets required
 
 ### Future: full resource group coverage (tracked in GitHub Issues)
 
