@@ -40,7 +40,7 @@ jobs:
           POSTGRES_DB: ${{ secrets.DEV_POSTGRES_DB }}
           POSTGRES_USER: ${{ secrets.DEV_POSTGRES_USER }}
           POSTGRES_PASSWORD: ${{ secrets.DEV_POSTGRES_PASSWORD }}
-          SERVICEBUS_CONN: ${{ secrets.DEV_SERVICEBUS_CONNECTIONSTRING }}
+          SB_NAMESPACE: ${{ secrets.DEV_SERVICEBUS_NAMESPACE }}
           RG: ${{ secrets.DEV_RG }}
         run: |
           LA_WORKSPACE_ID=$(az monitor log-analytics workspace show \
@@ -58,6 +58,9 @@ jobs:
           ACR_NAME="${REGISTRY_SERVER%%.*}"
           REGISTRY_USER=$(az acr credential show --name "$ACR_NAME" --query username --output tsv)
           REGISTRY_PASS=$(az acr credential show --name "$ACR_NAME" --query "passwords[0].value" --output tsv)
+          IDENTITY_ID=$(az identity show --resource-group "$RG" --name nihdevgithubportal-firehose --query id --output tsv)
+          IDENTITY_CLIENT_ID=$(az identity show --resource-group "$RG" --name nihdevgithubportal-firehose --query clientId --output tsv)
+          SB_ENDPOINT="https://${SB_NAMESPACE}.servicebus.windows.net"
           az container create \
             --resource-group "$RG" \
             --name nihdevgithubportalfh \
@@ -66,6 +69,7 @@ jobs:
             --registry-login-server "$REGISTRY_SERVER" \
             --registry-username "$REGISTRY_USER" \
             --registry-password "$REGISTRY_PASS" \
+            --assign-identity "$IDENTITY_ID" \
             --command-line "node /usr/src/repos/jobs/firehose.js" \
             --restart-policy OnFailure \
             --os-type Linux \
@@ -84,9 +88,11 @@ jobs:
               GITHUB_ORGANIZATIONS_SOURCE=postgres \
               GITHUB_WEBHOOKS_PROVIDER=servicebus \
               GITHUB_WEBHOOKS_SERVICEBUS_QUEUE=events \
+              GITHUB_WEBHOOKS_SERVICEBUS_USE_ENTRA_AUTH=1 \
+              GITHUB_WEBHOOKS_SERVICEBUS_ENDPOINT="$SB_ENDPOINT" \
+              AZURE_CLIENT_ID="$IDENTITY_CLIENT_ID" \
             --secure-environment-variables \
               REDIS_KEY="$REDIS_KEY" \
               REPOS_POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
-              GITHUB_WEBHOOKS_SERVICEBUS_CONNECTIONSTRING="$SERVICEBUS_CONN" \
             "${LA_ARGS[@]}" \
             --no-wait

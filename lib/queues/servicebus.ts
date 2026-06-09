@@ -4,6 +4,7 @@
 //
 
 import { DateTime } from 'luxon';
+import { DefaultAzureCredential } from '@azure/identity';
 import { ServiceBusClient, ServiceBusReceivedMessage, ServiceBusReceiver } from '@azure/service-bus';
 
 import type { IQueueMessage, IQueueProcessor } from './index.js';
@@ -98,12 +99,14 @@ export default class ServiceBusQueueProcessor implements IQueueProcessor {
 
   async initialize(): Promise<void> {
     const options = this.#options;
-    const service = this.#options.useEntraAuthentication
-      ? new ServiceBusClient(
-          options.endpoint,
-          tryGetEntraApplicationTokenCredential(this.providers, 'service bus')
-        )
-      : new ServiceBusClient(options.connectionString);
+    let service: ServiceBusClient;
+    if (options.useEntraAuthentication) {
+      const credential =
+        tryGetEntraApplicationTokenCredential(this.providers, 'service bus') ?? new DefaultAzureCredential();
+      service = new ServiceBusClient(options.endpoint, credential);
+    } else {
+      service = new ServiceBusClient(options.connectionString);
+    }
     this.#receiver = service.createReceiver(options.queue, {
       receiveMode: options.immediatelyDeleteMessages ? 'receiveAndDelete' : 'peekLock',
       skipParsingBodyAsJson: true,
