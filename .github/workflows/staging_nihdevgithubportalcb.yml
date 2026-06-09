@@ -45,9 +45,6 @@ jobs:
           APP_SLUG: ${{ secrets.DEV_GITHUB_APP_OPERATIONS_SLUG }}
           RG: ${{ secrets.DEV_RG }}
         run: |
-          ACR_NAME="${REGISTRY_SERVER%%.*}"
-          REGISTRY_USER=$(az acr credential show --name "$ACR_NAME" --query username --output tsv)
-          REGISTRY_PASS=$(az acr credential show --name "$ACR_NAME" --query "passwords[0].value" --output tsv)
           LA_WORKSPACE_ID=$(az monitor log-analytics workspace show \
             --resource-group "$RG" \
             --workspace-name nihdevgithubportal-logs \
@@ -56,6 +53,13 @@ jobs:
             --resource-group "$RG" \
             --workspace-name nihdevgithubportal-logs \
             --query primarySharedKey --output tsv 2>/dev/null || echo "")
+          LA_ARGS=()
+          if [ -n "$LA_WORKSPACE_ID" ]; then
+            LA_ARGS=(--log-analytics-workspace "$LA_WORKSPACE_ID" --log-analytics-workspace-key "$LA_WORKSPACE_KEY")
+          fi
+          ACR_NAME="${REGISTRY_SERVER%%.*}"
+          REGISTRY_USER=$(az acr credential show --name "$ACR_NAME" --query username --output tsv)
+          REGISTRY_PASS=$(az acr credential show --name "$ACR_NAME" --query "passwords[0].value" --output tsv)
           az container create \
             --resource-group "$RG" \
             --name nihdevgithubportalcb \
@@ -85,5 +89,5 @@ jobs:
               REDIS_KEY="$REDIS_KEY" \
               REPOS_POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
               GITHUB_APP_OPERATIONS_KEY="$APP_KEY" \
-            $( [ -n "$LA_WORKSPACE_ID" ] && echo "--log-analytics-workspace \"$LA_WORKSPACE_ID\" --log-analytics-workspace-key \"$LA_WORKSPACE_KEY\"" ) \
+            "${LA_ARGS[@]}" \
             --no-wait
