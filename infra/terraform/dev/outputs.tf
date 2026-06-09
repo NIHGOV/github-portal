@@ -1,10 +1,10 @@
 output "workspace_id" {
-  description = "Workspace ID — store as GitHub Secret DEV_LOG_ANALYTICS_WORKSPACE_ID"
+  description = "Log Analytics workspace ID (customer ID). Looked up at deploy time via az monitor — not stored as a secret."
   value       = azurerm_log_analytics_workspace.main.workspace_id
 }
 
 output "primary_shared_key" {
-  description = "Primary key — store as GitHub Secret DEV_LOG_ANALYTICS_WORKSPACE_KEY"
+  description = "Log Analytics primary shared key. Looked up at deploy time via az monitor — not stored as a secret."
   value       = azurerm_log_analytics_workspace.main.primary_shared_key
   sensitive   = true
 }

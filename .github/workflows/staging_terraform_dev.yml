@@ -67,15 +67,5 @@ jobs:
           terraform apply -auto-approve \
             -var="resource_group_name=${{ secrets.DEV_RG }}"
 
-      - name: Export outputs to GitHub Secrets
-        if: ${{ github.event_name == 'push' || github.event.inputs.action == 'apply' }}
-        working-directory: infra/terraform/dev
-        env:
-          # Fine-grained PAT with: Contents=read, Secrets=read/write, scoped to this repo.
-          # Store as GitHub Secret: GH_SECRETS_PAT
-          GH_TOKEN: ${{ secrets.GH_SECRETS_PAT }}
-        run: |
-          WORKSPACE_ID=$(terraform output -raw workspace_id)
-          PRIMARY_KEY=$(terraform output -raw primary_shared_key)
-          gh secret set DEV_LOG_ANALYTICS_WORKSPACE_ID --body "$WORKSPACE_ID"
-          gh secret set DEV_LOG_ANALYTICS_WORKSPACE_KEY --body "$PRIMARY_KEY"
+      # Log Analytics workspace ID and key are NOT stored as secrets.
+      # ACI deploy workflows look them up at deploy time via az monitor.
