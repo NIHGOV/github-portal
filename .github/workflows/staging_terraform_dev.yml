@@ -42,6 +42,25 @@ jobs:
           tenant-id: ${{ secrets.AAD_TENANT_ID }}
           subscription-id: ${{ secrets.AAD_SUBSCRIPTION_ID }}
 
+      - name: Bootstrap Terraform backend storage
+        env:
+          TF_SA: ${{ secrets.DEV_TF_STORAGE_ACCOUNT }}
+          TF_CONTAINER: ${{ secrets.DEV_TF_STORAGE_CONTAINER }}
+          RG: ${{ secrets.DEV_RG }}
+        run: |
+          az storage account create \
+            --name "$TF_SA" \
+            --resource-group "$RG" \
+            --sku Standard_LRS \
+            --allow-blob-public-access false \
+            --min-tls-version TLS1_2 \
+            2>/dev/null || echo "Storage account already exists"
+          az storage container create \
+            --name "$TF_CONTAINER" \
+            --account-name "$TF_SA" \
+            --auth-mode login \
+            2>/dev/null || echo "Container already exists"
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
 
