@@ -71,7 +71,8 @@ jobs:
             -backend-config="resource_group_name=${{ secrets.DEV_RG }}" \
             -backend-config="storage_account_name=${{ secrets.DEV_TF_STORAGE_ACCOUNT }}" \
             -backend-config="container_name=${{ secrets.DEV_TF_STORAGE_CONTAINER }}" \
-            -backend-config="key=dev/terraform.tfstate"
+            -backend-config="key=dev/terraform.tfstate" \
+            -backend-config="use_azuread_auth=true"
 
       - name: Terraform Plan
         working-directory: infra/terraform/dev
