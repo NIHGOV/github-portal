@@ -6,9 +6,11 @@ resource "azurerm_log_analytics_workspace" "main" {
   retention_in_days   = var.log_retention_days
 }
 
-data "azurerm_servicebus_namespace" "main" {
+resource "azurerm_servicebus_namespace" "main" {
   name                = var.servicebus_namespace_name
+  location            = var.location
   resource_group_name = var.resource_group_name
+  sku                 = "Standard"
 }
 
 resource "azurerm_user_assigned_identity" "firehose" {
@@ -18,7 +20,7 @@ resource "azurerm_user_assigned_identity" "firehose" {
 }
 
 resource "azurerm_role_assignment" "firehose_servicebus" {
-  scope                = data.azurerm_servicebus_namespace.main.id
+  scope                = azurerm_servicebus_namespace.main.id
   role_definition_name = "Azure Service Bus Data Receiver"
   principal_id         = azurerm_user_assigned_identity.firehose.principal_id
 }

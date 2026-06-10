@@ -21,5 +21,5 @@ output "firehose_identity_client_id" {
 
 output "servicebus_endpoint" {
   description = "Fully qualified Service Bus namespace endpoint URL."
-  value       = data.azurerm_servicebus_namespace.main.endpoint
+  value       = azurerm_servicebus_namespace.main.endpoint
 }
