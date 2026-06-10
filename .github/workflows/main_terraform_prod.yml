@@ -79,7 +79,7 @@ jobs:
         run: |
           terraform plan \
             -var="resource_group_name=${{ secrets.PROD_RG }}" \
-            -var="servicebus_namespace_name=${{ secrets.PROD_SERVICEBUS_NAMESPACE }}"
+            -var="servicebus_namespace_name=${{ vars.PROD_SERVICEBUS_NAMESPACE }}"
 
       - name: Terraform Apply
         if: ${{ github.event_name == 'push' || github.event.inputs.action == 'apply' }}
@@ -87,7 +87,7 @@ jobs:
         run: |
           terraform apply -auto-approve \
             -var="resource_group_name=${{ secrets.PROD_RG }}" \
-            -var="servicebus_namespace_name=${{ secrets.PROD_SERVICEBUS_NAMESPACE }}"
+            -var="servicebus_namespace_name=${{ vars.PROD_SERVICEBUS_NAMESPACE }}"
 
       # Log Analytics workspace ID and key are NOT stored as secrets.
       # ACI deploy workflows look them up at deploy time via az monitor.

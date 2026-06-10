@@ -31,12 +31,31 @@ Alternative if admin is disabled: assign a user-assigned managed identity with A
 | `AZUREAPPSERVICE_PUBLISHPROFILE_34824FEBDA0F4C8CACF5CB97111CBFFB` | `staging_nihdevgithubportal.yml` | Add `azure/login` OIDC step; drop `publish-profile:` |
 | `AZUREAPPSERVICE_PUBLISHPROFILE_990190F22A5149AC859307273BAE196C` | `main_nihgithubportal.yml`       | Same                                                 |
 
+### ✅ Secrets converted to variables (June 2026)
+
+Non-sensitive values moved from secrets to repository variables (visible in Actions but not credential material):
+
+| Variable                   | Value                  | Used in                                                         |
+| -------------------------- | ---------------------- | --------------------------------------------------------------- |
+| `DEV_SERVICEBUS_NAMESPACE` | `nihdevgithubportalsb` | `staging_terraform_dev.yml`, `staging_nihdevgithubportalfh.yml` |
+| `DEV_TF_STORAGE_CONTAINER` | `tfstate`              | `staging_terraform_dev.yml`                                     |
+
+### Pending: staging → main merge (production equivalents — tracked in #1128)
+
+After the next staging → main merge, create the following repository variables in GitHub:
+
+| Variable                    | Value                     | Used in                                                 |
+| --------------------------- | ------------------------- | ------------------------------------------------------- |
+| `PROD_SERVICEBUS_NAMESPACE` | prod Service Bus name     | `main_terraform_prod.yml`, `main_nihgithubportalfh.yml` |
+| `PROD_TF_STORAGE_CONTAINER` | `tfstate` (or equivalent) | `main_terraform_prod.yml`                               |
+
+Then delete the corresponding `PROD_SERVICEBUS_CONNECTIONSTRING` secret once managed identity is verified working in prod (mirrors the dev→managed-identity migration).
+
 ### Keeping as secrets (decision: June 2026)
 
-`AAD_CLIENT_ID`, `AAD_TENANT_ID`, `AAD_SUBSCRIPTION_ID`, `PROD_AAD_CLIENT_ID`,
-`PROD_AAD_TENANT_ID`, `PROD_AAD_SUBSCRIPTION_ID` — remain as encrypted secrets.
-Although these are GUIDs rather than credentials, the team prefers to keep them
-in the secrets store to avoid any risk of accidental exposure.
+All other identifiers (client IDs, tenant IDs, subscription IDs, resource group names,
+hostnames, usernames, app IDs, slugs, storage account names) remain as encrypted secrets
+per team preference — none of their business if breached.
 
 ---
 
@@ -91,6 +110,9 @@ Replaced hardcoded-secret YAML files with GitHub Actions workflows and `infra/ac
 - [x] Add GitHub Secret `DEV_GITHUB_APP_OPERATIONS_APP_ID`
 - [x] Add GitHub Secret `DEV_GITHUB_APP_OPERATIONS_KEY`
 - [x] Add GitHub Secret `DEV_GITHUB_APP_OPERATIONS_SLUG`
+- [x] ~~Add GitHub Secret `DEV_SERVICEBUS_CONNECTIONSTRING`~~ — replaced by managed identity (see below)
+- [ ] Add GitHub Variable `DEV_SERVICEBUS_NAMESPACE` → `nihdevgithubportalsb` ← **set in GitHub UI**
+- [ ] Run Terraform dev workflow (`staging_terraform_dev.yml`, action: apply) — provisions `nihdevgithubportal-firehose` managed identity and `Azure Service Bus Data Receiver` role assignment
 - [ ] Run `staging_nihdevgithubportalfh.yml` manually — verify firehose container starts and logs appear
 - [ ] Run `staging_nihdevgithubportalcb.yml` manually — verify cache builder runs and `portaldescription` is written to DB for ARPA-H
 - [ ] Restart `nihdevgithubportal` App Service — confirm ARPA-H org description shows on homepage
@@ -105,16 +127,48 @@ Replaced hardcoded-secret YAML files with GitHub Actions workflows and `infra/ac
 - [ ] Add GitHub Secret `PROD_POSTGRES_DB`
 - [ ] Add GitHub Secret `PROD_POSTGRES_USER`
 - [ ] Add GitHub Secret `PROD_POSTGRES_PASSWORD`
-- [ ] Add GitHub Secret `PROD_SERVICEBUS_CONNECTIONSTRING`
+- [ ] ~~Add GitHub Secret `PROD_SERVICEBUS_CONNECTIONSTRING`~~ — replaced by managed identity
+- [ ] Add GitHub Variable `PROD_SERVICEBUS_NAMESPACE` → prod Service Bus namespace name
+- [ ] Add GitHub Variable `PROD_TF_STORAGE_CONTAINER` → `tfstate` (or equivalent)
+- [ ] Add GitHub Secret `PROD_TF_STORAGE_ACCOUNT` → prod Terraform state storage account name
 - [ ] Add GitHub Secret `PROD_GITHUB_APP_OPERATIONS_APP_ID`
 - [ ] Add GitHub Secret `PROD_GITHUB_APP_OPERATIONS_KEY`
 - [ ] Add GitHub Secret `PROD_GITHUB_APP_OPERATIONS_SLUG`
+- [ ] Run Terraform prod workflow (`main_terraform_prod.yml`, action: apply) — provisions `nihgithubportal-firehose` managed identity and Service Bus role assignment
 - [ ] Run `main_nihgithubportalfh.yml` manually — verify firehose starts
 - [ ] Run `main_nihgithubportalcb.yml` manually — verify cache builder runs
 
 ---
 
-## Completed (June 2026 — GitHub Copilot agentic session)
+## Managed Identity — Service Bus (June 2026)
+
+Replaces `SERVICEBUS_CONNECTIONSTRING` secret with Azure managed identity + `DefaultAzureCredential`.
+No credential to rotate or leak; ACI picks up the identity at runtime.
+
+### How it works
+
+1. Terraform provisions `azurerm_user_assigned_identity` (`nihdevgithubportal-firehose` / `nihgithubportal-firehose`)
+2. Terraform assigns `Azure Service Bus Data Receiver` role on the Service Bus namespace
+3. ACI deploy workflow passes `--assign-identity <identity-resource-id>` and `AZURE_CLIENT_ID=<client-id>` so `DefaultAzureCredential` selects the right identity
+4. `GITHUB_WEBHOOKS_SERVICEBUS_ENDPOINT=<namespace>.servicebus.windows.net` (no `https://` — SDK prepends `sb://` internally)
+5. `lib/queues/servicebus.ts` uses `useEntraAuthentication` flag to branch between credential and connection-string mode
+
+### Staging status (tracked in #1127)
+
+- [x] Code changes on `staging` branch
+- [ ] `DEV_SERVICEBUS_NAMESPACE` variable set in GitHub → `nihdevgithubportalsb`
+- [ ] Terraform apply run to create identity + role assignment
+- [ ] Firehose deploy verified with managed identity
+
+### Production (after staging → main merge — tracked in #1128)
+
+- [ ] `PROD_SERVICEBUS_NAMESPACE` variable set in GitHub → prod namespace name
+- [ ] Terraform prod apply run
+- [ ] `PROD_TF_STORAGE_CONTAINER` variable set in GitHub
+- [ ] Firehose deploy verified with managed identity
+- [ ] Delete `PROD_SERVICEBUS_CONNECTIONSTRING` secret
+
+---
 
 ### ✅ Fixed admin apps page showing wrong GitHub App slug and broken "Install in new org" link (June 2026)
 

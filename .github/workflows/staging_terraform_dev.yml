@@ -48,7 +48,7 @@ jobs:
       - name: Bootstrap Terraform backend storage
         env:
           TF_SA: ${{ secrets.DEV_TF_STORAGE_ACCOUNT }}
-          TF_CONTAINER: ${{ secrets.DEV_TF_STORAGE_CONTAINER }}
+          TF_CONTAINER: ${{ vars.DEV_TF_STORAGE_CONTAINER }}
           RG: ${{ secrets.DEV_RG }}
         run: |
           az storage account create \
@@ -73,7 +73,7 @@ jobs:
           terraform init \
             -backend-config="resource_group_name=${{ secrets.DEV_RG }}" \
             -backend-config="storage_account_name=${{ secrets.DEV_TF_STORAGE_ACCOUNT }}" \
-            -backend-config="container_name=${{ secrets.DEV_TF_STORAGE_CONTAINER }}" \
+            -backend-config="container_name=${{ vars.DEV_TF_STORAGE_CONTAINER }}" \
             -backend-config="key=dev/terraform.tfstate" \
             -backend-config="use_azuread_auth=true"
 
@@ -82,7 +82,7 @@ jobs:
         run: |
           terraform plan \
             -var="resource_group_name=${{ secrets.DEV_RG }}" \
-            -var="servicebus_namespace_name=${{ secrets.DEV_SERVICEBUS_NAMESPACE }}"
+            -var="servicebus_namespace_name=${{ vars.DEV_SERVICEBUS_NAMESPACE }}"
 
       - name: Terraform Apply
         if: ${{ github.event_name == 'push' || github.event.inputs.action == 'apply' }}
@@ -90,7 +90,7 @@ jobs:
         run: |
           terraform apply -auto-approve \
             -var="resource_group_name=${{ secrets.DEV_RG }}" \
-            -var="servicebus_namespace_name=${{ secrets.DEV_SERVICEBUS_NAMESPACE }}"
+            -var="servicebus_namespace_name=${{ vars.DEV_SERVICEBUS_NAMESPACE }}"
 
       # Log Analytics workspace ID and key are NOT stored as secrets.
       # ACI deploy workflows look them up at deploy time via az monitor.

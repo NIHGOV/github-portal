@@ -40,7 +40,7 @@ jobs:
           POSTGRES_DB: ${{ secrets.DEV_POSTGRES_DB }}
           POSTGRES_USER: ${{ secrets.DEV_POSTGRES_USER }}
           POSTGRES_PASSWORD: ${{ secrets.DEV_POSTGRES_PASSWORD }}
-          SB_NAMESPACE: ${{ secrets.DEV_SERVICEBUS_NAMESPACE }}
+          SB_NAMESPACE: ${{ vars.DEV_SERVICEBUS_NAMESPACE }}
           RG: ${{ secrets.DEV_RG }}
         run: |
           LA_WORKSPACE_ID=$(az monitor log-analytics workspace show \
