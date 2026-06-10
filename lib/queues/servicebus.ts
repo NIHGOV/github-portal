@@ -4,6 +4,7 @@
 //
 
 import { DateTime } from 'luxon';
+import { DefaultAzureCredential } from '@azure/identity';
 import { ServiceBusClient, ServiceBusReceivedMessage, ServiceBusReceiver } from '@azure/service-bus';
 
 import { IQueueMessage, IQueueProcessor } from '.';
@@ -18,7 +19,8 @@ const maxWaitTimeInMs = 30 /* seconds */ * 1000;
 
 export interface IServiceBusQueueProcessorOptions {
   queue: string;
-  connectionString: string;
+  connectionString?: string;
+  fullyQualifiedNamespace?: string;
 }
 
 export class ServiceBusMessage implements IQueueMessage {
@@ -52,15 +54,14 @@ export class ServiceBusMessage implements IQueueMessage {
 
 export default class ServiceBusQueueProcessor implements IQueueProcessor {
   #options: IServiceBusQueueProcessorOptions;
-  #service: ServiceBusClient;
   #receiver: ServiceBusReceiver;
   #initialized: boolean;
 
   supportsMultipleThreads: false;
 
   constructor(options: IServiceBusQueueProcessorOptions) {
-    if (!options.connectionString) {
-      throw new Error('options.connectionString required');
+    if (!options.connectionString && !options.fullyQualifiedNamespace) {
+      throw new Error('options.connectionString or options.fullyQualifiedNamespace required');
     }
     if (!options.queue) {
       throw new Error('options.queue required');
@@ -70,8 +71,9 @@ export default class ServiceBusQueueProcessor implements IQueueProcessor {
 
   async initialize(): Promise<void> {
     const options = this.#options;
-    const service = new ServiceBusClient(options.connectionString);
-    this.#service = service;
+    const service = options.fullyQualifiedNamespace
+      ? new ServiceBusClient(options.fullyQualifiedNamespace, new DefaultAzureCredential())
+      : new ServiceBusClient(options.connectionString);
     this.#receiver = service.createReceiver(options.queue, { receiveMode: 'peekLock' });
     this.#initialized = true;
   }

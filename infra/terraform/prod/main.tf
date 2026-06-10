@@ -12,7 +12,7 @@ data "azurerm_servicebus_namespace" "main" {
 }
 
 resource "azurerm_user_assigned_identity" "firehose" {
-  name                = "nihdevgithubportal-firehose"
+  name                = "nihgithubportal-firehose"
   resource_group_name = var.resource_group_name
   location            = var.location
 }

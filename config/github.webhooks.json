@@ -11,6 +11,7 @@
 
   "serviceBus": {
     "connectionString": "env://GITHUB_WEBHOOKS_SERVICEBUS_CONNECTIONSTRING",
+    "fullyQualifiedNamespace": "env://GITHUB_WEBHOOKS_SERVICEBUS_ENDPOINT",
     "queue": "env://GITHUB_WEBHOOKS_SERVICEBUS_QUEUE"
   },
 

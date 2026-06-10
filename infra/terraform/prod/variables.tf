@@ -1,5 +1,5 @@
 variable "resource_group_name" {
-  description = "Name of the dev Azure resource group"
+  description = "Name of the prod Azure resource group"
   type        = string
 }
 
@@ -12,7 +12,7 @@ variable "location" {
 variable "log_analytics_workspace_name" {
   description = "Name for the Log Analytics workspace"
   type        = string
-  default     = "nihdevgithubportal-logs"
+  default     = "nihgithubportal-logs"
 }
 
 variable "log_retention_days" {

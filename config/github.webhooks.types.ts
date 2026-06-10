@@ -17,7 +17,8 @@ export type ConfigGitHubWebhooks = {
   provider: string;
 
   serviceBus: {
-    connectionString: string;
+    connectionString?: string;
+    fullyQualifiedNamespace?: string;
     queue: string;
   };
 
