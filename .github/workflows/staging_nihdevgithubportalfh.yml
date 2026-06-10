@@ -60,7 +60,7 @@ jobs:
           REGISTRY_PASS=$(az acr credential show --name "$ACR_NAME" --query "passwords[0].value" --output tsv)
           IDENTITY_ID=$(az identity show --resource-group "$RG" --name nihdevgithubportal-firehose --query id --output tsv)
           IDENTITY_CLIENT_ID=$(az identity show --resource-group "$RG" --name nihdevgithubportal-firehose --query clientId --output tsv)
-          SB_ENDPOINT="https://${SB_NAMESPACE}.servicebus.windows.net"
+          SB_ENDPOINT="${SB_NAMESPACE}.servicebus.windows.net"
           az container create \
             --resource-group "$RG" \
             --name nihdevgithubportalfh \
