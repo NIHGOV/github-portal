@@ -20,8 +20,3 @@ variable "log_retention_days" {
   type        = number
   default     = 30
 }
-
-variable "servicebus_namespace_name" {
-  description = "Name of the existing Azure Service Bus namespace"
-  type        = string
-}
