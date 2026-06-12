@@ -16,6 +16,11 @@ on:
       - '.vscode/**'
       - '.github/ISSUE_TEMPLATE/**'
       - '.github/prompts/**'
+      - '.github/workflows/staging_*.yml'
+      - '.github/workflows/main_nihgithubportalcb.yml'
+      - '.github/workflows/main_nihgithubportalfh.yml'
+      - '.github/workflows/main_terraform_prod.yml'
+      - 'infra/**'
   workflow_dispatch:
 
 jobs:

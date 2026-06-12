@@ -112,7 +112,9 @@ Replaced hardcoded-secret YAML files with GitHub Actions workflows and `infra/ac
 - [x] Add GitHub Secret `DEV_GITHUB_APP_OPERATIONS_SLUG`
 - [x] ~~Add GitHub Secret `DEV_SERVICEBUS_CONNECTIONSTRING`~~ — replaced by managed identity (see below)
 - [x] Add GitHub Variable `DEV_SERVICEBUS_NAMESPACE` → `nihdevgithubportalsb` ✅ done
-- [x] ~~Run Terraform dev workflow~~ — partial: namespace + identity created, role assignment blocked (see Managed Identity section)
+- [x] ~~Run Terraform dev workflow~~ — ✅ complete: namespace + identity + role assignment all created
+- [x] Run `staging_nihdevgithubportalfh.yml` — ✅ firehose deployed and verified
+- [x] ~~Run `staging_nihdevgithubportalcb.yml`~~ — ✅ cache builder deployed and verified
 - [ ] Run `staging_nihdevgithubportalfh.yml` manually — verify firehose container starts and logs appear
 - [ ] Run `staging_nihdevgithubportalcb.yml` manually — verify cache builder runs and `portaldescription` is written to DB for ARPA-H
 - [ ] Restart `nihdevgithubportal` App Service — confirm ARPA-H org description shows on homepage
@@ -153,19 +155,16 @@ No credential to rotate or leak; ACI picks up the identity at runtime.
 4. `GITHUB_WEBHOOKS_SERVICEBUS_ENDPOINT=<namespace>.servicebus.windows.net` (no `https://` — SDK prepends `sb://` internally)
 5. `lib/queues/servicebus.ts` uses `useEntraAuthentication` flag to branch between credential and connection-string mode
 
-### Staging status (tracked in #1127)
+### Staging status (tracked in #1127) ✅ Complete
 
 - [x] Code changes on `staging` branch
 - [x] `DEV_SERVICEBUS_NAMESPACE` variable set in GitHub → `nihdevgithubportalsb`
-- [x] `nihdevgithubportalsb` Service Bus namespace created (by Terraform run #13)
-- [x] `nihdevgithubportal-firehose` managed identity created (by Terraform run #13)
-- [ ] **BLOCKED** — Grant OIDC service principal (object ID `d0b5d786-b1ef-473f-bfd8-bcaedd602489`) **User Access Administrator** on resource group `GitHub_OpenSource_Portal_Dev` so Terraform can write the `Azure Service Bus Data Receiver` role assignment
-  - Portal: Resource group → Access control (IAM) → Add role assignment → User Access Administrator → assign to object ID above
-  - CLI: `az role assignment create --role "User Access Administrator" --assignee d0b5d786-b1ef-473f-bfd8-bcaedd602489 --scope /subscriptions/<DEV_SUBSCRIPTION_ID>/resourceGroups/GitHub_OpenSource_Portal_Dev`
-- [ ] Re-run `staging_terraform_dev.yml` (action: apply) after permission is granted — completes the role assignment
-- [ ] Run `staging_nihdevgithubportalfh.yml` manually — verify firehose container starts and connects to Service Bus
-- [ ] Confirm events are flowing (check `nihdevgithubportal-logs` Log Analytics)
-- [ ] Delete `DEV_SERVICEBUS_CONNECTIONSTRING` secret (no longer used)
+- [x] `nihdevgithubportalsb` Service Bus namespace created (Terraform)
+- [x] `nihdevgithubportal-firehose` managed identity created (Terraform)
+- [x] `Azure Service Bus Data Receiver` role assignment created (Terraform, after User Access Administrator granted)
+- [x] Firehose container deployed and verified
+- [x] Cache builder deployed and verified
+- [ ] Delete `DEV_SERVICEBUS_CONNECTIONSTRING` secret ← **do this now**
 
 ### Production (after staging → main merge — tracked in #1128)
 
