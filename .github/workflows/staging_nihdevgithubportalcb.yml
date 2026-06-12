@@ -43,6 +43,9 @@ jobs:
           APP_ID: ${{ secrets.DEV_GITHUB_APP_OPERATIONS_APP_ID }}
           APP_KEY: ${{ secrets.DEV_GITHUB_APP_OPERATIONS_KEY }}
           APP_SLUG: ${{ secrets.DEV_GITHUB_APP_OPERATIONS_SLUG }}
+          ENTRA_CLIENT_ID: ${{ secrets.AAD_CLIENT_ID }}
+          ENTRA_CLIENT_SECRET: ${{ secrets.AAD_CLIENT_SECRET }}
+          ENTRA_TENANT_ID: ${{ secrets.AAD_TENANT_ID }}
           RG: ${{ secrets.DEV_RG }}
         run: |
           LA_WORKSPACE_ID=$(az monitor log-analytics workspace show \
@@ -83,11 +86,14 @@ jobs:
               REPOS_POSTGRES_USER="$POSTGRES_USER" \
               REPOS_POSTGRES_SSL=false \
               GITHUB_ORGANIZATIONS_SOURCE=postgres \
+              ENTRA_ID_CLIENT_ID="$ENTRA_CLIENT_ID" \
+              ENTRA_ID_TENANT_ID="$ENTRA_TENANT_ID" \
               GITHUB_APP_OPERATIONS_APP_ID="$APP_ID" \
               GITHUB_APP_OPERATIONS_SLUG="$APP_SLUG" \
             --secure-environment-variables \
               REDIS_KEY="$REDIS_KEY" \
               REPOS_POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+              ENTRA_ID_CLIENT_SECRET="$ENTRA_CLIENT_SECRET" \
               GITHUB_APP_OPERATIONS_KEY="$APP_KEY" \
             "${LA_ARGS[@]}" \
             --no-wait

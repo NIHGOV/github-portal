@@ -84,7 +84,6 @@ jobs:
               REPOS_POSTGRES_HOST="$POSTGRES_HOST" \
               REPOS_POSTGRES_USER="$POSTGRES_USER" \
               REPOS_POSTGRES_SSL=false \
-              GITHUB_ORGANIZATIONS_FILE=../env-orgs.json \
               GITHUB_ORGANIZATIONS_SOURCE=postgres \
               GITHUB_WEBHOOKS_PROVIDER=servicebus \
               GITHUB_WEBHOOKS_SERVICEBUS_QUEUE=events \
