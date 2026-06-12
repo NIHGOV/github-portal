@@ -44,6 +44,7 @@ jobs:
           ENTRA_CLIENT_ID: ${{ secrets.PROD_AAD_CLIENT_ID }}
           ENTRA_CLIENT_SECRET: ${{ secrets.PROD_AAD_CLIENT_SECRET }}
           ENTRA_TENANT_ID: ${{ secrets.PROD_AAD_TENANT_ID }}
+          WEBHOOK_SHARED_SECRET: ${{ secrets.PROD_WEBHOOK_SHARED_SECRET }}
           RG: ${{ secrets.PROD_RG }}
         run: |
           LA_WORKSPACE_ID=$(az monitor log-analytics workspace show \
@@ -99,5 +100,6 @@ jobs:
               REDIS_KEY="$REDIS_KEY" \
               REPOS_POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
               ENTRA_ID_CLIENT_SECRET="$ENTRA_CLIENT_SECRET" \
+              GITHUB_WEBHOOK_SHARED_SECRET="$WEBHOOK_SHARED_SECRET" \
             "${LA_ARGS[@]}" \
             --no-wait
