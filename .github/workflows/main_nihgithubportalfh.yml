@@ -41,6 +41,9 @@ jobs:
           POSTGRES_USER: ${{ secrets.PROD_POSTGRES_USER }}
           POSTGRES_PASSWORD: ${{ secrets.PROD_POSTGRES_PASSWORD }}
           SB_NAMESPACE: ${{ vars.PROD_SERVICEBUS_NAMESPACE }}
+          ENTRA_CLIENT_ID: ${{ secrets.PROD_AAD_CLIENT_ID }}
+          ENTRA_CLIENT_SECRET: ${{ secrets.PROD_AAD_CLIENT_SECRET }}
+          ENTRA_TENANT_ID: ${{ secrets.PROD_AAD_TENANT_ID }}
           RG: ${{ secrets.PROD_RG }}
         run: |
           LA_WORKSPACE_ID=$(az monitor log-analytics workspace show \
@@ -85,6 +88,8 @@ jobs:
               REPOS_POSTGRES_USER="$POSTGRES_USER" \
               REPOS_POSTGRES_SSL=false \
               GITHUB_ORGANIZATIONS_SOURCE=postgres \
+              ENTRA_ID_CLIENT_ID="$ENTRA_CLIENT_ID" \
+              ENTRA_ID_TENANT_ID="$ENTRA_TENANT_ID" \
               GITHUB_WEBHOOKS_PROVIDER=servicebus \
               GITHUB_WEBHOOKS_SERVICEBUS_QUEUE=events \
               GITHUB_WEBHOOKS_SERVICEBUS_USE_ENTRA_AUTH=1 \
@@ -93,5 +98,6 @@ jobs:
             --secure-environment-variables \
               REDIS_KEY="$REDIS_KEY" \
               REPOS_POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+              ENTRA_ID_CLIENT_SECRET="$ENTRA_CLIENT_SECRET" \
             "${LA_ARGS[@]}" \
             --no-wait
