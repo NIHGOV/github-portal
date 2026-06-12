@@ -10,7 +10,6 @@ import { ServiceBusClient, ServiceBusReceivedMessage, ServiceBusReceiver } from 
 import type { IQueueMessage, IQueueProcessor } from './index.js';
 import { IDictionary, IProviders, Json } from '../../interfaces/index.js';
 import { CreateError } from '../transitional.js';
-import { tryGetEntraApplicationTokenCredential } from '../applicationIdentity.js';
 import { normalizeWebhookRawBody, requireWebhookRawBody } from '../webhookSignature.js';
 
 // NOTE: in May 2021 this file was moved to the newer generation of Azure SDK dependencies,
@@ -101,8 +100,7 @@ export default class ServiceBusQueueProcessor implements IQueueProcessor {
     const options = this.#options;
     let service: ServiceBusClient;
     if (options.useEntraAuthentication) {
-      const credential =
-        tryGetEntraApplicationTokenCredential(this.providers, 'service bus') ?? new DefaultAzureCredential();
+      const credential = new DefaultAzureCredential();
       service = new ServiceBusClient(options.endpoint, credential);
     } else {
       service = new ServiceBusClient(options.connectionString);
