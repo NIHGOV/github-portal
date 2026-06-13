@@ -82,15 +82,39 @@ Before the workflow can run, a storage account for Terraform state must exist:
 - [ ] `azurerm_log_analytics_workspace` — `nihdevgithubportal-logs`
 - [x] Log Analytics ID/key wired into ACI deploys: looked up at runtime via `az monitor log-analytics workspace show/get-shared-keys` — no secrets required
 
-### Future: full resource group coverage (tracked in GitHub Issues)
+### Future: full resource group import via aztfexport
 
-- [ ] Redis Cache (`nihdevgithubportal`) — see issue
-- [ ] PostgreSQL Flexible Server (`nihdevgithubportaldb`) — see issue
-- [ ] Service Bus namespace — see issue
-- [ ] Container Registry — see issue
-- [ ] App Service (`nihdevgithubportal`) — see issue
-- [ ] ACI container groups (firehose, cache builder) — see issue
-- [ ] Repeat entire stack for `GitHub_OpenSource_Portal` (prod) — see issue
+**Prerequisites:** staging verified stable, staging → main merged, prod stabilized.
+
+Use `aztfexport` to import all remaining resources into the existing Terraform state backends.
+No data will be modified — `terraform import` only updates state; actual Azure resources are untouched.
+
+#### Dev (`GitHub_OpenSource_Portal_Dev`)
+
+1. Run locally (requires `az login` + `aztfexport` installed):
+
+   ```bash
+   aztfexport resource-group GitHub_OpenSource_Portal_Dev --output-dir /tmp/aztfexport-dev
+   ```
+
+2. Feed output to agent — reconcile with existing `infra/terraform/dev/main.tf`, remove duplicate blocks for resources already in state (Service Bus namespace, queue, managed identity, role assignment, Log Analytics)
+3. Add `lifecycle { ignore_changes = [app_settings] }` to App Service resource to prevent Terraform from blanking sensitive settings not in HCL
+4. Run `terraform plan` — must show zero destructive changes before committing
+5. Commit cleaned HCL to `infra/terraform/dev/`
+
+#### Prod (`GitHub_OpenSource_Portal`)
+
+Repeat same process against prod resource group using `infra/terraform/prod/` and `nihgithubportaltf` state backend.
+
+#### Resources to import (both envs)
+
+- [ ] Redis Cache
+- [ ] PostgreSQL Flexible Server
+- [ ] Container Registry (ACR)
+- [ ] App Service (with `ignore_changes = [app_settings]`)
+- [ ] ACI container groups (firehose, cache builder)
+- [ ] Virtual network / subnets (if any)
+- [ ] Any remaining role assignments, diagnostic settings
 
 ---
 
