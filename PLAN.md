@@ -113,12 +113,14 @@ Replaced hardcoded-secret YAML files with GitHub Actions workflows and `infra/ac
 
 - [ ] Add GitHub Secret `PROD_RG` → `GitHub_OpenSource_Portal`
 - [ ] Add GitHub Secrets `PROD_AAD_CLIENT_ID`, `PROD_AAD_CLIENT_SECRET`, `PROD_AAD_SUBSCRIPTION_ID`, `PROD_AAD_TENANT_ID` (may match existing `AAD_*` values)
+- [ ] Add GitHub Secret `PROD_REGISTRY_SERVER` → prod ACR hostname (e.g. `nihgithubportal.azurecr.io`)
 - [ ] Add GitHub Secret `PROD_REDIS_TLS_HOST`
 - [ ] Add GitHub Secret `PROD_REDIS_KEY`
 - [ ] Add GitHub Secret `PROD_POSTGRES_HOST`
 - [ ] Add GitHub Secret `PROD_POSTGRES_DB`
 - [ ] Add GitHub Secret `PROD_POSTGRES_USER`
 - [ ] Add GitHub Secret `PROD_POSTGRES_PASSWORD`
+- [ ] Add GitHub Secret `PROD_WEBHOOK_SHARED_SECRET` → webhook HMAC secret from the prod GitHub App settings (needed by firehose; learned from staging)
 - [ ] ~~Add GitHub Secret `PROD_SERVICEBUS_CONNECTIONSTRING`~~ — replaced by managed identity
 - [ ] Add GitHub Variable `PROD_SERVICEBUS_NAMESPACE` → prod Service Bus namespace name
 - [ ] Add GitHub Variable `PROD_TF_STORAGE_CONTAINER` → `tfstate` (or equivalent)

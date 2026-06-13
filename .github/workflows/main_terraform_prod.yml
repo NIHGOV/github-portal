@@ -45,7 +45,7 @@ jobs:
       - name: Bootstrap Terraform backend storage
         env:
           TF_SA: ${{ secrets.PROD_TF_STORAGE_ACCOUNT }}
-          TF_CONTAINER: ${{ secrets.PROD_TF_STORAGE_CONTAINER }}
+          TF_CONTAINER: ${{ vars.PROD_TF_STORAGE_CONTAINER }}
           RG: ${{ secrets.PROD_RG }}
         run: |
           az storage account create \
@@ -70,7 +70,7 @@ jobs:
           terraform init \
             -backend-config="resource_group_name=${{ secrets.PROD_RG }}" \
             -backend-config="storage_account_name=${{ secrets.PROD_TF_STORAGE_ACCOUNT }}" \
-            -backend-config="container_name=${{ secrets.PROD_TF_STORAGE_CONTAINER }}" \
+            -backend-config="container_name=${{ vars.PROD_TF_STORAGE_CONTAINER }}" \
             -backend-config="key=prod/terraform.tfstate" \
             -backend-config="use_azuread_auth=true"
 
