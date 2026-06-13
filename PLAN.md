@@ -79,7 +79,7 @@ Before the workflow can run, a storage account for Terraform state must exist:
 
 ### Resources managed
 
-- [ ] `azurerm_log_analytics_workspace` — `nihdevgithubportal-logs`
+- [x] `azurerm_log_analytics_workspace` — `nihdevgithubportal-logs`
 - [x] Log Analytics ID/key wired into ACI deploys: looked up at runtime via `az monitor log-analytics workspace show/get-shared-keys` — no secrets required
 
 ---
