@@ -69,13 +69,13 @@ Long-term goal: represent the entire `GitHub_OpenSource_Portal_Dev` (and eventua
 
 Before the workflow can run, a storage account for Terraform state must exist:
 
-1. ~~Create a storage account in `GitHub_OpenSource_Portal_Dev` (e.g. `nihdevgithubportaltf`)~~ ✅ Done
-2. Create a blob container in it (e.g. `tfstate`) — or confirm it exists
-3. ~~Grant service principal **Storage Blob Data Contributor** on `nihdevgithubportaltf`~~ ✅ Done
-4. Add GitHub Secrets:
-   - `DEV_TF_STORAGE_ACCOUNT` → `nihdevgithubportaltf`
-   - `DEV_TF_STORAGE_CONTAINER` → container name (e.g. `tfstate`)
-   - ~~`GH_SECRETS_PAT`~~ — not needed; ACI workflows look up Log Analytics from Azure at deploy time via `az monitor`
+- [x] ~~Create a storage account in `GitHub_OpenSource_Portal_Dev` (e.g. `nihdevgithubportaltf`)~~
+- [x] Create a blob container in it (e.g. `tfstate`) — or confirm it exists
+- [x] ~~Grant service principal **Storage Blob Data Contributor** on `nihdevgithubportaltf`~~
+- [x] Add GitHub Secrets:
+  - `DEV_TF_STORAGE_ACCOUNT` → `nihdevgithubportaltf`
+  - `DEV_TF_STORAGE_CONTAINER` → container name (e.g. `tfstate`)
+  - ~~`GH_SECRETS_PAT`~~ — not needed; ACI workflows look up Log Analytics from Azure at deploy time via `az monitor`
 
 ### Resources managed
 
