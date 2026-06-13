@@ -77,10 +77,17 @@ Before the workflow can run, a storage account for Terraform state must exist:
   - `DEV_TF_STORAGE_CONTAINER` → container name (e.g. `tfstate`)
   - ~~`GH_SECRETS_PAT`~~ — not needed; ACI workflows look up Log Analytics from Azure at deploy time via `az monitor`
 
-### Resources managed
+### Dev resources managed
 
 - [x] `azurerm_log_analytics_workspace` — `nihdevgithubportal-logs`
 - [x] Log Analytics ID/key wired into ACI deploys: looked up at runtime via `az monitor log-analytics workspace show/get-shared-keys` — no secrets required
+
+### Prod bootstrap (one-time, before Terraform prod apply)
+
+- [ ] Create/confirm Terraform state storage account for prod (e.g. `nihgithubportaltf`) in `GitHub_OpenSource_Portal`
+- [ ] Create blob container (e.g. `tfstate`) in it
+- [ ] Grant service principal **Storage Blob Data Contributor** on the prod state storage account
+- [ ] Add GitHub Secret `PROD_TF_STORAGE_ACCOUNT` → prod storage account name (also listed in ACI Production above)
 
 ---
 
@@ -90,17 +97,18 @@ Replaced hardcoded-secret YAML files with GitHub Actions workflows and `infra/ac
 
 ### Staging
 
+- [x] Add GitHub Secret `DEV_RG` → `GitHub_OpenSource_Portal_Dev`
+- [x] Add GitHub Secret `DEV_REGISTRY_SERVER` → dev ACR hostname
 - [x] Add GitHub Secret `DEV_REDIS_TLS_HOST`
 - [x] Add GitHub Secret `DEV_REDIS_KEY`
 - [x] Add GitHub Secret `DEV_POSTGRES_HOST`
 - [x] Add GitHub Secret `DEV_POSTGRES_DB`
 - [x] Add GitHub Secret `DEV_POSTGRES_USER`
 - [x] Add GitHub Secret `DEV_POSTGRES_PASSWORD`
-- [x] Add GitHub Secret `DEV_SERVICEBUS_CONNECTIONSTRING`
+- [x] Add GitHub Secret `DEV_WEBHOOK_SHARED_SECRET` → webhook HMAC secret from dev GitHub App settings
 - [x] Add GitHub Secret `DEV_GITHUB_APP_OPERATIONS_APP_ID`
 - [x] Add GitHub Secret `DEV_GITHUB_APP_OPERATIONS_KEY`
 - [x] Add GitHub Secret `DEV_GITHUB_APP_OPERATIONS_SLUG`
-- [x] ~~Add GitHub Secret `DEV_SERVICEBUS_CONNECTIONSTRING`~~ — replaced by managed identity (see below)
 - [x] Add GitHub Variable `DEV_SERVICEBUS_NAMESPACE` → `nihdevgithubportalsb` ✅ done
 - [x] ~~Run Terraform dev workflow~~ — ✅ complete: namespace + identity + role assignment all created
 - [x] Run `staging_nihdevgithubportalfh.yml` — ✅ firehose deployed and verified
@@ -121,16 +129,19 @@ Replaced hardcoded-secret YAML files with GitHub Actions workflows and `infra/ac
 - [ ] Add GitHub Secret `PROD_POSTGRES_USER`
 - [ ] Add GitHub Secret `PROD_POSTGRES_PASSWORD`
 - [ ] Add GitHub Secret `PROD_WEBHOOK_SHARED_SECRET` → webhook HMAC secret from the prod GitHub App settings (needed by firehose; learned from staging)
-- [ ] ~~Add GitHub Secret `PROD_SERVICEBUS_CONNECTIONSTRING`~~ — replaced by managed identity
+- [ ] ~~`PROD_SERVICEBUS_CONNECTIONSTRING`~~ — never needed; went straight to managed identity
 - [ ] Add GitHub Variable `PROD_SERVICEBUS_NAMESPACE` → prod Service Bus namespace name
 - [ ] Add GitHub Variable `PROD_TF_STORAGE_CONTAINER` → `tfstate` (or equivalent)
-- [ ] Add GitHub Secret `PROD_TF_STORAGE_ACCOUNT` → prod Terraform state storage account name
+- [ ] Add GitHub Secret `PROD_TF_STORAGE_ACCOUNT` → prod Terraform state storage account name (also required for Terraform prod bootstrap below)
 - [ ] Add GitHub Secret `PROD_GITHUB_APP_OPERATIONS_APP_ID`
 - [ ] Add GitHub Secret `PROD_GITHUB_APP_OPERATIONS_KEY`
 - [ ] Add GitHub Secret `PROD_GITHUB_APP_OPERATIONS_SLUG`
-- [ ] Run Terraform prod workflow (`main_terraform_prod.yml`, action: apply) — provisions `nihgithubportal-firehose` managed identity and Service Bus role assignment
+- [ ] Apply `WEBSITE_RUN_FROM_PACKAGE=1`, Entra env vars, and all required App Service settings to `nihgithubportal` (see High Priority §0)
+- [ ] Run Terraform prod workflow (`main_terraform_prod.yml`, action: apply) — provisions `nihgithubportal-firehose` managed identity, Service Bus namespace, queue, and role assignment
 - [ ] Run `main_nihgithubportalfh.yml` manually — verify firehose starts
 - [ ] Run `main_nihgithubportalcb.yml` manually — verify cache builder runs
+- [ ] Run `main_nihgithubportal.yml` — deploy app to `nihgithubportal` App Service
+- [ ] Verify `nihgithubportal` App Service starts and portal is accessible
 
 ---
 
@@ -156,15 +167,17 @@ No credential to rotate or leak; ACI picks up the identity at runtime.
 - [x] `Azure Service Bus Data Receiver` role assignment created (Terraform, after User Access Administrator granted)
 - [x] Firehose container deployed and verified
 - [x] Cache builder deployed and verified
-- [ ] Delete `DEV_SERVICEBUS_CONNECTIONSTRING` secret from GitHub Actions secrets (no longer needed)
 
 ### Production (after staging → main merge — tracked in #1128)
 
 - [ ] `PROD_SERVICEBUS_NAMESPACE` variable set in GitHub → prod namespace name
+- [ ] `PROD_TF_STORAGE_CONTAINER` variable set in GitHub → `tfstate`
 - [ ] Terraform prod apply run
-- [ ] `PROD_TF_STORAGE_CONTAINER` variable set in GitHub
-- [ ] Firehose deploy verified with managed identity
-- [ ] Delete `PROD_SERVICEBUS_CONNECTIONSTRING` secret
+- [ ] `nihgithubportalsb` Service Bus namespace created (Terraform)
+- [ ] `nihgithubportal-firehose` managed identity created (Terraform)
+- [ ] `Azure Service Bus Data Receiver` role assignment created (Terraform)
+- [ ] Firehose container deployed and verified
+- [ ] Cache builder deployed and verified
 
 ---
 
