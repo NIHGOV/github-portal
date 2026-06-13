@@ -13,6 +13,11 @@ resource "azurerm_servicebus_namespace" "main" {
   sku                 = "Standard"
 }
 
+resource "azurerm_servicebus_queue" "events" {
+  name         = "events"
+  namespace_id = azurerm_servicebus_namespace.main.id
+}
+
 resource "azurerm_user_assigned_identity" "firehose" {
   name                = "nihgithubportal-firehose"
   resource_group_name = var.resource_group_name
