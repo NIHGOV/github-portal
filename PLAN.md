@@ -115,9 +115,9 @@ Replaced hardcoded-secret YAML files with GitHub Actions workflows and `infra/ac
 - [x] ~~Run Terraform dev workflow~~ — ✅ complete: namespace + identity + role assignment all created
 - [x] Run `staging_nihdevgithubportalfh.yml` — ✅ firehose deployed and verified
 - [x] ~~Run `staging_nihdevgithubportalcb.yml`~~ — ✅ cache builder deployed and verified
-- [ ] Run `staging_nihdevgithubportalfh.yml` manually — verify firehose container starts and logs appear
-- [ ] Run `staging_nihdevgithubportalcb.yml` manually — verify cache builder runs and `portaldescription` is written to DB for ARPA-H
-- [ ] Restart `nihdevgithubportal` App Service — confirm ARPA-H org description shows on homepage
+- [x] Run `staging_nihdevgithubportalfh.yml` manually — ✅ firehose container starts, polls `events` queue every 10s
+- [x] Run `staging_nihdevgithubportalcb.yml` manually — ✅ cache builder runs, saves repo permissions to DB
+- [x] Restart `nihdevgithubportal` App Service — ✅ ARPA-H org description appears on homepage
 
 ### Production
 
@@ -164,7 +164,7 @@ No credential to rotate or leak; ACI picks up the identity at runtime.
 - [x] `Azure Service Bus Data Receiver` role assignment created (Terraform, after User Access Administrator granted)
 - [x] Firehose container deployed and verified
 - [x] Cache builder deployed and verified
-- [ ] Delete `DEV_SERVICEBUS_CONNECTIONSTRING` secret ← **do this now**
+- [ ] Delete `DEV_SERVICEBUS_CONNECTIONSTRING` secret from GitHub Actions secrets (no longer needed)
 
 ### Production (after staging → main merge — tracked in #1128)
 
