@@ -378,6 +378,7 @@ router.post('/whois/link/:linkid', async function (req: ReposAppRequest, res: Re
   }
 });
 
+// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
 router.post('/whois/link/', async function (req: ReposAppRequest, res: Response, next: NextFunction) {
   const { config, operations } = getProviders(req);
   const allowAdministratorManualLinking = operations?.config?.features?.allowAdministratorManualLinking;
@@ -485,6 +486,7 @@ router.get('/whois/aad/:upn', function (req: ReposAppRequest, res: Response, nex
     .catch(next);
 });
 
+// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
 router.get('/whois/github/:username', function (req: ReposAppRequest, res: Response, next: NextFunction) {
   const login = stringParam(req, 'username');
   const providers = getProviders(req);

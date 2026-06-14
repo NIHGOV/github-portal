@@ -90,6 +90,7 @@ async function ensureAnnotations(
   return next();
 }
 
+// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
 router.patch('/*splat', authorizeOnlyPrivilegedOrganizationAnnotationsWriters, ensureAnnotations);
 router.put('/*splat', authorizeOnlyPrivilegedOrganizationAnnotationsWriters, ensureAnnotations);
 router.delete('/*splat', authorizeOnlyPrivilegedOrganizationAnnotationsWriters);

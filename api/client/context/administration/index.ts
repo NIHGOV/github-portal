@@ -41,6 +41,7 @@ router.get('/', async (req: IRequestWithAdministration, res: Response) => {
   }) as unknown as void;
 });
 
+// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
 router.use((req: IRequestWithAdministration, res: Response, next: NextFunction) => {
   return req.isSystemAdministrator ? next() : next(CreateError.NotAuthorized('Not authorized'));
 });

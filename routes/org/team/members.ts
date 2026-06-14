@@ -93,6 +93,7 @@ router.use(
   RoutePeopleSearch
 );
 
+// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
 router.post(
   '/remove',
   MiddlewareTeamAdminRequired,
@@ -111,6 +112,7 @@ router.post(
   }
 );
 
+// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
 router.post(
   '/add',
   MiddlewareTeamAdminRequired,

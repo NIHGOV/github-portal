@@ -27,6 +27,7 @@ interface IRequestWithRaw extends ReposAppRequest {
   _raw?: string | Buffer;
 }
 
+// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
 router.use(async (req: IRequestWithRaw, res: Response, next: NextFunction) => {
   const { insights } = req;
   if (!isWebhookIngestionEndpointEnabled(req)) {

@@ -148,6 +148,7 @@ router.use(async (req: IRequestHacked, res: Response, next: NextFunction) => {
   }
 });
 
+// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
 router.get('/', async function (req: ReposAppRequest, res: Response, next: NextFunction) {
   const { config } = getProviders(req);
   const individualContext = req.individualContext;

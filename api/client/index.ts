@@ -38,6 +38,7 @@ const router: Router = Router();
 
 let staticSiteFeatures: SiteStaticFeatures = null;
 
+// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
 router.use((req: ReposAppRequest, res: Response, next: NextFunction) => {
   const { query } = req;
   const { config } = getProviders(req);
@@ -54,6 +55,7 @@ router.use((req: ReposAppRequest, res: Response, next: NextFunction) => {
   return next(CreateError.NotAuthorized('Client API features unavailable'));
 });
 
+// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
 router.use(requireAccessTokenClient);
 router.use(apiContextMiddleware);
 router.use(setIdentity);

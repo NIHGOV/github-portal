@@ -15,6 +15,7 @@ interface ILinksApiRequestWithUnlink extends ReposApiRequest {
   unlink?: ICorporateLink;
 }
 
+// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
 router.use(function (req: ILinksApiRequestWithUnlink, res: Response, next: NextFunction) {
   const token = req.apiKeyToken;
   if (!token.hasScope) {

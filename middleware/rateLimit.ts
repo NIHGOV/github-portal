@@ -161,6 +161,7 @@ function resolveNetworkIdentity(req: ReposAppRequest): string {
 function hashValue(value: string): string {
   // Compacts an unbounded cache key into a fixed-length stable identifier.
   // NOT used for password storage, authentication, or secret comparison.
+  // codeql[js/insufficient-password-hash] - SHA-256 here is a cache key compactor, not a credential hash
   return crypto.createHash('sha256').update(value).digest('hex');
 }
 

@@ -103,7 +103,7 @@ export class RepositorySearch {
       .filterByType(this.type)
       .filterByPhrase(this.phrase)
       .filterByTeams(this.teamsType)
-      .determinePages()[sortMethodName]() // prettier will mangle this; CodeQL: given the explicit check and sortBy prefix on `this`, we are OK with this dynamic call by name.
+      .determinePages()[sortMethodName]() // prettier will mangle this; codeql[js/unvalidated-dynamic-method-call] - method existence verified above via this[sortMethodName] guard; name is always 'sortBy' + validated sort param
       .getPage(this.page);
     await this.expandEntitiesForkForks();
     return this;

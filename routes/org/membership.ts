@@ -10,6 +10,7 @@ import { wrapError } from '../../lib/utils.js';
 import RequireActiveGitHubSession from '../../middleware/github/requireActiveSession.js';
 const router: Router = Router();
 
+// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
 router.get(
   '/',
   RequireActiveGitHubSession,
@@ -51,6 +52,7 @@ router.get(
   }
 );
 
+// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
 router.post(
   '/',
   RequireActiveGitHubSession,

@@ -38,7 +38,9 @@ import { ReposAppRequest, UserAlertType } from '../interfaces/index.js';
 import { Repository } from '../business/index.js';
 
 // - - - Middleware: require that they have a passport - - -
+// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
 router.use(requireAuthenticatedUserOrSignIn);
+// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
 router.use(requireAccessTokenClient);
 // - - - Middleware: set the identities we have authenticated  - - -
 router.use(setIdentity);

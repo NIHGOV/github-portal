@@ -124,6 +124,7 @@ router.post(
   }
 );
 
+// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
 router.post(
   '/join/approvals/:approvalId',
   AddTeamPermissionsToRequest,
@@ -176,6 +177,7 @@ router.post(
   }
 );
 
+// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
 router.get(
   '/join/approvals/:approvalId',
   AddTeamPermissionsToRequest,
@@ -225,6 +227,7 @@ router.get(
   }
 );
 
+// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
 router.post(
   '/role/:login',
   AddTeamPermissionsToRequest,
@@ -255,6 +258,7 @@ router.post(
   }
 );
 
+// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
 router.delete(
   '/role/:login',
   AddTeamPermissionsToRequest,

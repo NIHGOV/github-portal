@@ -124,6 +124,7 @@ router.delete('/', async (req: ReposAppRequest, res: Response, next: NextFunctio
   return unlinkInteractive(true, activeContext, req, res, next);
 });
 
+// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
 router.post('/', validateLinkOk, async (req: ReposAppRequest, res: Response, next: NextFunction) => {
   const activeContext = (req.individualContext || req.apiContext) as IndividualContext;
   return interactiveLinkUser(true, activeContext, req, res, next);
