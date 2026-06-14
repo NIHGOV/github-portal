@@ -1,11 +1,15 @@
 name: NIH GHMP (Dev) - Deploy Cache Builder Container
 
+# Manual-dispatch only. Automatic deploys run as jobs in staging_create_acr_image.yml.
+# Use this workflow to redeploy the cache builder without rebuilding the image,
+# or to roll back to a specific image tag.
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows: ['NIH GHMP Container (Dev) - Build & Register']
-    types: [completed]
-    branches: [staging]
+    inputs:
+      image_tag:
+        description: 'ACR image tag to deploy (default: latest)'
+        required: false
+        default: 'latest'
 
 permissions:
   id-token: write
@@ -13,7 +17,7 @@ permissions:
 
 jobs:
   deploy:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     steps:
@@ -61,14 +65,14 @@ jobs:
             LA_ARGS=(--log-analytics-workspace "$LA_WORKSPACE_ID" --log-analytics-workspace-key "$LA_WORKSPACE_KEY")
           fi
           ACR_NAME="${REGISTRY_SERVER%%.*}"
-          IMAGE_SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+          IMAGE_TAG="${{ github.event.inputs.image_tag || 'latest' }}"
           REGISTRY_USER=$(az acr credential show --name "$ACR_NAME" --query username --output tsv)
           REGISTRY_PASS=$(az acr credential show --name "$ACR_NAME" --query "passwords[0].value" --output tsv)
           az container create \
             --resource-group "$RG" \
             --name nihdevgithubportalcb \
             --location centralus \
-            --image "$REGISTRY_SERVER/portal:${IMAGE_SHA}" \
+            --image "$REGISTRY_SERVER/portal:${IMAGE_TAG}" \
             --registry-login-server "$REGISTRY_SERVER" \
             --registry-username "$REGISTRY_USER" \
             --registry-password "$REGISTRY_PASS" \
