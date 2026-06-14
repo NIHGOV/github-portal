@@ -3,6 +3,10 @@ name: NIH GHMP (Prod) - Update Database Org Settings
 on:
   workflow_dispatch:
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -51,14 +55,15 @@ jobs:
       - name: Azure Login
         uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
         with:
-          creds: '{"clientId":"${{ secrets.AAD_CLIENT_ID }}","clientSecret":"${{ secrets.AAD_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AAD_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AAD_TENANT_ID }}"}'
+          client-id: ${{ secrets.AAD_CLIENT_ID }}
+          tenant-id: ${{ secrets.AAD_TENANT_ID }}
+          subscription-id: ${{ secrets.AAD_SUBSCRIPTION_ID }}
+
+      - name: Install psql client
+        run: sudo apt-get install -y --no-install-recommends postgresql-client
 
       - name: PSQL update
-        uses: azure/postgresql@59401b7890419c83f372819a1c37f5aecf57ac92 # v1.2.0
-        with:
-          connection-string: ${{ secrets.PROD_PSQL_CONN }}
-          server-name: $${{ secrets.PROD_PSQL_SERVER }}
-          plsql-file: ./update.sql
+        run: psql "${{ secrets.PROD_PSQL_CONN }}" -f ./update.sql
 
       - name: Azure CLI Action
         uses: Azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3.0.0
