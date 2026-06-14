@@ -7,11 +7,18 @@ on:
       - main
     paths:
       - 'Dockerfile'
-      - 'jobs/**'
+      - 'api/**'
+      - 'bin/**'
       - 'business/**'
-      - 'lib/**'
       - 'config/**'
       - 'interfaces/**'
+      - 'jobs/**'
+      - 'lib/**'
+      - 'middleware/**'
+      - 'routes/**'
+      - 'typings/**'
+      - 'index.ts'
+      - 'job.ts'
       - 'package.json'
       - 'bun.lock'
       - 'tsconfig.json'
@@ -59,5 +66,9 @@ jobs:
           username: ${{ secrets.PROD_REGISTRY_USER }}
           password: ${{ secrets.PROD_REGISTRY_PASS }}
       - run: |
-          docker build . -t ${{ secrets.PROD_REGISTRY_SERVER }}/portal
-          docker push ${{ secrets.PROD_REGISTRY_SERVER }}/portal
+          SHA_TAG="${{ github.sha }}"
+          docker build . \
+            -t ${{ secrets.PROD_REGISTRY_SERVER }}/portal:"${SHA_TAG}" \
+            -t ${{ secrets.PROD_REGISTRY_SERVER }}/portal:latest
+          docker push ${{ secrets.PROD_REGISTRY_SERVER }}/portal:"${SHA_TAG}"
+          docker push ${{ secrets.PROD_REGISTRY_SERVER }}/portal:latest

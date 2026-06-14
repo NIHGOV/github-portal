@@ -61,13 +61,14 @@ jobs:
             LA_ARGS=(--log-analytics-workspace "$LA_WORKSPACE_ID" --log-analytics-workspace-key "$LA_WORKSPACE_KEY")
           fi
           ACR_NAME="${REGISTRY_SERVER%%.*}"
+          IMAGE_SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
           REGISTRY_USER=$(az acr credential show --name "$ACR_NAME" --query username --output tsv)
           REGISTRY_PASS=$(az acr credential show --name "$ACR_NAME" --query "passwords[0].value" --output tsv)
           az container create \
             --resource-group "$RG" \
             --name nihdevgithubportalcb \
             --location centralus \
-            --image "$REGISTRY_SERVER/portal:latest" \
+            --image "$REGISTRY_SERVER/portal:${IMAGE_SHA}" \
             --registry-login-server "$REGISTRY_SERVER" \
             --registry-username "$REGISTRY_USER" \
             --registry-password "$REGISTRY_PASS" \
