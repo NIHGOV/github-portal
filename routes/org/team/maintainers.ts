@@ -84,7 +84,7 @@ router.use('/add', MiddlewareTeamAdminRequired, (req: ILocalRequest, res: Respon
   return next();
 });
 
-// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
+// codeql[js/missing-rate-limiting] - rate limiting is enforced globally in middleware/index.ts (120 req/min per identity; configure via RATE_LIMIT_MODE/RATE_LIMIT_AUDIT_* env vars)
 router.post(
   '/add',
   MiddlewareTeamAdminRequired,

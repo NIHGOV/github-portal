@@ -15,7 +15,7 @@ import type { ICorporateLink, ReposApiRequest, VoidedExpressRoute } from '../../
 
 const router: Router = Router();
 
-// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
+// codeql[js/missing-rate-limiting] - rate limiting is enforced globally in middleware/index.ts (120 req/min per identity; configure via RATE_LIMIT_MODE/RATE_LIMIT_AUDIT_* env vars)
 router.use(function (req: ReposApiRequest, res: Response, next: NextFunction) {
   const token = req.apiKeyToken;
   if (!token.hasScope) {
@@ -29,7 +29,7 @@ router.use(function (req: ReposApiRequest, res: Response, next: NextFunction) {
 
 router.post('/', postLinkApi as VoidedExpressRoute);
 
-// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
+// codeql[js/missing-rate-limiting] - rate limiting is enforced globally in middleware/index.ts (120 req/min per identity; configure via RATE_LIMIT_MODE/RATE_LIMIT_AUDIT_* env vars)
 router.get('/', async (req: ReposApiRequest, res: Response, next: NextFunction) => {
   const activeContext = req.apiContext || req.individualContext;
   const { operations } = getProviders(req);

@@ -124,7 +124,7 @@ router.post(
   }
 );
 
-// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
+// codeql[js/missing-rate-limiting] - rate limiting is enforced globally in middleware/index.ts (120 req/min per identity; configure via RATE_LIMIT_MODE/RATE_LIMIT_AUDIT_* env vars)
 router.post(
   '/join/approvals/:approvalId',
   AddTeamPermissionsToRequest,
@@ -177,7 +177,7 @@ router.post(
   }
 );
 
-// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
+// codeql[js/missing-rate-limiting] - rate limiting is enforced globally in middleware/index.ts (120 req/min per identity; configure via RATE_LIMIT_MODE/RATE_LIMIT_AUDIT_* env vars)
 router.get(
   '/join/approvals/:approvalId',
   AddTeamPermissionsToRequest,
@@ -227,7 +227,7 @@ router.get(
   }
 );
 
-// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
+// codeql[js/missing-rate-limiting] - rate limiting is enforced globally in middleware/index.ts (120 req/min per identity; configure via RATE_LIMIT_MODE/RATE_LIMIT_AUDIT_* env vars)
 router.post(
   '/role/:login',
   AddTeamPermissionsToRequest,
@@ -258,7 +258,7 @@ router.post(
   }
 );
 
-// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
+// codeql[js/missing-rate-limiting] - rate limiting is enforced globally in middleware/index.ts (120 req/min per identity; configure via RATE_LIMIT_MODE/RATE_LIMIT_AUDIT_* env vars)
 router.delete(
   '/role/:login',
   AddTeamPermissionsToRequest,

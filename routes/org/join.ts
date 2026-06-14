@@ -55,7 +55,7 @@ router.use(function (req: ReposAppRequest, res: Response, next: NextFunction) {
   next();
 });
 
-// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
+// codeql[js/missing-rate-limiting] - rate limiting is enforced globally in middleware/index.ts (120 req/min per identity; configure via RATE_LIMIT_MODE/RATE_LIMIT_AUDIT_* env vars)
 router.use(async function (req: ReposAppRequest, res: Response, next: NextFunction) {
   try {
     const providers = getProviders(req);
@@ -77,7 +77,7 @@ router.use(async function (req: ReposAppRequest, res: Response, next: NextFuncti
 
 //-------------
 
-// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
+// codeql[js/missing-rate-limiting] - rate limiting is enforced globally in middleware/index.ts (120 req/min per identity; configure via RATE_LIMIT_MODE/RATE_LIMIT_AUDIT_* env vars)
 router.use(RequireActiveGitHubSession);
 
 async function showOrgJoinDetails(req: ReposAppRequest) {

@@ -642,6 +642,65 @@ describe('createRateLimitAuditMiddleware', () => {
     );
   });
 
+  it('enforces lower unauthenticated threshold while allowing authenticated through in enforce mode', async () => {
+    // This test validates the production default: unauthenticated=20, authenticated=120.
+    // An unauthenticated client should be blocked at 20 while an authenticated user at the
+    // same path still passes through.
+    const cacheStore = new Map<string, { count: number }>();
+    const cacheProvider = {
+      getObject: vi.fn(async (key: string) => cacheStore.get(key)),
+      setObjectWithExpire: vi.fn(async (key: string, value: { count: number }) => {
+        cacheStore.set(key, value);
+      }),
+    };
+    const providers = { cacheProvider } as any;
+    const config = createConfiguration({
+      rateLimit: {
+        mode: 'enforce',
+        audit: {
+          enabled: true,
+          windowSeconds: 60,
+          threshold: 120,
+          thresholdAuthenticated: 120,
+          thresholdSessionAuthenticated: 120,
+          thresholdApiAuthorized: 120,
+          thresholdUnauthenticated: 20,
+          sampleRate: 0,
+          includePathInKey: true,
+          includeMethodInKey: true,
+        },
+      },
+    });
+    const middleware = createRateLimitAuditMiddleware(providers, config);
+
+    const unauthReq = createRequest({
+      user: undefined as any,
+      isAuthenticated: vi.fn().mockReturnValue(false) as any,
+    });
+    const authReq = createRequest({
+      user: { github: { id: 42 } } as any,
+      isAuthenticated: vi.fn().mockReturnValue(true) as any,
+    });
+    const res = createResponse();
+
+    // Send 21 unauthenticated requests — the 21st should be blocked
+    let unauthNextArg: any;
+    for (let i = 0; i < 21; i++) {
+      const next = vi.fn();
+      await middleware(unauthReq, res, next);
+      unauthNextArg = next.mock.calls[0][0];
+    }
+    expect(unauthNextArg).toMatchObject({ status: 429 });
+    expect(res.setHeader).toHaveBeenCalledWith('Retry-After', expect.any(String));
+
+    // Send 21 authenticated requests to the same path — all should pass (threshold is 120)
+    for (let i = 0; i < 21; i++) {
+      const next = vi.fn();
+      await middleware(authReq, res, next);
+      expect(next).toHaveBeenCalledWith(); // called with no error arg
+    }
+  });
+
   it('ignores raw x-forwarded-for spoofing when resolving the pre-auth identity', async () => {
     const cacheStore = new Map<string, { count: number }>();
     const cacheProvider = {

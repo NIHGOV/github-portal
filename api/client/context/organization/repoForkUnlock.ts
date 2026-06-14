@@ -14,7 +14,7 @@ import NewRepositoryLockdownSystem from '../../../../business/features/newReposi
 
 const router: Router = Router();
 
-// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
+// codeql[js/missing-rate-limiting] - rate limiting is enforced globally in middleware/index.ts (120 req/min per identity; configure via RATE_LIMIT_MODE/RATE_LIMIT_AUDIT_* env vars)
 router.use(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
   const organization = req.organization as Organization;
   if (!organization.isNewRepositoryLockdownSystemEnabled()) {

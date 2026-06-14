@@ -197,6 +197,84 @@ Code fix:
 
 **⚠️ Required before merging to main:** Verify `GITHUB_APP_OPERATIONS_SLUG` is set correctly on both App Services (`nihdevgithubportal` and `nihgithubportal`). The value must exactly match the slug shown at `github.com/organizations/NIHGOV/settings/apps/…` (e.g. `dev-nih-github-management-portal` on staging). An incorrect slug causes broken "Install in new org" links and silently misidentifies bot commits in `getApplicationsAsLogins()`.
 
+## Completed (June 2026 — GitHub Copilot agentic session)
+
+### ✅ Resolved staging ← main merge conflicts; preserved all NIH-only changes (June 2026)
+
+Merged `origin/main` into `staging`, resolving 14 conflicts across workflow files, Terraform configs, `lib/queues/servicebus.ts`, `.cspell.json`, and `PLAN.md`. All NIH-specific changes (managed identity, Service Bus, Terraform infrastructure) were preserved by taking `--ours` on all conflicts.
+
+### ✅ Added CodeQL inline suppression comments for 41 false-positive alerts (June 2026)
+
+41 CodeQL alerts across 20 files suppressed with `// codeql[rule-id]` comments.
+The `js/missing-rate-limiting` alerts remain suppressed because CodeQL cannot trace cross-file middleware registration — the suppressions are still correct explanatory annotations even though enforcement is now on by default (see rate limiting section below).
+
+- `js/missing-rate-limiting` (37 alerts) — inline suppressions retained as documentation; enforcement enabled separately (see below)
+- `js/unvalidated-dynamic-method-call` (3 alerts) — `business/*Search.ts` guards method existence via `this[sortMethodName]` check
+- `js/insufficient-password-hash` (1 alert) — `middleware/rateLimit.ts` uses SHA-256 as a cache key compactor, not a credential hash
+
+### ✅ Enabled rate limiting enforcement; tightened unauthenticated threshold (June 2026)
+
+`config/rateLimit.json` was previously shipped with `mode=disabled` and `audit.enabled=0` — rate limiting infrastructure existed but was entirely inert. Changed defaults:
+
+- `mode`: `disabled` → `enforce`
+- `audit.enabled`: `0` → `1`
+- `thresholdUnauthenticated`: `120` → `20` req/min/path (authenticated users retain 120)
+
+Enforcement can be overridden via `RATE_LIMIT_MODE` / `RATE_LIMIT_AUDIT_*` App Service settings without a code change.
+
+Also added a test (`middleware/rateLimit.test.ts`) confirming that the tighter unauthenticated threshold blocks at 20 while authenticated users at the same path still pass through at 120.
+
+### ✅ Resolved all 45 bun audit vulnerabilities (June 2026)
+
+- Direct bumps: `liquidjs` 10.25.5 → 10.27.0 (7 CVEs); `axios` 1.15.0 → 1.17.0 (19 CVEs)
+- Transitive overrides added: `cookie`, `fast-xml-parser`, `joi`, `js-yaml`, `json-bigint`, `on-headers`, `protobufjs`, `smol-toml`, `uuid`, `xml2js`
+- `bun audit` now reports 0 vulnerabilities
+
+### ✅ Build traceability in ACI container startup logs (June 2026)
+
+Containers now log three lines on startup:
+
+```text
+build: 8.5.<run_number>, opensource-management-portal
+commit: <8-char SHA>
+actions: https://github.com/NIHGOV/github-portal/actions/runs/<run_id>
+```
+
+- `config/continuousDeployment.js` — reads `GITHUB_SHA` (short form) and `GITHUB_RUN_ID`; attaches as `continuousDeployment.commit` / `.runUrl`
+- `middleware/initialize.ts` — logs `commit:` and `actions:` lines separately when values are present
+- All four CB/FH deploy workflows — pass `GITHUB_SHA`, `GITHUB_RUN_ID`, `GITHUB_RUN_NUMBER` as env vars to the containers
+
+### ✅ Fixed container CI/CD pipeline: SHA-tagged images, race condition, missing source paths (June 2026)
+
+**Race condition fixed:** ACR build workflows now push `portal:<full-sha>` alongside `portal:latest`. CB/FH deploys consume `portal:<sha>` directly, so rapid back-to-back pushes can never cause a deploy to pull the wrong image.
+
+**workflow_run default-branch bug fixed:** `workflow_run`-triggered workflows always execute from the repository's default branch (`main`), not the branch that triggered them. This meant all CB/FH deploy workflow changes on `staging` were silently ignored, and containers kept deploying `portal:latest` from `main`'s old workflow version.
+
+Fix: consolidated `deploy-cb` and `deploy-fh` as jobs inside `staging_create_acr_image.yml` / `main_create_acr_image.yml` (`needs: build`). Since these workflows trigger on `push` to their respective branch, they always run the correct branch version with `${{ github.sha }}` directly.
+
+The standalone `staging_nihdevgithubportalcb/fh.yml` and `main_nihgithubportalcb/fh.yml` are now **manual-dispatch only** with an `image_tag` input (default: `latest`) for rollbacks and targeted redeploys without a full rebuild.
+
+**Missing source paths fixed:** `api/**`, `bin/**`, `middleware/**`, `routes/**`, `typings/**`, `index.ts`, `job.ts` added to path filters in all ACR build workflows. Changes to these directories now correctly trigger a new container image.
+
+### ✅ Removed duplicate/stale main_create_acr_image.yaml (June 2026)
+
+`.github/workflows/main_create_acr_image.yaml` had the same workflow `name:` and identical push path triggers as `main_create_acr_image.yml` but ran a completely different job — a GraphQL org query + PowerShell `Create-EnvOrgs.ps1` script. It was silently failing on every `main` push (trying to `rm env-orgs.json` which doesn't exist) while the real ACR build ran alongside it. Deleted.
+
+### ✅ Removed static-mode org config artifacts (June 2026)
+
+- Deleted `.github/scripts/Create-EnvOrgs.ps1` — generated an incomplete org JSON (no `installations` block) for the old file-based `GITHUB_ORGANIZATIONS_FILE` mode; not wired into any active workflow
+- Removed stale `GITHUB_ORGANIZATIONS_FILE: ../env-orgs.json` from `infra/aci/prod-firehose.yml` and `infra/aci/staging-firehose.yml` (contradicted by the adjacent `GITHUB_ORGANIZATIONS_SOURCE: postgres`)
+
+### ✅ Fixed update_orgsettings workflows: OIDC login, double-$ typo, deprecated psql action (June 2026)
+
+Both `staging_update_orgsettings_table.yaml` and `main_update_orgsettings_table.yaml`:
+
+- `azure/login`: replaced deprecated JSON `creds:` format with OIDC `client-id`/`tenant-id`/`subscription-id`; added `permissions: id-token: write` block
+- PSQL step: replaced deprecated `azure/postgresql@v1.2.0` with `apt install postgresql-client` + `psql` CLI — works with any Postgres endpoint
+- Fixed `$${{ secrets.*_PSQL_SERVER }}` double-`$` typo (would have passed literal `$<value>` as server name, silently breaking the connection)
+
+---
+
 ## Completed (May 2026 — GitHub Copilot agentic session)
 
 ### ✅ Fixed version always showing 8.5.0 instead of 8.5.\<build\> (May 2026)

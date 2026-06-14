@@ -38,9 +38,9 @@ import { ReposAppRequest, UserAlertType } from '../interfaces/index.js';
 import { Repository } from '../business/index.js';
 
 // - - - Middleware: require that they have a passport - - -
-// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
+// codeql[js/missing-rate-limiting] - rate limiting is enforced globally in middleware/index.ts (120 req/min per identity; configure via RATE_LIMIT_MODE/RATE_LIMIT_AUDIT_* env vars)
 router.use(requireAuthenticatedUserOrSignIn);
-// codeql[js/missing-rate-limiting] - rate limiting applied globally in middleware/index.ts
+// codeql[js/missing-rate-limiting] - rate limiting is enforced globally in middleware/index.ts (120 req/min per identity; configure via RATE_LIMIT_MODE/RATE_LIMIT_AUDIT_* env vars)
 router.use(requireAccessTokenClient);
 // - - - Middleware: set the identities we have authenticated  - - -
 router.use(setIdentity);
