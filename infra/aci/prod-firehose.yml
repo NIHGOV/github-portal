@@ -30,8 +30,6 @@ properties:
             value: <PROD_POSTGRES_USER>
           - name: REPOS_POSTGRES_SSL
             value: 'false'
-          - name: GITHUB_ORGANIZATIONS_FILE
-            value: ../env-orgs.json
           - name: GITHUB_ORGANIZATIONS_SOURCE
             value: postgres
           - name: GITHUB_WEBHOOKS_PROVIDER
