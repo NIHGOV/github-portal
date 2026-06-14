@@ -26,6 +26,10 @@ export default (graphApi) => {
   continuousDeployment.version = runNumber ? `${major}.${minor}.${runNumber}` : pkg.version;
   continuousDeployment.name = pkg.name;
   continuousDeployment.deploymentId = environmentProvider.get(DEPLOYMENT_ID_KEY_NAME) || null;
+  const sha = environmentProvider.get('GITHUB_SHA');
+  if (sha) continuousDeployment.commit = sha.slice(0, 8);
+  const runId = environmentProvider.get('GITHUB_RUN_ID');
+  if (runId) continuousDeployment.runUrl = `https://github.com/NIHGOV/github-portal/actions/runs/${runId}`;
   return continuousDeployment;
 };
 

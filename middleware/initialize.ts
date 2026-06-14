@@ -396,10 +396,11 @@ export default async function initialize(
   debug(`${containerPurpose} profile: ${applicationProfile.applicationName}`);
   debug(`environment: ${config?.debug?.environmentName || 'Unknown'}`);
   if (config?.continuousDeployment) {
-    const values = Object.values(config.continuousDeployment).filter((x) => x);
-    if (values.length > 0) {
-      debug(`build: ${values.join(', ')}`);
-    }
+    const cd = config.continuousDeployment as Record<string, string>;
+    const summary = [cd.version, cd.name].filter(Boolean).join(', ');
+    if (summary) debug(`build: ${summary}`);
+    if (cd.commit) debug(`commit: ${cd.commit}`);
+    if (cd.runUrl) debug(`actions: ${cd.runUrl}`);
   }
 
   const codespacesConfig = (config as SiteConfiguration)?.github?.codespaces;

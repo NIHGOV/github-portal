@@ -89,6 +89,9 @@ jobs:
               REPOS_POSTGRES_USER="$POSTGRES_USER" \
               REPOS_POSTGRES_SSL=false \
               GITHUB_ORGANIZATIONS_SOURCE=postgres \
+              GITHUB_SHA="${{ github.sha }}" \
+              GITHUB_RUN_ID="${{ github.run_id }}" \
+              GITHUB_RUN_NUMBER="${{ github.run_number }}" \
               ENTRA_ID_CLIENT_ID="$ENTRA_CLIENT_ID" \
               ENTRA_ID_TENANT_ID="$ENTRA_TENANT_ID" \
               GITHUB_WEBHOOKS_PROVIDER=servicebus \
