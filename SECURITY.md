@@ -1,41 +1,94 @@
-<!-- BEGIN MICROSOFT SECURITY.MD V0.0.5 BLOCK -->
+# Security Policy
 
-# Security
+This policy governs vulnerability research and reporting for NIH systems and services under the [HHS Vulnerability Disclosure Policy](https://www.hhs.gov/vulnerability-disclosure-policy/index.html).
 
-Microsoft takes the security of our software products and services seriously, which includes all source code repositories managed through our GitHub organizations, which include [Microsoft](https://github.com/Microsoft), [Azure](https://github.com/Azure), [DotNet](https://github.com/dotnet), [AspNet](https://github.com/aspnet), [Xamarin](https://github.com/xamarin), and [our GitHub organizations](https://opensource.microsoft.com/).
+---
 
-If you believe you have found a security vulnerability in any Microsoft-owned repository that meets [Microsoft's definition of a security vulnerability](<https://docs.microsoft.com/en-us/previous-versions/tn-archive/cc751383(v=technet.10)>), please report it to us as described below.
+## Reporting a Vulnerability
 
-## Reporting Security Issues
+**Report all security issues using GitHub's private vulnerability reporting feature.**
 
-**Please do not report security vulnerabilities through public GitHub issues.**
+Click **"Report a vulnerability"** on the [Security Advisories](../../security/advisories) tab. Do not open a public issue or report through email, Slack, or any other channel.
 
-Instead, please report them to the Microsoft Security Response Center (MSRC) at [https://msrc.microsoft.com/create-report](https://msrc.microsoft.com/create-report).
+Your report will be received securely, kept confidential, and routed to the right people. See [GitHub's documentation](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability) for how the process works.
 
-If you prefer to submit without logging in, send email to [secure@microsoft.com](mailto:secure@microsoft.com). If possible, encrypt your message with our PGP key; please download it from the [Microsoft Security Response Center PGP Key page](https://www.microsoft.com/en-us/msrc/pgp-key-msrc).
+> **Note:** The HHS VDP also accepts reports at [hhs.responsibledisclosure.com](https://hhs.responsibledisclosure.com). For vulnerabilities in this repository or NIH systems hosted here, use the GitHub report link above so the responsible team is notified directly.
 
-You should receive a response within 24 hours. If for some reason you do not, please follow up via email to ensure we received your original message. Additional information can be found at [microsoft.com/msrc](https://www.microsoft.com/msrc).
+Please include:
+- What the vulnerability is and its potential impact
+- Where it was found
+- Steps to reproduce (proof-of-concept scripts or screenshots are helpful)
 
-Please include the requested information listed below (as much as you can provide) to help us better understand the nature and scope of the possible issue:
+---
 
-- Type of issue (e.g. buffer overflow, SQL injection, cross-site scripting, etc.)
-- Full paths of source file(s) related to the manifestation of the issue
-- The location of the affected source code (tag/branch/commit or direct URL)
-- Any special configuration required to reproduce the issue
-- Step-by-step instructions to reproduce the issue
-- Proof-of-concept or exploit code (if possible)
-- Impact of the issue, including how an attacker might exploit the issue
+## Authorization
 
-This information will help us triage your report more quickly.
+*Issued under the [HHS VDP — Authorization](https://www.hhs.gov/vulnerability-disclosure-policy/index.html#authorization).*
 
-If you are reporting for a bug bounty, more complete reports can contribute to a higher bounty award. Please visit our [Microsoft Bug Bounty Program](https://microsoft.com/msrc/bounty) page for more details about our active programs.
+Good faith research conducted under this policy is authorized. NIH and HHS will work with you to resolve issues quickly and will not pursue legal action related to your research.
 
-## Preferred Languages
+---
 
-We prefer all communications to be in English.
+## Guidelines
 
-## Policy
+*Issued under the [HHS VDP — Guidelines](https://www.hhs.gov/vulnerability-disclosure-policy/index.html#guidelines).*
 
-Microsoft follows the principle of [Coordinated Vulnerability Disclosure](https://www.microsoft.com/en-us/msrc/cvd).
+Authorized research means you:
 
-<!-- END MICROSOFT SECURITY.MD BLOCK -->
+- Notify us as soon as possible after discovering a real or potential security issue
+- Avoid privacy violations, user experience degradation, production system disruption, and data destruction or manipulation
+- Use exploits only to the extent necessary to confirm a vulnerability — do not exfiltrate data, establish access or persistence, or pivot to other systems
+- Allow a reasonable amount of time to resolve the issue before public disclosure
+- Do not compromise the privacy, safety, intellectual property, or financial interests of HHS/NIH personnel or third parties
+
+If you discover a vulnerability or encounter any sensitive data (PII, financial, proprietary, or trade secrets), **stop testing, report immediately via the GitHub private vulnerability report, and do not disclose the data to anyone else**.
+
+---
+
+## Scope
+
+*Issued under the [HHS VDP — Scope](https://www.hhs.gov/vulnerability-disclosure-policy/index.html#scope).*
+
+`nih.gov` and all its subdomains are in scope. Vendor systems are out of scope — report those to the vendor directly.
+
+Unsure if a system is in scope? Contact [support@responsibledisclosure.com](mailto:support@responsibledisclosure.com) before testing.
+
+---
+
+## Rules of Engagement
+
+*Issued under the [HHS VDP — Rules of Engagement](https://www.hhs.gov/vulnerability-disclosure-policy/index.html#rules-engagement).*
+
+**Must not:**
+- Test systems outside the scope above
+- Disclose vulnerability information except as described in this policy
+- Conduct physical testing, social engineering, or phishing
+- Execute denial-of-service or resource exhaustion attacks
+- Introduce malicious software
+- Degrade, impair, disrupt, or disable HHS/NIH systems
+- Test third-party applications or services that integrate with NIH systems
+- Delete, alter, share, retain, destroy, or exfiltrate HHS/NIH data
+- Use an exploit to establish access, persistence, or pivot to other systems
+
+**May:**
+- View or store NIH nonpublic data only as necessary to document a potential vulnerability
+
+**Must:**
+- Cease testing and immediately report any vulnerability or nonpublic data exposure via the GitHub private vulnerability report
+- Purge any stored NIH nonpublic data upon reporting
+
+---
+
+## Disclosure
+
+*Issued under the [HHS VDP — Disclosure](https://www.hhs.gov/vulnerability-disclosure-policy/index.html#disclosure).*
+
+Do not share details about discovered vulnerabilities for **90 calendar days** after receiving our acknowledgment. If you believe earlier disclosure is warranted, coordinate with us in advance.
+
+Reports may be shared with [CISA](https://www.cisa.gov/) and affected vendors under their [coordinated vulnerability disclosure process](https://www.cisa.gov/coordinated-vulnerability-disclosure-process). We will not share your name or contact information without explicit permission.
+
+---
+
+## Questions
+
+Email [HHS.Cybersecurity@hhs.gov](mailto:HHS.Cybersecurity@hhs.gov) or see the [HHS VDP](https://www.hhs.gov/vulnerability-disclosure-policy/index.html#questions).
