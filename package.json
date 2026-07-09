@@ -184,7 +184,7 @@
     "@types/cors": "2.8.19",
     "@types/debug": "4.1.13",
     "@types/express": "5.0.6",
-    "@types/express-serve-static-core": "5.1.1",
+    "@types/express-serve-static-core": "5.1.2",
     "@types/express-session": "1.18.2",
     "@types/get-pixels": "3.3.4",
     "@types/jsonwebtoken": "9.0.10",
