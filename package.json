@@ -79,7 +79,7 @@
     "@azure/storage-blob": "12.31.0",
     "@azure/storage-queue": "12.29.0",
     "@octokit/app-permissions": "2.1.0",
-    "@octokit/auth-app": "8.2.0",
+    "@octokit/auth-app": "8.3.0",
     "@octokit/auth-oauth-app": "9.0.3",
     "@octokit/auth-oauth-user": "6.0.2",
     "@octokit/graphql": "9.0.3",
