@@ -4,6 +4,50 @@ Priority-ordered list of security improvements identified across this repository
 
 ---
 
+## Dependency Updates (August 2026)
+
+Worked through every open Dependabot PR plus the full `bun outdated` list at the repo root,
+applying bumps in tiers (patch → minor → major), running `bun run build`, `bun run lint`, and
+`bun run test` after each tier/package, and committing only on green.
+
+- **Patch-level** (13 prod + 7 dev packages): `@azure/identity`, `@azure/keyvault-keys`,
+  `@azure/keyvault-secrets`, `@octokit/auth-oauth-app`, `@octokit/auth-oauth-user`,
+  `@octokit/graphql`, `@octokit/plugin-retry`, `@octokit/request`, `@octokit/request-error`,
+  `dotenv`, `form-data`, `jose`, `toad-cache`, `@types/express-serve-static-core`,
+  `@types/lodash`, `@types/luxon`, `cspell`, `eslint-plugin-prettier`, `eslint-plugin-security`,
+  `vitest`. Added a `package.json` `overrides` entry pinning
+  `@types/express-serve-static-core` to a single resolved version tree-wide — `@types/express`'s
+  own `^5.0.0` dependency was resolving a stale nested copy, producing a `TS2742`
+  non-portable-type build error.
+- **Minor-level** (16 prod + 10 dev packages): `@azure/cosmos`, `@azure/msal-node`,
+  `@azure/storage-blob`, `@azure/storage-queue`, `@octokit/auth-app`, `@primer/octicons`,
+  `applicationinsights`, `axios`, `body-parser`, `express-session`, `highlight.js`, `hyparquet`,
+  `liquidjs`, `morgan`, `pg`, `semver`, `@types/express-session`, `@types/multer`, `@types/pg`,
+  `@types/semver`, `@typescript-eslint/eslint-plugin`, `@typescript-eslint/parser`, `eslint`,
+  `globals`, `markdownlint-cli2`, `prettier`. The `prettier` bump changed formatting expectations
+  for 3 pre-existing files (`business/graphManager.ts`, `business/operations/core.ts`,
+  `lib/github/appTokens.ts`); reformatted with `prettier --write` to clear new
+  `eslint-plugin-prettier` errors.
+- **Major-level**, one at a time with usage review before each: `@octokit/types` (16→17, no
+  direct usage), `jwks-rsa` (3→4), `basic-auth` (2→3, no direct usage), `redis` + `connect-redis`
+  (5→6 / 9→10, bumped together since connect-redis is a session-store adapter for the redis
+  client), `js-yaml` (4→5, no direct usage, kept only for the security-floor `overrides` entry),
+  `nodemailer` (8→9), `json-2-csv` (3→5, `json2csvAsync` renamed to `json2csv` in
+  `routes/administration/index.ts`), `eslint-plugin-n` (17→18), `lint-staged` (16→17), `cspell`
+  (10.0→10.1).
+- **Reverted / held back:**
+  - `typescript` 5.9.3 → 7.0.2: incompatible with the installed `@typescript-eslint` (`<6.1.0`
+    peer range) and produced 40+ new compiler errors under its stricter inference. Staying on
+    5.9.3.
+  - `@types/node` 24.12.0 → 26.2.0: build/lint/test all passed, but reverted to stay aligned
+    with the Node 24.x runtime pin in this file's sibling `AGENTS.md` — newer `@types/node` would
+    type-check against Node APIs not present in the pinned 24.x runtime.
+- `bun outdated` at the repo root is clean except for the two held-back packages above.
+- Merged the open Dependabot GitHub Actions PRs (not covered by `bun outdated`, which only tracks
+  npm/bun packages) separately from the dependency-bump commits.
+
+---
+
 ## Organization Page Fixes (August 2026)
 
 - `NIHGitHubAdmin` (a service account) is now filtered out of the Owners list in `business/organization.ts#getOwnersCardData`, so it never appears on the org overview or public invitation pages.
