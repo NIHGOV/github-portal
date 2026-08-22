@@ -4,6 +4,17 @@ Priority-ordered list of security improvements identified across this repository
 
 ---
 
+## Fixed crash adopting an org already known to `operations` (August 2026)
+
+Adopting an org that `Operations.getOrganizationSettingsInstance()` already had in memory (already
+active, or from a legacy static config entry) threw "static keys which are not recognized..."
+`createDynamicSettingsForNewOrganization()` was re-running the already-converted
+`OrganizationSetting` back through `CreateFromStaticSettings()`, which only strips legacy
+config field names, not the entity's own. Fix: `CreateFromStaticSettings()` now detects an
+already-converted input and clones it defensively instead of re-mapping it.
+
+---
+
 ## Filtered `NIHGitHubAdmin` out of repository admin cards (August 2026)
 
 Same filter as the org Owners list fix below, applied to `business/repository.ts#getAdmins()`,
