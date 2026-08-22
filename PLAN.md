@@ -198,6 +198,18 @@ No credential to rotate or leak; ACI picks up the identity at runtime.
 
 ---
 
+### ✅ Fixed `ENOENT ... datasharing.pug` crash on `/settings/contributionData` (August 2026)
+
+Visiting `/settings/contributionData` threw `ENOENT: no such file or directory, open '.../views/corporate/contributions/datasharing.pug'`.
+
+Root cause: `middleware/corporateViews.ts` scans `views/corporate/` at startup and flags a feature as available (e.g. `corporateViews.contributions.datasharing`) whenever it finds **any file** with a matching base name, regardless of extension. Pug templates (e.g. `views/settings/contributionData.pug`) then do a literal `include ../corporate/contributions/datasharing`, which only resolves `.pug` files. A stray non-`.pug` file (or a `.pug` file removed after startup by a non-atomic/additive deploy while the flag stayed cached in memory) caused the flag to be `true` with no matching `.pug` file to include, crashing the page for the lifetime of the process.
+
+This repo doesn't ship a `views/corporate/` directory at all (it's an optional extension point for downstream forks), so the leftover flag most likely came from stale files accumulated on the App Service under a Kudu additive deploy — the same class of issue documented in `AGENTS.md` under `WEBSITE_RUN_FROM_PACKAGE`.
+
+Code fix: `middleware/corporateViews.ts` — `recurseDirectory()` now only flags files with a `.pug` extension, so a stray/stale non-`.pug` file can never cause a template to `include` a view that doesn't exist.
+
+**Operational follow-up:** confirm `WEBSITE_RUN_FROM_PACKAGE=1` is applied and redeploy/restart the affected App Service so any stale `views/corporate` remnants under `wwwroot` are discarded.
+
 ### ✅ Fixed admin apps page showing wrong GitHub App slug and broken "Install in new org" link (June 2026)
 
 `/administration/apps` displayed the slug from `GITHUB_APP_OPERATIONS_SLUG` as both the "GitHub App" and "Purpose" columns, and used that slug to build the "Install in new org" link. Two issues combined to cause the broken link and misleading display:

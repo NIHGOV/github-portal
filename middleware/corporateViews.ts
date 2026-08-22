@@ -46,8 +46,10 @@ async function recurseDirectory(dir: string) {
   for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
     if (entry.isDirectory()) {
       thisLevel[entry.name] = await recurseDirectory(path.join(dir, entry.name));
-    } else if (entry.isFile()) {
-      const baseName = path.basename(entry.name, path.extname(entry.name));
+    } else if (entry.isFile() && path.extname(entry.name) === '.pug') {
+      // only flag files that Pug can actually `include`; stray non-.pug files
+      // (docs, stale artifacts, etc.) must not cause templates to reference a missing view
+      const baseName = path.basename(entry.name, '.pug');
       thisLevel[baseName] = true;
     }
   }
