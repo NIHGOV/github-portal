@@ -59,6 +59,8 @@ async function findCandidates(providers: IProviders): Promise<void> {
     failed: 0,
   };
   let unlinkedCount = 0;
+  let duplicateCount = 0;
+  const seenThirdPartyIds = new Set<string>();
   const outputRows: unknown[] = [];
 
   for (const orgName of orgNames) {
@@ -71,6 +73,15 @@ async function findCandidates(providers: IProviders): Promise<void> {
         unlinkedCount++;
         continue;
       }
+      // The ledger has one row per third-party ID; a person who belongs to multiple scanned orgs
+      // would otherwise be upserted/emitted once per org, producing conflicting edits in the
+      // candidates file (setTargets accepts the first occurrence, reports the rest as not found).
+      if (seenThirdPartyIds.has(pair.link.thirdPartyId)) {
+        duplicateCount++;
+        continue;
+      }
+      seenThirdPartyIds.add(pair.link.thirdPartyId);
+
       const corporateUsername = pair.link.corporateUsername || '';
       const corporateMailAddress = pair.link.corporateMailAddress || '';
       const corporateDisplayName = pair.link.corporateDisplayName || '';
@@ -134,6 +145,7 @@ async function findCandidates(providers: IProviders): Promise<void> {
   console.log(`  pending (candidates):     ${counts.pending}`);
   console.log(`  skipped-already-migrated: ${counts['skipped-already-migrated']}`);
   console.log(`  unlinked (out of scope):  ${unlinkedCount}`);
+  console.log(`  duplicate (already seen in another org): ${duplicateCount}`);
   console.log('');
   console.log(`Candidates file (${outputRows.length} row(s)) follows -- fill in the blank`);
   console.log('new* fields for each person you want to migrate, then feed this file into');

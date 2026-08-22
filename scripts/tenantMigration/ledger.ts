@@ -192,7 +192,7 @@ export async function setTarget(
         updatedat = now()
     WHERE batchid = $7
       AND lower(thirdpartyusername) = lower($8)
-      AND status IN ('pending', 'needs-review')
+      AND status IN ('pending', 'needs-review', 'ready')
   `,
     [
       target.newCorporateId,

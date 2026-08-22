@@ -43,7 +43,10 @@ async function applyMigration(providers: IProviders): Promise<void> {
     const label = `[${row.thirdPartyUsername}]`;
     let link: ICorporateLink;
     try {
-      link = await linkProvider.getByThirdPartyUsername(row.thirdPartyUsername);
+      // Look up by the immutable thirdPartyId, not the mutable username: a GitHub login can be
+      // renamed between the gather and apply steps (or the ledger's cached username can simply be
+      // stale), which would otherwise cause a false "link no longer exists" failure here.
+      link = await linkProvider.getByThirdPartyId(row.thirdPartyId);
     } catch (lookupError) {
       const message =
         lookupError?.status === 404 ? 'link no longer exists' : lookupError?.message || String(lookupError);
@@ -93,6 +96,18 @@ async function applyMigration(providers: IProviders): Promise<void> {
 
     if (commit) {
       try {
+        // Re-verify immediately before writing: the drift check above and this write are not one
+        // atomic operation, so re-fetching here narrows (though the underlying link providers
+        // don't expose a true compare-and-swap update, so it can't fully close) the window in
+        // which a concurrent relink/update could otherwise be silently overwritten.
+        const liveLink = await linkProvider.getByThirdPartyId(row.thirdPartyId);
+        if (row.discoveredCorporateId && liveLink.corporateId !== row.discoveredCorporateId) {
+          const notes = `live corporateId (${liveLink.corporateId}) changed just before the update was applied`;
+          console.error(`${label}: CONFLICT - ${notes}`);
+          await markConflict(pool, row.id, notes);
+          conflicts++;
+          continue;
+        }
         await linkProvider.updateLink(link);
         await markApplied(pool, row.id, beforeSnapshot, afterSnapshot);
       } catch (updateError) {

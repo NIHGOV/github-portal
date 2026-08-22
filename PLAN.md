@@ -73,8 +73,6 @@ Enterprise Team-backed org teams (slug prefixed `ent:`) 404 on the classic
 crashing team pages. Fix: `business/team.ts#getMembers()` now returns `[]` for that case
 instead of throwing the error; all other member/maintainer lookups build on top of it.
 
-> > > > > > > origin/staging
-
 ---
 
 ## Organization Page Fixes (August 2026)

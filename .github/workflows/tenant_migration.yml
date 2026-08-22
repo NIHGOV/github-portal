@@ -64,25 +64,33 @@ jobs:
   run-migration:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    # Binds to the same required-reviewer-gated 'Production' environment used by the real
+    # deployment jobs whenever this dispatch targets prod, so patching production links can't
+    # bypass that approval gate.
+    environment: ${{ inputs.environment == 'prod' && 'Production' || 'Development' }}
 
     steps:
       - name: Validate inputs
+        env:
+          MODE: ${{ inputs.mode }}
+          GITHUB_ORGS_INPUT: ${{ inputs.github_orgs }}
+          CANDIDATES_JSON_BASE64_INPUT: ${{ inputs.candidates_json_base64 }}
         run: |
-          case "${{ inputs.mode }}" in
+          case "$MODE" in
             gather)
-              if [ -z "${{ inputs.github_orgs }}" ]; then
+              if [ -z "$GITHUB_ORGS_INPUT" ]; then
                 echo "::error::gather mode requires github_orgs"
                 exit 1
               fi
               ;;
             patch)
-              if [ -z "${{ inputs.candidates_json_base64 }}" ]; then
+              if [ -z "$CANDIDATES_JSON_BASE64_INPUT" ]; then
                 echo "::error::patch mode requires candidates_json_base64"
                 exit 1
               fi
               ;;
             *)
-              echo "::error::Unknown mode ${{ inputs.mode }}"
+              echo "::error::Unknown mode $MODE"
               exit 1
               ;;
           esac
@@ -119,6 +127,17 @@ jobs:
           RG: ${{ inputs.environment == 'prod' && secrets.PROD_RG || secrets.DEV_RG }}
           CONTAINER_NAME: ${{ inputs.environment == 'prod' && 'nihgithubportaltm' || 'nihdevgithubportaltm' }}
           LOG_ANALYTICS_WORKSPACE: ${{ inputs.environment == 'prod' && 'nihgithubportal-logs' || 'nihdevgithubportal-logs' }}
+          # Free-form inputs are passed as env vars (never interpolated with ${{ }} into the script
+          # body below) so a value containing e.g. $(...) or backticks can't execute as shell code.
+          MODE: ${{ inputs.mode }}
+          IMAGE_TAG_INPUT: ${{ inputs.image_tag }}
+          BATCH_ID_INPUT: ${{ inputs.batch_id }}
+          GITHUB_ORGS_INPUT: ${{ inputs.github_orgs }}
+          UPN_CONTAINS_INPUT: ${{ inputs.upn_contains }}
+          DISPLAY_NAME_CONTAINS_INPUT: ${{ inputs.display_name_contains }}
+          EXCLUDE_UPN_CONTAINS_INPUT: ${{ inputs.exclude_upn_contains }}
+          CANDIDATES_JSON_BASE64_INPUT: ${{ inputs.candidates_json_base64 }}
+          COMMIT_INPUT: ${{ inputs.commit }}
         run: |
           LA_WORKSPACE_ID=$(az monitor log-analytics workspace show \
             --resource-group "$RG" \
@@ -134,33 +153,33 @@ jobs:
           fi
 
           ACR_NAME="${REGISTRY_SERVER%%.*}"
-          IMAGE_TAG="${{ inputs.image_tag }}"
+          IMAGE_TAG="$IMAGE_TAG_INPUT"
           REGISTRY_USER=$(az acr credential show --name "$ACR_NAME" --query username --output tsv)
           REGISTRY_PASS=$(az acr credential show --name "$ACR_NAME" --query "passwords[0].value" --output tsv)
 
           # Stage-specific env vars, built as arrays so empty/unused ones are simply omitted.
-          PLAIN_TENANT_VARS=("TENANT_MIGRATION_BATCH_ID=${{ inputs.batch_id }}")
+          PLAIN_TENANT_VARS=("TENANT_MIGRATION_BATCH_ID=$BATCH_ID_INPUT")
           SECURE_TENANT_VARS=()
 
-          case "${{ inputs.mode }}" in
+          case "$MODE" in
             gather)
-              PLAIN_TENANT_VARS+=("TENANT_MIGRATION_GITHUB_ORGS=${{ inputs.github_orgs }}")
-              if [ -n "${{ inputs.upn_contains }}" ]; then
-                PLAIN_TENANT_VARS+=("TENANT_MIGRATION_UPN_CONTAINS=${{ inputs.upn_contains }}")
+              PLAIN_TENANT_VARS+=("TENANT_MIGRATION_GITHUB_ORGS=$GITHUB_ORGS_INPUT")
+              if [ -n "$UPN_CONTAINS_INPUT" ]; then
+                PLAIN_TENANT_VARS+=("TENANT_MIGRATION_UPN_CONTAINS=$UPN_CONTAINS_INPUT")
               fi
-              if [ -n "${{ inputs.display_name_contains }}" ]; then
-                PLAIN_TENANT_VARS+=("TENANT_MIGRATION_DISPLAY_NAME_CONTAINS=${{ inputs.display_name_contains }}")
+              if [ -n "$DISPLAY_NAME_CONTAINS_INPUT" ]; then
+                PLAIN_TENANT_VARS+=("TENANT_MIGRATION_DISPLAY_NAME_CONTAINS=$DISPLAY_NAME_CONTAINS_INPUT")
               fi
-              if [ -n "${{ inputs.exclude_upn_contains }}" ]; then
-                PLAIN_TENANT_VARS+=("TENANT_MIGRATION_EXCLUDE_UPN_CONTAINS=${{ inputs.exclude_upn_contains }}")
+              if [ -n "$EXCLUDE_UPN_CONTAINS_INPUT" ]; then
+                PLAIN_TENANT_VARS+=("TENANT_MIGRATION_EXCLUDE_UPN_CONTAINS=$EXCLUDE_UPN_CONTAINS_INPUT")
               fi
               # findCandidates.js prints the developer-facing JSON to stdout between marker lines;
               # captured from container logs in the next step (see JSON_BEGIN_MARKER in the script).
               COMMAND_LINE="node /usr/src/repos/dist/scripts/tenantMigration/findCandidates.js"
               ;;
             patch)
-              SECURE_TENANT_VARS+=("TENANT_MIGRATION_TARGETS_JSON_BASE64=${{ inputs.candidates_json_base64 }}")
-              if [ "${{ inputs.commit }}" = "true" ]; then
+              SECURE_TENANT_VARS+=("TENANT_MIGRATION_TARGETS_JSON_BASE64=$CANDIDATES_JSON_BASE64_INPUT")
+              if [ "$COMMIT_INPUT" = "true" ]; then
                 PLAIN_TENANT_VARS+=("TENANT_MIGRATION_COMMIT=1")
               fi
               # setTargets.js reads TENANT_MIGRATION_TARGETS_JSON_BASE64 itself (no shell
@@ -239,15 +258,17 @@ jobs:
 
       - name: Extract candidates JSON (gather mode)
         if: inputs.mode == 'gather'
+        env:
+          BATCH_ID_INPUT: ${{ inputs.batch_id }}
         run: |
           if ! grep -q '===TENANT_MIGRATION_CANDIDATES_JSON_BEGIN===' container.log; then
             echo "::error::Could not find the candidates JSON marker in the container logs -- see logs above"
             exit 1
           fi
           sed -n '/===TENANT_MIGRATION_CANDIDATES_JSON_BEGIN===/,/===TENANT_MIGRATION_CANDIDATES_JSON_END===/p' container.log \
-            | sed '1d;$d' > "candidates-${{ inputs.batch_id }}.json"
+            | sed '1d;$d' > "candidates-${BATCH_ID_INPUT}.json"
           echo "--- candidates file ---"
-          cat "candidates-${{ inputs.batch_id }}.json"
+          cat "candidates-${BATCH_ID_INPUT}.json"
 
       - name: Upload candidates artifact (gather mode)
         if: inputs.mode == 'gather'
