@@ -891,7 +891,7 @@ export class Operations {
     const links = await this.getLinks(options);
     const reduced = links.filter((link) => {
       // was 'ghid' in the prior implementation before link interfaces
-      return link && link.thirdPartyId == id /* allow string comparisons */;
+      return link && link.thirdPartyId == id; /* allow string comparisons */
     });
     if (reduced.length > 1) {
       throw new Error(`Multiple links were present for the same GitHub user ${id}`);
