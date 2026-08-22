@@ -84,6 +84,8 @@ instead of throwing the error; all other member/maintainer lookups build on top 
 - `views/org/index.pug`: moved the "About the Organization" section above "Teams You Maintain" so it's visible without scrolling past team management tables.
 - `views/org/index.pug`: the top `<> Organization` header now links the org name to the org on GitHub, so it's the first org link on the page instead of the "Open on GitHub" link further down.
 - `views/footer.pug`: swapped column alignment so the NIH logo is left-aligned and the Version/legal notices/Contact/Contribute/Powered-by messaging is right-aligned; fixed the "Powered by" hyperlink so it ends on the word "source" instead of also wrapping the trailing comma.
+- `views/footer.pug`: the "Powered by ... GitHub API." line sat ~5px (about one character) further right than the Version/Contact/Contribute lines above it, because those are `<li>`s inside Bootstrap's `.list-inline` (which adds `padding-right:5px`) while the Powered-by text wasn't wrapped in any element with matching padding. Wrapped both branches in a `span(style='padding-right:5px')` so all rows align to the same right edge.
+- `views/nav2.pug`: navbar wrapper changed from `.container-fluid` to `.container` so the navbar content aligns with the fixed-width page container instead of spanning the full viewport width.
 
 ---
 
