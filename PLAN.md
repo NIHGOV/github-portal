@@ -4,6 +4,17 @@ Priority-ordered list of security improvements identified across this repository
 
 ---
 
+## Azure Region Migration: Central US → East US (August 2026)
+
+Moved the default Azure region for all Terraform-managed and ACI resources from `centralus` to `eastus`.
+
+- `infra/terraform/dev/variables.tf`, `infra/terraform/prod/variables.tf`: default `location` → `eastus`
+- ACI `--location` updated in `main_create_acr_image.yml`, `main_nihgithubportalcb.yml`, `main_nihgithubportalfh.yml`, `staging_create_acr_image.yml`, `staging_nihdevgithubportalcb.yml`, `staging_nihdevgithubportalfh.yml`
+
+**Known/accepted impact:** `location` is immutable on `azurerm_log_analytics_workspace`, `azurerm_servicebus_namespace`, and `azurerm_user_assigned_identity`, so `terraform apply` destroys and recreates these rather than moving them in place. Accepted trade-off: a short window (~15 minutes) of lost Log Analytics history and any in-flight Service Bus messages during cutover, versus a costlier migration later. `staging_terraform_dev.yml` auto-applies on push to `staging`, so dev migrates immediately on merge; prod only migrates once this reaches `main`. The ACI deploy workflows already delete the container group before recreating it, so there's no location-conflict error, and those containers are stateless (state lives in Postgres/Redis), so no data loss there.
+
+---
+
 ## GitHub Actions Secret Reduction (June 2026)
 
 Audit of all workflow secrets against Entra ID Workload Federation (OIDC) coverage.

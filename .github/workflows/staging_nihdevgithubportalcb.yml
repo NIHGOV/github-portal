@@ -71,7 +71,7 @@ jobs:
           az container create \
             --resource-group "$RG" \
             --name nihdevgithubportalcb \
-            --location centralus \
+            --location eastus \
             --image "$REGISTRY_SERVER/portal:${IMAGE_TAG}" \
             --registry-login-server "$REGISTRY_SERVER" \
             --registry-username "$REGISTRY_USER" \
