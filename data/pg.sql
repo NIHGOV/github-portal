@@ -193,6 +193,45 @@ CREATE INDEX IF NOT EXISTS corporate_lowercase_thirdparty_username ON links (thi
 CREATE INDEX IF NOT EXISTS corporate_id ON links (corporateid);
 CREATE INDEX IF NOT EXISTS corporate_lowercase_username ON links (lower(corporateusername));
 
+-- Ledger for scripts/tenantMigration/* (see PLAN.md > "Corporate Identity Tenant Migration
+-- Ledger"). Also created on demand by those scripts via ensureSchema(); listed here so a fresh
+-- dev database bootstrapped from this file has it too.
+CREATE TABLE IF NOT EXISTS identitytenantmigrations (
+  id text PRIMARY KEY,
+  batchid text NOT NULL,
+  thirdpartytype text NOT NULL DEFAULT 'github',
+  thirdpartyid text NOT NULL,
+  thirdpartyusername text,
+
+  discoveredcorporateid text,
+  discoveredcorporateusername text,
+  discoveredcorporatedisplayname text,
+  discoveredcorporatemailaddress text,
+
+  newcorporateid text,
+  newcorporateusername text,
+  newcorporatedisplayname text,
+  newcorporatemailaddress text,
+
+  sourcetenantlabel text,
+  targettenantlabel text,
+
+  status text NOT NULL DEFAULT 'pending',
+  notes text,
+  lasterror text,
+
+  beforesnapshot jsonb,
+  aftersnapshot jsonb,
+
+  createdat timestamptz NOT NULL DEFAULT now(),
+  updatedat timestamptz NOT NULL DEFAULT now(),
+  appliedat timestamptz
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS identitytenantmigrations_batch_thirdparty ON identitytenantmigrations (batchid, thirdpartytype, thirdpartyid);
+CREATE INDEX IF NOT EXISTS identitytenantmigrations_status ON identitytenantmigrations (status);
+CREATE INDEX IF NOT EXISTS identitytenantmigrations_batch ON identitytenantmigrations (batchid);
+
 CREATE TABLE IF NOT EXISTS voting (
   entitytype text,
   entityid text,

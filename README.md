@@ -51,6 +51,16 @@ This NIH fork deploys to two Azure App Services:
 
 **If the app is crash-looping on startup with a `SyntaxError` about `@azure/core-tracing` not exporting `createTracingClient` (or a similar `@azure/*` ESM named-export error), read `AGENTS.md` first.** That document explains exactly why this happens, what _doesn't_ fix it (shipping more files, bumping versions, re-running the deploy), and the actual fix.
 
+### Corporate identity tenant migrations
+
+When a batch of users moves from one Entra tenant to another (e.g. NIH → ARPA-H), their existing
+`links` rows need to be re-pointed at the new tenant's identity without losing their GitHub link.
+This fork includes a generic, ledger-backed toolkit for that — [`scripts/tenantMigration/`](scripts/tenantMigration),
+run via the [`tenant_migration.yml`](.github/workflows/tenant_migration.yml) GitHub Actions
+workflow (`gather` mode finds candidates and produces a downloadable JSON file to fill in; `patch`
+mode applies the edited file). See `PLAN.md` ("Corporate Identity Tenant Migration Ledger") for the
+full workflow, including how to test against a single user before rolling out to the rest of a batch.
+
 ## LICENSE
 
 [MIT License](LICENSE)

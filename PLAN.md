@@ -642,74 +642,83 @@ WHERE thirdpartytype = 'github'
   AND lower(thirdpartyusername) = '<github-login-lowercase>';
 ```
 
-### Bulk ARPA-H User Migration (batch of users)
+### Corporate Identity Tenant Migration Ledger (generic — not tied to one tenant pair)
 
-For a batch of users who migrated NIH → ARPA-H before multitenant support existed, use
-[`scripts/arpaHIdentityMigration.ts`](scripts/arpaHIdentityMigration.ts) instead of hand-editing
-each row. It re-points existing `links` rows (matched by GitHub login, which does not change
-across the tenant migration) to the new ARPA-H `corporateid`/`corporateusername`, and is safe to
-re-run (dry-run by default, skips rows already migrated, never guesses/fuzzy-matches identities).
+For a batch of users who moved from one Entra tenant to another (NIH → ARPA-H was the first case,
+but this is intentionally generic since it can happen again with any other tenant pair), use the
+toolkit under [`scripts/tenantMigration/`](scripts/tenantMigration) instead of hand-editing rows or
+relying on local files. State lives in a Postgres ledger table (`identitytenantmigrations`,
+self-created by the scripts on first run via `ensureSchema()` — no manual DB migration needed).
+Run it via the [`tenant_migration.yml`](.github/workflows/tenant_migration.yml) workflow (manual
+dispatch, OIDC, runs as a one-shot ACI container using the already-built portal image) — not by
+SSHing into an App Service.
 
-#### Step 1 — Gather data with Reader access
+Each row in the ledger tracks one GitHub identity through the whole process — discovered ("before")
+corporate identity, intended ("target") corporate identity, and what was actually applied
+("after") — via a `status` column: `pending` → `needs-review` → `ready` → `applied` (or `conflict`/
+`failed`). Nothing is ever deleted from the ledger, so it doubles as an audit trail and makes every
+mode safely re-runnable.
 
-Reader access to the production resource group is enough to export App Service/Postgres
-_resource_ metadata, but not directory data or secrets. To build the mapping you additionally
-need:
+The workflow has two modes:
 
-- The list of GitHub logins with an existing link whose `corporateusername` looks like an NIH
-  account that's now stale (candidates for migration) — ask someone with prod DB access to run:
+#### `gather` — find candidates and produce a file to edit
 
-  ```sql
-  SELECT thirdpartyusername, corporateusername, corporateid, corporatename
-  FROM links
-  WHERE thirdpartytype = 'github'
-    AND lower(corporateusername) LIKE '%@nih.gov';
-  ```
-
-- For each candidate, the new ARPA-H home-tenant identity, exported from the ARPA-H tenant
-  (requires Directory Reader in that tenant, separate from the NIH RG Reader role):
-
-  ```bash
-  az login --tenant <arpa-h-tenant-id>
-  az ad user list --query "[].{upn:userPrincipalName, oid:id, mail:mail, displayName:displayName}" -o json
-  ```
-
-Match candidates to ARPA-H accounts **by hand** (e.g. name, known alias, HR migration list) —
-do not auto-match on email local-part alone; a wrong match links one person's GitHub account to
-another person's corporate identity.
-
-#### Step 2 — Build the mapping file
-
-Create a JSON file (do **not** commit it — put it under `secrets/`, which is gitignored) with one
-entry per user:
-
-```json
-[
-  {
-    "githubLogin": "octocat",
-    "newCorporateId": "11111111-2222-3333-4444-555555555555",
-    "newCorporateUsername": "jdoe@arpa-h.gov",
-    "newCorporateDisplayName": "Jane Doe",
-    "newCorporateMailAddress": "jdoe@arpa-h.gov",
-    "notes": "confirmed via HR migration list 2026-08-20"
-  }
-]
-```
-
-#### Step 3 — Dry run, then commit
+Scans one or more GitHub orgs' members and flags candidates by simple substring criteria against
+each linked member's _currently stored_ corporate identity — UPN/email contains, display name
+contains, or org membership alone if no other criteria are given:
 
 ```bash
-ARPAH_MIGRATION_FILE=secrets/arpah-migration.json node dist/scripts/arpaHIdentityMigration.js
+gh workflow run tenant_migration.yml \
+  -f environment=dev \
+  -f mode=gather \
+  -f batch_id=<source-tenant>-to-<target-tenant>-2026-08 \
+  -f github_orgs=<org1,org2> \
+  -f upn_contains=<source-tenant-domain> \
+  -f exclude_upn_contains=<target-tenant-domain>
 ```
 
-Review the printed before/after diff and the summary counts (`updated` / `already migrated` /
-`not found` / `invalid rows` / `errors`). Every planned change is also appended to
-`secrets/arpah-migration-audit.jsonl` (before/after values, for rollback) regardless of dry-run.
-Once the diff looks correct, re-run with the commit flag against staging first, then production:
+This writes every match to the ledger table (never to `links`), and also uploads a **downloadable
+artifact** on the workflow run named `tenant-migration-candidates-<batch-id>` — a JSON file with
+one entry per candidate, pre-filled with their discovered identity and blank `new*` fields:
 
 ```bash
-ARPAH_MIGRATION_FILE=secrets/arpah-migration.json ARPAH_MIGRATION_COMMIT=1 node dist/scripts/arpaHIdentityMigration.js
+gh run download <run-id> -n tenant-migration-candidates-<batch-id>
 ```
+
+Edit that file: for each person you want to migrate, fill in `newCorporateId` (their OID in the
+target tenant — get this from `az ad user show --id user@target-tenant.example --query id -o tsv`
+after `az login --tenant <target-tenant-id>`), `newCorporateUsername`, and optionally
+`newCorporateDisplayName`/`newCorporateMailAddress`. **Never auto-match on email local-part
+alone** — hand-verify each pairing (name, known alias, HR migration list); a wrong match links one
+person's GitHub account to someone else's corporate identity. Leave a row's `newCorporateId` blank
+to skip migrating that person.
+
+You can also inspect the raw ledger directly instead of/alongside the downloaded file:
+
+```sql
+SELECT thirdpartyusername, discoveredcorporateusername, status
+FROM identitytenantmigrations
+WHERE batchid = '<batch-id>';
+```
+
+#### `patch` — apply the edited file
+
+```bash
+gh workflow run tenant_migration.yml \
+  -f environment=dev \
+  -f mode=patch \
+  -f batch_id=<batch-id> \
+  -f candidates_json_base64="$(base64 -w0 candidates-<batch-id>.json)"
+```
+
+This first records your edited target identities in the ledger (moving edited rows to `ready`,
+skipping any row you left blank), then applies them to `links` — dry run by default; review the
+printed before/after diff in the workflow run's logs, then re-run with `-f commit=true`
+(`environment=dev` first, then `environment=prod`). For each `ready` row, it re-fetches the live
+`links` row and checks it still matches what was discovered during `gather`; if something changed
+in between (e.g. someone re-linked, or another operator already touched it), the row is marked
+`conflict` instead of being blindly overwritten. Successful updates are marked `applied` with both
+the before and after snapshot recorded on the ledger row.
 
 Then follow Steps 3–4 of the single-user procedure above (confirm `ENTRA_ID_ALLOWED_TENANT_IDS`,
 have each user sign in).
