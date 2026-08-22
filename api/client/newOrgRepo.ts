@@ -6,21 +6,25 @@
 import _ from 'lodash';
 
 import { NextFunction, Response, Router } from 'express';
-import asyncHandler from 'express-async-handler';
 const router: Router = Router();
 
-import { getProviders } from '../../lib/transitional';
-import { jsonError } from '../../middleware/jsonError';
-import { IndividualContext } from '../../business/user';
-import { Organization } from '../../business/organization';
-import { CreateRepository, ICreateRepositoryApiResult, CreateRepositoryEntrypoint } from '../createRepo';
-import { Team } from '../../business/team';
+import { CreateError, ErrorHelper, getProviders } from '../../lib/transitional.js';
+import { stringParam } from '../../lib/utils.js';
+import { safeStringify } from '../../lib/safeStringify.js';
+import { Organization } from '../../business/organization.js';
+import {
+  createRepositoryCore,
+  ICreateRepositoryApiResult,
+  CreateRepositoryEntrypoint,
+} from '../createRepo.js';
+import { Team } from '../../business/team.js';
 import {
   GitHubRepositoryVisibility,
   GitHubTeamRole,
   ReposAppRequest,
   VoidedExpressRoute,
-} from '../../interfaces';
+} from '../../interfaces/index.js';
+import type { IndividualContext } from '../../business/user/index.js';
 
 // This file supports the client apps for creating repos.
 
@@ -39,131 +43,124 @@ router.get('/metadata', (req: ILocalApiRequest, res: Response, next: NextFunctio
     const metadata = organization.getRepositoryCreateMetadata(options);
     res.json(metadata);
   } catch (error) {
-    return next(jsonError(error, 400));
+    return next(CreateError.InvalidParameters(error?.message || String(error), error));
   }
 });
 
-router.get(
-  '/personalizedTeams',
-  asyncHandler(async (req: ILocalApiRequest, res: Response, next: NextFunction) => {
-    try {
-      const organization = req.organization as Organization;
-      const userAggregateContext = req.apiContext.aggregations;
-      const maintainedTeams = new Set<string>();
-      const broadTeams = new Set<number>(req.organization.broadAccessTeams);
-      const openAccessTeams = new Set<number>(req.organization.openAccessTeams);
-      const userTeams = userAggregateContext.reduceOrganizationTeams(
-        organization,
-        await userAggregateContext.teams()
-      );
-      userTeams.maintainer.map((maintainedTeam) => maintainedTeams.add(maintainedTeam.id.toString()));
-      const combinedTeams = new Map<string, Team>();
-      userTeams.maintainer.map((team) => combinedTeams.set(team.id.toString(), team));
-      userTeams.member.map((team) => combinedTeams.set(team.id.toString(), team));
-      const personalizedTeams = Array.from(combinedTeams.values()).map((combinedTeam) => {
-        return {
-          broad: broadTeams.has(Number(combinedTeam.id)),
-          isOpenAccessTeam: openAccessTeams.has(Number(combinedTeam.id)),
-          description: combinedTeam.description,
-          id: Number(combinedTeam.id),
-          name: combinedTeam.name,
-          role: maintainedTeams.has(combinedTeam.id.toString())
-            ? GitHubTeamRole.Maintainer
-            : GitHubTeamRole.Member,
-        };
-      });
-      return res.json({
-        personalizedTeams,
-      }) as unknown as void;
-    } catch (error) {
-      return next(jsonError(error, 400));
-    }
-  })
-);
-
-router.get(
-  '/teams',
-  asyncHandler(async (req: ILocalApiRequest, res: Response, next: NextFunction) => {
-    const providers = getProviders(req);
-    const queryCache = providers.queryCache;
+router.get('/personalizedTeams', async (req: ILocalApiRequest, res: Response, next: NextFunction) => {
+  try {
     const organization = req.organization as Organization;
-    const broadTeams = new Set(organization.broadAccessTeams);
+    const userAggregateContext = req.apiContext.aggregations;
+    const maintainedTeams = new Set<string>();
+    const broadTeams = new Set<number>(req.organization.broadAccessTeams);
     const openAccessTeams = new Set<number>(req.organization.openAccessTeams);
-    if (req.query.refresh === undefined && queryCache && queryCache.supportsTeams) {
-      // Use the newer method in this case...
-      const organizationTeams = await queryCache.organizationTeams(organization.id.toString());
-      return res.json({
-        teams: organizationTeams.map((qt) => {
-          const team = qt.team;
-          const t = team.toSimpleJsonObject();
-          if (broadTeams.has(Number(t.id))) {
-            t['broad'] = true;
-          }
-          if (openAccessTeams.has(Number(t.id))) {
-            t['openAccess'] = true;
-          }
-          return t;
-        }),
-      }) as unknown as void;
-    }
+    const userTeams = userAggregateContext.reduceOrganizationTeams(
+      organization,
+      await userAggregateContext.teams()
+    );
+    userTeams.maintainer.map((maintainedTeam) => maintainedTeams.add(maintainedTeam.id.toString()));
+    const combinedTeams = new Map<string, Team>();
+    userTeams.maintainer.map((team) => combinedTeams.set(team.id.toString(), team));
+    userTeams.member.map((team) => combinedTeams.set(team.id.toString(), team));
+    const personalizedTeams = Array.from(combinedTeams.values()).map((combinedTeam) => {
+      return {
+        broad: broadTeams.has(Number(combinedTeam.id)),
+        isOpenAccessTeam: openAccessTeams.has(Number(combinedTeam.id)),
+        description: combinedTeam.description,
+        id: Number(combinedTeam.id),
+        name: combinedTeam.name,
+        role: maintainedTeams.has(combinedTeam.id.toString())
+          ? GitHubTeamRole.Maintainer
+          : GitHubTeamRole.Member,
+      };
+    });
+    return res.json({
+      personalizedTeams,
+    }) as unknown as void;
+  } catch (error) {
+    return next(CreateError.InvalidParameters(error?.message || String(error), error));
+  }
+});
 
-    // By default, allow a 30-second old list of teams. If the cached
-    // view is older, refresh this list in the background for use if
-    // they refresh for a better user experience.
-    const caching = {
-      backgroundRefresh: true,
-      maxAgeSeconds: 30,
-    };
-
-    // If the user forces a true refresh, force a true walk of all the teams
-    // from GitHub. This will be slow the larger the org. Allow a short cache
-    // window for the case where a  webhook processes the change quickly.
-    if (req.query.refresh) {
-      caching.backgroundRefresh = false;
-      caching.maxAgeSeconds = 10;
-    }
-
-    try {
-      const teams = await organization.getTeams();
-      const simpleTeams = teams.map((team) => {
+router.get('/teams', async (req: ILocalApiRequest, res: Response, next: NextFunction) => {
+  const providers = getProviders(req);
+  const queryCache = providers.queryCache;
+  const organization = req.organization as Organization;
+  const broadTeams = new Set(organization.broadAccessTeams);
+  const openAccessTeams = new Set<number>(req.organization.openAccessTeams);
+  if (req.query.refresh === undefined && queryCache && queryCache.supportsTeams) {
+    // Use the newer method in this case...
+    const organizationTeams = await queryCache.organizationTeams(organization.id.toString());
+    return res.json({
+      teams: organizationTeams.map((qt) => {
+        const team = qt.team;
         const t = team.toSimpleJsonObject();
-        if (broadTeams.has(t.id)) {
+        if (broadTeams.has(Number(t.id))) {
           t['broad'] = true;
         }
+        if (openAccessTeams.has(Number(t.id))) {
+          t['openAccess'] = true;
+        }
         return t;
-      });
-      res.json({
-        teams: simpleTeams,
-      });
-    } catch (getTeamsError) {
-      return next(jsonError(getTeamsError, 400));
-    }
-  })
-);
+      }),
+    }) as unknown as void;
+  }
 
-router.get(
-  '/repo/:repo',
-  asyncHandler(async (req: ILocalApiRequest, res) => {
-    const { insights } = getProviders(req);
-    const repoName = req.params.repo;
-    let error = null;
-    try {
-      const repo = await req.organization.repository(repoName).getDetails();
-      res.json(repo);
-    } catch (repoDetailsError) {
-      res.status(404).end();
-      error = repoDetailsError;
-    }
-    insights?.trackEvent({
-      name: 'ApiClientNewRepoValidateAvailability',
-      properties: {
-        found: error ? true : false,
-        repoName,
-        org: req.organization.name,
-      },
+  // By default, allow a 30-second old list of teams. If the cached
+  // view is older, refresh this list in the background for use if
+  // they refresh for a better user experience.
+  const caching = {
+    backgroundRefresh: true,
+    maxAgeSeconds: 30,
+  };
+
+  // If the user forces a true refresh, force a true walk of all the teams
+  // from GitHub. This will be slow the larger the org. Allow a short cache
+  // window for the case where a  webhook processes the change quickly.
+  if (req.query.refresh) {
+    caching.backgroundRefresh = false;
+    caching.maxAgeSeconds = 10;
+  }
+
+  try {
+    const teams = await organization.getTeams();
+    const simpleTeams = teams.map((team) => {
+      const t = team.toSimpleJsonObject();
+      if (broadTeams.has(t.id)) {
+        t['broad'] = true;
+      }
+      return t;
     });
-  })
-);
+    res.json({
+      teams: simpleTeams,
+    });
+  } catch (getTeamsError) {
+    return next(
+      CreateError.InvalidParameters(getTeamsError?.message || String(getTeamsError), getTeamsError)
+    );
+  }
+});
+
+router.get('/repo/:repo', async (req: ILocalApiRequest, res) => {
+  const { insights } = req;
+  const repoName = stringParam(req, 'repo');
+  let error = null;
+  try {
+    const repo = await req.organization.repository(repoName).getDetails();
+    res.json(repo);
+  } catch (repoDetailsError) {
+    res.status(404).end();
+    error = repoDetailsError;
+  }
+  insights?.trackEvent({
+    name: 'ApiClientNewRepoValidateAvailability',
+    properties: {
+      found: error ? true : false,
+      repoName,
+      org: req.organization.name,
+    },
+  });
+});
 
 export async function discoverUserIdentities(req: ReposAppRequest, res: Response, next: NextFunction) {
   const apiContext = req.apiContext as IndividualContext;
@@ -186,15 +183,37 @@ export async function discoverUserIdentities(req: ReposAppRequest, res: Response
   return next();
 }
 
+export type CreateRepositoryRequest = ILocalApiRequest & {
+  createRepositorySource: 'api' | 'client';
+  repoCreateResponse?: ICreateRepositoryApiResult;
+};
+
+export function setRepositoryCreateSourceThenNext(
+  source: 'api' | 'client',
+  req: CreateRepositoryRequest,
+  res,
+  next
+) {
+  req.createRepositorySource = source || 'api';
+  return next();
+}
+
 router.post(
   '/repo/:repo',
-  asyncHandler(discoverUserIdentities),
-  asyncHandler(createRepositoryFromClient as VoidedExpressRoute)
+  discoverUserIdentities,
+  setRepositoryCreateSourceThenNext.bind('client'),
+  createRepositoryFromClient as VoidedExpressRoute
 );
 
-export async function createRepositoryFromClient(req: ILocalApiRequest, res: Response, next: NextFunction) {
+export async function createRepositoryFromClient(
+  req: CreateRepositoryRequest,
+  res: Response,
+  next: NextFunction
+) {
+  const createRepositorySource = req.createRepositorySource || 'client';
   const providers = getProviders(req);
-  const { insights, diagnosticsDrop, customizedNewRepositoryLogic, graphProvider } = providers;
+  const { diagnosticsDrop, customizedNewRepositoryLogic, graphProvider } = providers;
+  const { insights } = req;
   const individualContext = req.watchdogContextOverride || req.individualContext || req.apiContext;
   const config = getProviders(req).config;
   const organization = (req.organization || (req as any).aeOrganization) as Organization;
@@ -233,25 +252,49 @@ export async function createRepositoryFromClient(req: ILocalApiRequest, res: Res
       )
     );
   }
+  const overrideAllowApiCreatesWhenNative = organization.allowCreateRepositoriesByApiWhenNative;
+  if (overrideAllowApiCreatesWhenNative && createRepositorySource === 'api') {
+    insights?.trackEvent({
+      name: 'CreateRepositoryFromApiOverride',
+      properties: {
+        org: organization.name,
+        correlationId,
+        corporateId,
+      },
+    });
+    insights?.trackMetric({ name: 'CreateRepositoryApiOverrides', value: 1 });
+  }
   if (
+    (!overrideAllowApiCreatesWhenNative ||
+      (overrideAllowApiCreatesWhenNative && createRepositorySource === 'client')) &&
     organization.createRepositoriesOnGitHub &&
     !(existingRepoId && organization.isNewRepositoryLockdownSystemEnabled())
   ) {
+    insights?.trackEvent({
+      name: 'CreateRepositoryBlocked',
+      properties: {
+        org: organization.name,
+        correlationId,
+        corporateId,
+      },
+    });
+    insights?.trackMetric({ name: 'CreateRepositoryBlocks', value: 1 });
     return next(
-      jsonError(
-        `The GitHub organization ${organization.name} is configured as "createRepositoriesOnGitHub": repos should be created on GitHub.com directly and not through this wizard.`,
-        400
+      CreateError.InvalidParameters(
+        `The GitHub organization ${organization.name} is configured as "createRepositoriesOnGitHub": repos should be created on GitHub.com directly and not through this wizard.`
       )
     );
   }
   const body = req.body;
   if (!body) {
-    return next(jsonError('No body', 400));
+    return next(CreateError.InvalidParameters('No body'));
   }
   try {
     await customizedNewRepositoryLogic?.validateRequest(customContext, req);
   } catch (validationError) {
-    return next(jsonError(validationError, 400));
+    return next(
+      CreateError.InvalidParameters(validationError?.message || String(validationError), validationError)
+    );
   }
   req.apiVersion = (req.query['api-version'] || req.headers['api-version'] || '2017-07-27') as string;
   if (req.apiContext && req.apiContext.getGitHubIdentity()) {
@@ -273,7 +316,9 @@ export async function createRepositoryFromClient(req: ILocalApiRequest, res: Res
         }
       });
       if (!valid) {
-        return next(jsonError('The approval type is not supported or approved at this time', 400));
+        return next(
+          CreateError.InvalidParameters('The approval type is not supported or approved at this time')
+        );
       }
     }
   }
@@ -293,10 +338,24 @@ export async function createRepositoryFromClient(req: ILocalApiRequest, res: Res
   ) {
     // Only if the organization types are configured in the settings should this gate the type of this
     if (!organization.getRepositoryCreateMetadata()?.visibilities?.includes(targetType)) {
+      const { insights } = req;
+      const additionalContext =
+        createRepositorySource === 'api'
+          ? ' As an application or API user trying to create repositories, this behavior may be new and impacting your application. Please reach out to ospocore@microsoft.com to share more detail and see if a feature flag is required to enable your application to continue creating repositories of this type. This change landed in March 2025.'
+          : '';
+      insights?.trackEvent({
+        name: 'api.create_repo.type_blocked',
+        properties: {
+          createRepositorySource,
+          org: organization.name,
+          requestedVisibility: targetType,
+          correlationId,
+        },
+      });
+      insights?.trackMetric({ name: 'api.create_repo.type_blocks', value: 1 });
       return next(
-        jsonError(
-          `The portal is not configured to allow the creation of ${targetType} repositories in the ${organization.name} organization`,
-          400
+        CreateError.InvalidParameters(
+          `The portal is not configured to allow the creation of ${targetType} repositories in the ${organization.name} organization.${additionalContext}`
         )
       );
     }
@@ -313,7 +372,7 @@ export async function createRepositoryFromClient(req: ILocalApiRequest, res: Res
   }
   if (!sufficientTeamsOk) {
     if (!body.selectedAdminTeams || !body.selectedAdminTeams.length) {
-      return next(jsonError('No administration team(s) provided in the request', 400));
+      return next(CreateError.InvalidParameters('No administration team(s) provided in the request'));
     }
   }
   translateTeams(body);
@@ -357,7 +416,7 @@ export async function createRepositoryFromClient(req: ILocalApiRequest, res: Res
   insights.trackEvent({
     name: 'ApiClientNewOrgRepoStart',
     properties: {
-      body: JSON.stringify(req.body),
+      body: safeStringify(req.body),
     },
   });
   let success: ICreateRepositoryApiResult = null;
@@ -365,7 +424,7 @@ export async function createRepositoryFromClient(req: ILocalApiRequest, res: Res
     const newRepositoryParameters = customizedNewRepositoryLogic?.additionalCreateRepositoryParameters
       ? Object.assign(body, customizedNewRepositoryLogic.additionalCreateRepositoryParameters(customContext))
       : body;
-    success = await CreateRepository(
+    success = await createRepositoryCore(
       req,
       organization,
       customizedNewRepositoryLogic,
@@ -379,11 +438,14 @@ export async function createRepositoryFromClient(req: ILocalApiRequest, res: Res
       name: 'ApiClientNewOrgRepoError',
       properties: {
         error: createRepositoryError.message,
-        encoded: JSON.stringify(createRepositoryError),
+        encoded: safeStringify(createRepositoryError),
       },
     });
-    if (!createRepositoryError.json) {
-      createRepositoryError = jsonError(createRepositoryError, 400);
+    if (!ErrorHelper.HasStatus(createRepositoryError)) {
+      createRepositoryError = CreateError.InvalidParameters(
+        createRepositoryError?.message || String(createRepositoryError),
+        createRepositoryError
+      );
     }
     return next(createRepositoryError);
   }
@@ -398,13 +460,13 @@ export async function createRepositoryFromClient(req: ILocalApiRequest, res: Res
     title: existingRepoId ? 'Repository unlocked' : 'Repository created',
     message,
     url: null,
-    messages: null,
+    messages: success.tasks,
   };
+  delete output.tasks;
+  delete output.insights;
   if (success.github) {
     output.url = success.github.html_url;
   }
-  output.messages = output['tasks'];
-  delete output['tasks'];
   insights.trackEvent({
     name: 'ApiClientNewOrgRepoSuccessful',
     properties: {

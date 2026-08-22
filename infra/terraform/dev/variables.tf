@@ -20,3 +20,9 @@ variable "log_retention_days" {
   type        = number
   default     = 30
 }
+
+variable "servicebus_namespace_name" {
+  description = "Name of the Azure Service Bus namespace (will be created if it does not exist)"
+  type        = string
+  default     = "nihdevgithubportalsb"
+}

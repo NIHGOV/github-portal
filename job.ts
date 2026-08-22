@@ -3,20 +3,23 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
+import { fileURLToPath } from 'url';
+import path from 'path';
 import { hostname } from 'os';
 import Debug from 'debug';
 
 import type {
   ExecutionEnvironment,
   IProviders,
+  IReposApplication,
   IReposJob,
   IReposJobOptions,
   IReposJobResult,
   SiteConfiguration,
-} from './interfaces';
-import { commonStartup } from '.';
-import { quitInTenSeconds } from './lib/utils';
-import initialize from './middleware/initialize';
+} from './interfaces/index.js';
+import { commonStartup, startupWebStack } from './index.js';
+import { quitInTenSeconds } from './lib/utils.js';
+import initialize from './middleware/initialize.js';
 
 export async function runJob(
   job: (job: IReposJob) => Promise<IReposJobResult | void>,
@@ -41,24 +44,32 @@ export async function runJob(
     process.env.DEBUG = options.defaultDebugOutput;
   }
 
+  let app: IReposApplication = null;
+  if (options.withWebStack === true) {
+    app = startupWebStack({ skipStartup: true });
+  }
+
   let executionEnvironment: ExecutionEnvironment = null;
   try {
     executionEnvironment = await commonStartup(
       initializeJob,
       true /* job */,
       options.enableAllGitHubApps,
-      null /* app */,
+      app,
       options.name
     );
   } catch (startupError) {
     console.error(`Job startup error before runJob: ${startupError}`);
+    if (startupError?.stack) {
+      console.error(startupError.stack);
+    }
     quitInTenSeconds(false);
     return;
   }
   const providers = executionEnvironment?.providers;
-  if (options.insightsPrefix && providers?.insights) {
+  if (options.insightsPrefix && providers?.genericInsights) {
     try {
-      providers?.insights?.trackEvent({
+      providers?.genericInsights?.trackEvent({
         name: `${options.insightsPrefix}Started`,
         properties: {
           hostname: hostname(),
@@ -79,9 +90,9 @@ export async function runJob(
   let result: IReposJobResult = null;
   try {
     result = (await job.call(null, jobObject)) as IReposJobResult;
-    if (result?.successProperties && providers?.insights && options.insightsPrefix) {
+    if (result?.successProperties && providers?.genericInsights && options.insightsPrefix) {
       try {
-        providers?.insights?.trackEvent({
+        providers?.genericInsights?.trackEvent({
           name: `${options.insightsPrefix}Success`,
           properties: Object.assign(
             {
@@ -101,13 +112,15 @@ export async function runJob(
     }
     // by default, let's not show the whole inner error
     const simpleError = { ...jobError };
-    simpleError?.cause && delete simpleError.cause;
+    if (simpleError?.cause) {
+      delete simpleError.cause;
+    }
     console.dir(simpleError);
     const config = providers?.config;
     quitInTenSeconds(false, config);
     if (options.insightsPrefix) {
       try {
-        providers?.insights?.trackException({
+        providers?.genericInsights?.trackException({
           exception: jobError,
           properties: {
             name: `${options.insightsPrefix}Failure`,
@@ -130,7 +143,7 @@ export async function runJob(
 
 function trySilentInsightsFlush(providers: IProviders) {
   try {
-    providers?.insights?.flush();
+    providers?.genericInsights?.flush();
   } catch (ignored) {
     console.warn(ignored);
   }
@@ -138,20 +151,17 @@ function trySilentInsightsFlush(providers: IProviders) {
 
 function initializeJob(
   executionEnvironment: ExecutionEnvironment,
+  app: IReposApplication,
   config: SiteConfiguration,
   configurationError: Error
 ) {
   if (!config || configurationError) {
     console.warn(`Configuration did not resolve successfully`, configurationError);
   }
-  return initialize(
-    executionEnvironment,
-    null /* app */,
-    null /* express */,
-    __dirname,
-    config,
-    configurationError
-  );
+  const filename = fileURLToPath(import.meta.url);
+  const dirname = path.dirname(filename);
+
+  return initialize(executionEnvironment, app, dirname, config, configurationError);
 }
 
 export const job = {

@@ -11,11 +11,11 @@ import {
   ICorporateLinkExtended,
   ICorporateLinkProperties,
   IReposError,
-} from '../../../interfaces';
+} from '../../../interfaces/index.js';
 
-import { CorporateMemoryLink } from './memoryLink';
-import { ILinkProvider } from '..';
-import { CorporatePropertyNames } from '../../../business';
+import { CorporateMemoryLink } from './memoryLink.js';
+import { ILinkProvider } from '../index.js';
+import { CorporatePropertyNames } from '../../../business/index.js';
 
 const defaultThirdPartyType = 'github';
 const defaultPageSize = 500;
@@ -51,7 +51,6 @@ const linkInterfacePropertyMapping: IMemoryLinkProperties = {
   corporateUsername: 'aadupn',
   corporateDisplayName: 'aadname',
   corporateMailAddress: 'corporateMailAddress',
-  corporateAlias: 'corporateAlias',
 
   thirdPartyId: 'ghid',
   thirdPartyUsername: 'ghu',

@@ -4,10 +4,13 @@
 //
 
 import { DateTime } from 'luxon';
+import { DefaultAzureCredential } from '@azure/identity';
 import { ServiceBusClient, ServiceBusReceivedMessage, ServiceBusReceiver } from '@azure/service-bus';
 
-import { IQueueMessage, IQueueProcessor } from '.';
-import { IDictionary, Json } from '../../interfaces';
+import type { IQueueMessage, IQueueProcessor } from './index.js';
+import { IDictionary, IProviders, Json } from '../../interfaces/index.js';
+import { CreateError } from '../transitional.js';
+import { normalizeWebhookRawBody, requireWebhookRawBody } from '../webhookSignature.js';
 
 // NOTE: in May 2021 this file was moved to the newer generation of Azure SDK dependencies,
 // which brings in AMQP under the covers instead of the HTTP REST approach; this is therefore
@@ -16,14 +19,23 @@ import { IDictionary, Json } from '../../interfaces';
 const defaultMessagesPerRequest = 5; // could be configurable in the future
 const maxWaitTimeInMs = 30 /* seconds */ * 1000;
 
+type ServiceBusMessageBodyType = ServiceBusReceivedMessage['_rawAmqpMessage']['bodyType'];
+
 export interface IServiceBusQueueProcessorOptions {
   queue: string;
-  connectionString: string;
+  connectionString?: string;
+  useEntraAuthentication?: boolean;
+  endpoint?: string;
+  immediatelyDeleteMessages: boolean;
+  maximumMessagesPerRequest?: number;
 }
 
 export class ServiceBusMessage implements IQueueMessage {
   #lockedMessage: ServiceBusReceivedMessage = null;
   constructor(message: ServiceBusReceivedMessage) {
+    const normalizedBody = normalizeWebhookRawBody(
+      requireWebhookRawBody(message.body, 'Service Bus webhook body')
+    );
     this.#lockedMessage = message;
     this.brokerProperties = Object.assign({}, message) as unknown as IDictionary<string>;
     if (message.enqueuedTimeUtc) {
@@ -33,14 +45,26 @@ export class ServiceBusMessage implements IQueueMessage {
     this.identifier =
       message.messageId && typeof message.messageId === 'string' ? message.messageId : undefined;
     this.customProperties = message.applicationProperties as IDictionary<string>;
-    this.unparsedBody = message.body;
-    this.body = typeof message.body === 'string' ? JSON.parse(message.body) : this.unparsedBody; // newer library parses JSON automatically
+    this.unparsedBody = normalizedBody;
+    this.rawBodyType = message._rawAmqpMessage?.bodyType;
+    try {
+      this.body = JSON.parse(normalizedBody) as Json;
+    } catch {
+      const id = this.identifier || (typeof message.messageId === 'string' ? message.messageId : undefined);
+      const bodyType = message._rawAmqpMessage?.bodyType;
+      const idPart = id ? ` ${id}` : '';
+      const bodyTypePart = bodyType ? ` (bodyType: ${bodyType})` : '';
+      throw CreateError.InvalidParameters(
+        `Invalid JSON body for Service Bus message${idPart}${bodyTypePart}`
+      );
+    }
   }
 
   body: Json;
   customProperties: IDictionary<string>;
   brokerProperties: IDictionary<string>;
-  unparsedBody: any;
+  unparsedBody: string;
+  rawBodyType?: ServiceBusMessageBodyType;
 
   identifier: string;
   enqueuedSecondsAgo?: number;
@@ -57,36 +81,52 @@ export default class ServiceBusQueueProcessor implements IQueueProcessor {
 
   supportsMultipleThreads: false;
 
-  constructor(options: IServiceBusQueueProcessorOptions) {
-    if (!options.connectionString) {
-      throw new Error('options.connectionString required');
+  constructor(
+    private providers: IProviders,
+    options: IServiceBusQueueProcessorOptions
+  ) {
+    if (!options.connectionString && !options.useEntraAuthentication) {
+      throw CreateError.InvalidParameters('options.connectionString required');
+    } else if (options.useEntraAuthentication && !options.endpoint) {
+      throw CreateError.InvalidParameters('options.endpoint required for Entra ID');
     }
     if (!options.queue) {
-      throw new Error('options.queue required');
+      throw CreateError.InvalidParameters('options.queue required');
     }
     this.#options = options;
   }
 
   async initialize(): Promise<void> {
     const options = this.#options;
-    const service = new ServiceBusClient(options.connectionString);
-    this.#receiver = service.createReceiver(options.queue, { receiveMode: 'peekLock' });
+    let service: ServiceBusClient;
+    if (options.useEntraAuthentication) {
+      const credential = new DefaultAzureCredential();
+      service = new ServiceBusClient(options.endpoint, credential);
+    } else {
+      service = new ServiceBusClient(options.connectionString);
+    }
+    this.#receiver = service.createReceiver(options.queue, {
+      receiveMode: options.immediatelyDeleteMessages ? 'receiveAndDelete' : 'peekLock',
+      skipParsingBodyAsJson: true,
+    });
     this.#initialized = true;
   }
 
-  async receiveMessages(): Promise<ServiceBusMessage[]> {
+  async receiveMessages(maxWaitTimeMsAlternative?: number): Promise<ServiceBusMessage[]> {
     if (!this.#initialized) {
       throw new Error('Provider not initialized');
     }
 
     try {
-      const messages = await this.#receiver.receiveMessages(defaultMessagesPerRequest, {
-        maxWaitTimeInMs,
-      });
+      const messages = await this.#receiver.receiveMessages(
+        this.#options.maximumMessagesPerRequest || defaultMessagesPerRequest,
+        {
+          maxWaitTimeInMs: maxWaitTimeMsAlternative || maxWaitTimeInMs,
+        }
+      );
       return messages.map((message) => new ServiceBusMessage(message));
     } catch (error) {
       // if empty, return empty array
-
       console.warn(error);
     }
   }
@@ -94,6 +134,12 @@ export default class ServiceBusQueueProcessor implements IQueueProcessor {
   async deleteMessage(message: IQueueMessage): Promise<void> {
     if (!this.#initialized) {
       throw new Error('Provider not initialized');
+    }
+    if (this.#options.immediatelyDeleteMessages) {
+      console.log(
+        `In immediate delete mode, not deleting message ${message.identifier} (it was already handled)`
+      );
+      return;
     }
     const assumedType = message as ServiceBusMessage;
     const lockedMessage = assumedType.lockedMessage();

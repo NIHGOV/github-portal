@@ -10,6 +10,8 @@ export type ConfigGitHubRootWebhooks = {
 export type ConfigGitHubWebhooks = {
   firehoseOffline: string;
   sharedSecret: string;
+  allowInvalidSignature: boolean;
+  acceptUnsigned: boolean;
   runtimeMinutes: string;
   parallelism: string;
   emptyQueueDelaySeconds: string;
@@ -17,13 +19,16 @@ export type ConfigGitHubWebhooks = {
   provider: string;
 
   serviceBus: {
-    connectionString: string;
+    connectionString?: string;
+    endpoint?: string;
+    useEntraAuthentication?: boolean;
     queue: string;
   };
 
   azureQueues: {
     account: string;
-    sas: string;
+    sas?: string;
     queue: string;
+    useEntraAuthentication: boolean;
   };
 };

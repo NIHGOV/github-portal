@@ -7,11 +7,18 @@ on:
       - staging
     paths:
       - 'Dockerfile'
-      - 'jobs/**'
+      - 'api/**'
+      - 'bin/**'
       - 'business/**'
-      - 'lib/**'
       - 'config/**'
       - 'interfaces/**'
+      - 'jobs/**'
+      - 'lib/**'
+      - 'middleware/**'
+      - 'routes/**'
+      - 'typings/**'
+      - 'index.ts'
+      - 'job.ts'
       - 'package.json'
       - 'bun.lock'
       - 'tsconfig.json'
@@ -36,6 +43,193 @@ jobs:
         env:
           REGISTRY_SERVER: ${{ secrets.DEV_REGISTRY_SERVER }}
         run: az acr login --name "${REGISTRY_SERVER%%.*}"
-      - run: |
-          docker build . -t ${{ secrets.DEV_REGISTRY_SERVER }}/portal
-          docker push ${{ secrets.DEV_REGISTRY_SERVER }}/portal
+      - name: Build & push image
+        run: |
+          SHA_TAG="${{ github.sha }}"
+          docker build . \
+            -t ${{ secrets.DEV_REGISTRY_SERVER }}/portal:"${SHA_TAG}" \
+            -t ${{ secrets.DEV_REGISTRY_SERVER }}/portal:latest
+          docker push ${{ secrets.DEV_REGISTRY_SERVER }}/portal:"${SHA_TAG}"
+          docker push ${{ secrets.DEV_REGISTRY_SERVER }}/portal:latest
+
+  deploy-cb:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Azure Login
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        with:
+          client-id: ${{ secrets.AAD_CLIENT_ID }}
+          tenant-id: ${{ secrets.AAD_TENANT_ID }}
+          subscription-id: ${{ secrets.AAD_SUBSCRIPTION_ID }}
+
+      - name: Delete existing container group
+        run: |
+          az container delete \
+            --resource-group "${{ secrets.DEV_RG }}" \
+            --name nihdevgithubportalcb \
+            --yes 2>/dev/null || true
+
+      - name: Create cache builder container
+        env:
+          REGISTRY_SERVER: ${{ secrets.DEV_REGISTRY_SERVER }}
+          REDIS_TLS_HOST: ${{ secrets.DEV_REDIS_TLS_HOST }}
+          REDIS_KEY: ${{ secrets.DEV_REDIS_KEY }}
+          POSTGRES_HOST: ${{ secrets.DEV_POSTGRES_HOST }}
+          POSTGRES_DB: ${{ secrets.DEV_POSTGRES_DB }}
+          POSTGRES_USER: ${{ secrets.DEV_POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.DEV_POSTGRES_PASSWORD }}
+          APP_ID: ${{ secrets.DEV_GITHUB_APP_OPERATIONS_APP_ID }}
+          APP_KEY: ${{ secrets.DEV_GITHUB_APP_OPERATIONS_KEY }}
+          APP_SLUG: ${{ secrets.DEV_GITHUB_APP_OPERATIONS_SLUG }}
+          ENTRA_CLIENT_ID: ${{ secrets.AAD_CLIENT_ID }}
+          ENTRA_CLIENT_SECRET: ${{ secrets.AAD_CLIENT_SECRET }}
+          ENTRA_TENANT_ID: ${{ secrets.AAD_TENANT_ID }}
+          RG: ${{ secrets.DEV_RG }}
+        run: |
+          LA_WORKSPACE_ID=$(az monitor log-analytics workspace show \
+            --resource-group "$RG" \
+            --workspace-name nihdevgithubportal-logs \
+            --query customerId --output tsv 2>/dev/null || echo "")
+          LA_WORKSPACE_KEY=$(az monitor log-analytics workspace get-shared-keys \
+            --resource-group "$RG" \
+            --workspace-name nihdevgithubportal-logs \
+            --query primarySharedKey --output tsv 2>/dev/null || echo "")
+          LA_ARGS=()
+          if [ -n "$LA_WORKSPACE_ID" ]; then
+            LA_ARGS=(--log-analytics-workspace "$LA_WORKSPACE_ID" --log-analytics-workspace-key "$LA_WORKSPACE_KEY")
+          fi
+          ACR_NAME="${REGISTRY_SERVER%%.*}"
+          REGISTRY_USER=$(az acr credential show --name "$ACR_NAME" --query username --output tsv)
+          REGISTRY_PASS=$(az acr credential show --name "$ACR_NAME" --query "passwords[0].value" --output tsv)
+          az container create \
+            --resource-group "$RG" \
+            --name nihdevgithubportalcb \
+            --location centralus \
+            --image "$REGISTRY_SERVER/portal:${{ github.sha }}" \
+            --registry-login-server "$REGISTRY_SERVER" \
+            --registry-username "$REGISTRY_USER" \
+            --registry-password "$REGISTRY_PASS" \
+            --command-line "node /usr/src/repos/jobs/refreshQueryCache.js" \
+            --restart-policy OnFailure \
+            --os-type Linux \
+            --cpu 1 \
+            --memory 1.5 \
+            --ip-address Public \
+            --ports 443 \
+            --environment-variables \
+              REDIS_TLS_HOST="$REDIS_TLS_HOST" \
+              REDIS_PORT=6380 \
+              REPOS_POSTGRES_DATABASE="$POSTGRES_DB" \
+              REPOS_POSTGRES_HOST="$POSTGRES_HOST" \
+              REPOS_POSTGRES_USER="$POSTGRES_USER" \
+              REPOS_POSTGRES_SSL=false \
+              GITHUB_ORGANIZATIONS_SOURCE=postgres \
+              GITHUB_SHA="${{ github.sha }}" \
+              GITHUB_RUN_ID="${{ github.run_id }}" \
+              GITHUB_RUN_NUMBER="${{ github.run_number }}" \
+              ENTRA_ID_CLIENT_ID="$ENTRA_CLIENT_ID" \
+              ENTRA_ID_TENANT_ID="$ENTRA_TENANT_ID" \
+              GITHUB_APP_OPERATIONS_APP_ID="$APP_ID" \
+              GITHUB_APP_OPERATIONS_SLUG="$APP_SLUG" \
+            --secure-environment-variables \
+              REDIS_KEY="$REDIS_KEY" \
+              REPOS_POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+              ENTRA_ID_CLIENT_SECRET="$ENTRA_CLIENT_SECRET" \
+              GITHUB_APP_OPERATIONS_KEY="$APP_KEY" \
+            "${LA_ARGS[@]}" \
+            --no-wait
+
+  deploy-fh:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Azure Login
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        with:
+          client-id: ${{ secrets.AAD_CLIENT_ID }}
+          tenant-id: ${{ secrets.AAD_TENANT_ID }}
+          subscription-id: ${{ secrets.AAD_SUBSCRIPTION_ID }}
+
+      - name: Delete existing container group
+        run: |
+          az container delete \
+            --resource-group "${{ secrets.DEV_RG }}" \
+            --name nihdevgithubportalfh \
+            --yes 2>/dev/null || true
+
+      - name: Create firehose container
+        env:
+          REGISTRY_SERVER: ${{ secrets.DEV_REGISTRY_SERVER }}
+          REDIS_TLS_HOST: ${{ secrets.DEV_REDIS_TLS_HOST }}
+          REDIS_KEY: ${{ secrets.DEV_REDIS_KEY }}
+          POSTGRES_HOST: ${{ secrets.DEV_POSTGRES_HOST }}
+          POSTGRES_DB: ${{ secrets.DEV_POSTGRES_DB }}
+          POSTGRES_USER: ${{ secrets.DEV_POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.DEV_POSTGRES_PASSWORD }}
+          SB_NAMESPACE: ${{ vars.DEV_SERVICEBUS_NAMESPACE }}
+          ENTRA_CLIENT_ID: ${{ secrets.AAD_CLIENT_ID }}
+          ENTRA_CLIENT_SECRET: ${{ secrets.AAD_CLIENT_SECRET }}
+          ENTRA_TENANT_ID: ${{ secrets.AAD_TENANT_ID }}
+          WEBHOOK_SHARED_SECRET: ${{ secrets.DEV_WEBHOOK_SHARED_SECRET }}
+          RG: ${{ secrets.DEV_RG }}
+        run: |
+          LA_WORKSPACE_ID=$(az monitor log-analytics workspace show \
+            --resource-group "$RG" \
+            --workspace-name nihdevgithubportal-logs \
+            --query customerId --output tsv 2>/dev/null || echo "")
+          LA_WORKSPACE_KEY=$(az monitor log-analytics workspace get-shared-keys \
+            --resource-group "$RG" \
+            --workspace-name nihdevgithubportal-logs \
+            --query primarySharedKey --output tsv 2>/dev/null || echo "")
+          LA_ARGS=()
+          if [ -n "$LA_WORKSPACE_ID" ]; then
+            LA_ARGS=(--log-analytics-workspace "$LA_WORKSPACE_ID" --log-analytics-workspace-key "$LA_WORKSPACE_KEY")
+          fi
+          ACR_NAME="${REGISTRY_SERVER%%.*}"
+          REGISTRY_USER=$(az acr credential show --name "$ACR_NAME" --query username --output tsv)
+          REGISTRY_PASS=$(az acr credential show --name "$ACR_NAME" --query "passwords[0].value" --output tsv)
+          IDENTITY_ID=$(az identity show --resource-group "$RG" --name nihdevgithubportal-firehose --query id --output tsv)
+          IDENTITY_CLIENT_ID=$(az identity show --resource-group "$RG" --name nihdevgithubportal-firehose --query clientId --output tsv)
+          SB_ENDPOINT="${SB_NAMESPACE}.servicebus.windows.net"
+          az container create \
+            --resource-group "$RG" \
+            --name nihdevgithubportalfh \
+            --location centralus \
+            --image "$REGISTRY_SERVER/portal:${{ github.sha }}" \
+            --registry-login-server "$REGISTRY_SERVER" \
+            --registry-username "$REGISTRY_USER" \
+            --registry-password "$REGISTRY_PASS" \
+            --assign-identity "$IDENTITY_ID" \
+            --command-line "node /usr/src/repos/jobs/firehose.js" \
+            --restart-policy OnFailure \
+            --os-type Linux \
+            --cpu 1 \
+            --memory 1.5 \
+            --ip-address Public \
+            --ports 443 \
+            --environment-variables \
+              REDIS_TLS_HOST="$REDIS_TLS_HOST" \
+              REDIS_PORT=6380 \
+              REPOS_POSTGRES_DATABASE="$POSTGRES_DB" \
+              REPOS_POSTGRES_HOST="$POSTGRES_HOST" \
+              REPOS_POSTGRES_USER="$POSTGRES_USER" \
+              REPOS_POSTGRES_SSL=false \
+              GITHUB_ORGANIZATIONS_SOURCE=postgres \
+              GITHUB_SHA="${{ github.sha }}" \
+              GITHUB_RUN_ID="${{ github.run_id }}" \
+              GITHUB_RUN_NUMBER="${{ github.run_number }}" \
+              ENTRA_ID_CLIENT_ID="$ENTRA_CLIENT_ID" \
+              ENTRA_ID_TENANT_ID="$ENTRA_TENANT_ID" \
+              GITHUB_WEBHOOKS_PROVIDER=servicebus \
+              GITHUB_WEBHOOKS_SERVICEBUS_QUEUE=events \
+              GITHUB_WEBHOOKS_SERVICEBUS_USE_ENTRA_AUTH=1 \
+              GITHUB_WEBHOOKS_SERVICEBUS_ENDPOINT="$SB_ENDPOINT" \
+              AZURE_CLIENT_ID="$IDENTITY_CLIENT_ID" \
+            --secure-environment-variables \
+              REDIS_KEY="$REDIS_KEY" \
+              REPOS_POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+              ENTRA_ID_CLIENT_SECRET="$ENTRA_CLIENT_SECRET" \
+              GITHUB_WEBHOOK_SHARED_SECRET="$WEBHOOK_SHARED_SECRET" \
+            "${LA_ARGS[@]}" \
+            --no-wait

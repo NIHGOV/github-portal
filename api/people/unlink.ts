@@ -4,72 +4,69 @@
 //
 
 import { NextFunction, Response, Router } from 'express';
-import asyncHandler from 'express-async-handler';
 
-import { ICorporateLink, UnlinkPurpose } from '../../interfaces';
-import { jsonError } from '../../middleware';
-import { IApiRequest } from '../../middleware/apiReposAuth';
-import { getProviders } from '../../lib/transitional';
+import { ICorporateLink, ReposApiRequest, UnlinkPurpose } from '../../interfaces/index.js';
+import { CreateError, getProviders } from '../../lib/transitional.js';
+import { stringParam } from '../../lib/utils.js';
 
 const router: Router = Router();
 
-interface ILinksApiRequestWithUnlink extends IApiRequest {
+interface ILinksApiRequestWithUnlink extends ReposApiRequest {
   unlink?: ICorporateLink;
 }
 
+// codeql[js/missing-rate-limiting] - rate limiting is enforced globally in middleware/index.ts (120 req/min per identity; configure via RATE_LIMIT_MODE/RATE_LIMIT_AUDIT_* env vars)
 router.use(function (req: ILinksApiRequestWithUnlink, res: Response, next: NextFunction) {
   const token = req.apiKeyToken;
-  if (!token.scopes) {
-    return next(jsonError('The key is not authorized for specific APIs', 401));
+  if (!token.hasScope) {
+    return next(CreateError.NotAuthorized('The key is not authorized for specific APIs'));
   }
   if (!token.hasScope('unlink')) {
-    return next(jsonError('The key is not authorized to use the unlink API', 401));
+    return next(CreateError.NotAuthorized('The key is not authorized to use the unlink API'));
   }
   return next();
 });
 
-router.use(
-  '/github/id/:id',
-  asyncHandler(async (req: ILinksApiRequestWithUnlink, res: Response, next: NextFunction) => {
-    const { linkProvider } = getProviders(req);
-    const id = req.params.id;
-    try {
-      const link = await linkProvider.getByThirdPartyId(id);
-      if (!link) {
-        throw new Error(`Could not locate a link for GitHub user ID ${id}`);
-      }
-      req.unlink = link;
-      return next();
-    } catch (error) {
-      return next(jsonError(error));
+router.use('/github/id/:id', async (req: ILinksApiRequestWithUnlink, res: Response, next: NextFunction) => {
+  const { linkProvider } = getProviders(req);
+  const id = stringParam(req, 'id');
+  try {
+    const link = await linkProvider.getByThirdPartyId(id);
+    if (!link) {
+      throw new Error(`Could not locate a link for GitHub user ID ${id}`);
     }
-  })
-);
-
-router.use('*', (req: ILinksApiRequestWithUnlink, res: Response, next: NextFunction) => {
-  return next(req.unlink ? undefined : jsonError('No link available for operation', 404));
+    req.unlink = link;
+    return next();
+  } catch (error) {
+    return next(error);
+  }
 });
 
-router.delete('*', (req: ILinksApiRequestWithUnlink, res: Response, next: NextFunction) => {
+router.use('/*splat', (req: ILinksApiRequestWithUnlink, res: Response, next: NextFunction) => {
+  return next(req.unlink ? undefined : CreateError.NotFound('No link available for operation'));
+});
+
+router.delete('/*splat', (req: ILinksApiRequestWithUnlink, res: Response, next: NextFunction) => {
+  const { insights } = req;
   const { config, operations } = getProviders(req);
   const link = req.unlink;
   let purpose: UnlinkPurpose = null;
   try {
     purpose = apiUnlinkPurposeToEnum((req.headers['unlink-purpose'] || 'termination') as string);
   } catch (purposeError) {
-    return next(jsonError(purposeError, 400));
+    return next(CreateError.InvalidParameters(purposeError.message, purposeError));
   }
   const unlinkWithoutDrops = config?.debug?.unlinkWithoutDrops;
   const options = { purpose, unlinkWithoutDrops };
   return operations
-    .terminateLinkAndMemberships(link.thirdPartyId, options)
+    .terminateLinkAndMemberships(insights, link.thirdPartyId, options)
     .then((results) => {
       res.json({
         messages: Array.isArray(results) ? (results as any as string[]).reverse() : results,
       });
     })
     .catch((problem) => {
-      return next(jsonError(problem, 500));
+      return next(CreateError.ServerError(problem.message, problem));
     });
 });
 

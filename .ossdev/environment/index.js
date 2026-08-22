@@ -29,6 +29,7 @@ module.exports = function retrieveEnvironment(name, type, options) {
     }
   }
   try {
+    // eslint-disable-next-line security/detect-non-literal-require
     const values = require(environmentPath);
     return values;
   } catch (requireError) {

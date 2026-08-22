@@ -3,7 +3,7 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { ICorporateLink } from '../interfaces';
+import { ICorporateLink } from '../interfaces/index.js';
 
 export const CorporatePropertyNames = [
   'isServiceAccount',
@@ -22,7 +22,6 @@ export const CorporatePropertyNames = [
 export function corporateLinkToJson(link: ICorporateLink): ICorporateLink {
   return (
     link && {
-      corporateAlias: link.corporateAlias,
       corporateDisplayName: link.corporateDisplayName,
       corporateId: link.corporateId,
       corporateMailAddress: link.corporateMailAddress,

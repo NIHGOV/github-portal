@@ -7,7 +7,6 @@ import _ from 'lodash';
 import moment from 'moment';
 import octicons from '@primer/octicons';
 import fileSize from 'file-size';
-import languageMap from 'language-map';
 import validator from 'validator';
 
 export default {
@@ -15,17 +14,12 @@ export default {
   fileSize: function (bytes) {
     return fileSize(bytes).human();
   },
-  languageColor: function (name) {
-    const language = languageMap[name];
-    if (language) {
-      return language.color;
-    }
-  },
   moment,
   octicon: function (name, optionalWidth, classes, optionalAria) {
     const icon = octicons[name];
     if (!icon || typeof icon.toSVG !== 'function') {
-      throw new Error(`Missing octicon ${name}`);
+      console.warn(`Missing octicon: ${name}`);
+      return '';
     }
     const options: {
       width?: string | number;

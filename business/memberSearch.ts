@@ -5,15 +5,16 @@
 
 import _ from 'lodash';
 import {
-  IProviders,
-  ICorporateLink,
+  type IProviders,
+  type ICorporateLink,
   RequestTeamMemberAddType,
-  IMemberSearchOptions,
-  ICrossOrganizationMembershipByOrganization,
-  ICrossOrganizationMembershipBasics,
-} from '../interfaces';
+  type IMemberSearchOptions,
+  type ICrossOrganizationMembershipByOrganization,
+  type ICrossOrganizationMembershipBasics,
+} from '../interfaces/index.js';
 
-import { OrganizationMember } from './organizationMember';
+import { OrganizationMember } from './organizationMember.js';
+import { CreateError } from '../lib/transitional.js';
 
 const earlyProfileFetchTypes = new Set(['former', 'active', 'unknownAccount']);
 
@@ -67,8 +68,8 @@ export class MemberSearch {
     }
   }
 
-  async search(page, sort?: string): Promise<void> {
-    this.page = parseInt(page);
+  async search(page: number, sort?: string): Promise<void> {
+    this.page = page;
     this.sort = sort ? sort.charAt(0).toUpperCase() + sort.slice(1) : 'Alphabet';
 
     await this.filterOrganizationOwners();
@@ -79,10 +80,15 @@ export class MemberSearch {
       associateLinks().
       getCorporateProfilesEarly(this.type);
 
+    const sortMethodName = 'sortBy' + this.sort;
+    const sortMethod = this[sortMethodName];
+    if (!sortMethod) {
+      throw CreateError.InvalidParameters(`Invalid sort method: ${sortMethodName}`);
+    }
     // prettier-ignore
     return this.filterByType(this.type)
       .filterByPhrase(this.phrase)
-      .determinePages()['sortBy' + this.sort]() // prettier will mangle this into a newline
+      .determinePages()[sortMethodName]() // prettier will mangle this; codeql[js/unvalidated-dynamic-method-call] - method existence verified above via this[sortMethodName] guard; name is always 'sortBy' + validated sort param
       .getPage(this.page)
       .sortOrganizations()
       .getCorporateProfiles();
@@ -173,7 +179,6 @@ export class MemberSearch {
   async getCorporateProfiles(): Promise<MemberSearch> {
     // const projectLinkAsCorporateProfile = this.type !== 'former';
     // corporate.alias -> corporateMailAddress (?)
-    // corporate.emailAddress -> corporateAlias
     return this;
   }
 
@@ -183,7 +188,7 @@ export class MemberSearch {
     return this;
   }
 
-  getPage(page) {
+  getPage(page: number) {
     this.members = this.members.slice((page - 1) * this.pageSize, (page - 1) * this.pageSize + this.pageSize);
     this.pageFirstItem = 1 + (page - 1) * this.pageSize;
     this.pageLastItem = this.pageFirstItem + this.members.length - 1;
@@ -309,12 +314,12 @@ function translateMembers(members, isOrganizationScoped, optionalLinks) {
   }
 }
 
-function memberMatchesPhrase(member, phrase) {
+function memberMatchesPhrase(member: OrganizationMember, phrase: string) {
   const link = member.link as ICorporateLink;
   const linkIdentity = link
-    ? `${link.corporateUsername} ${link.corporateDisplayName} ${link.corporateId} ${link.thirdPartyUsername} ${link.thirdPartyId} ${link.corporateMailAddress} ${link.corporateAlias}`
+    ? `${link.corporateUsername} ${link.corporateDisplayName} ${link.corporateId} ${link.thirdPartyUsername} ${link.thirdPartyId} ${link.corporateMailAddress}`
     : '';
-  const accountIdentity = member.login ? member.login.toLowerCase() : member.account.login.toLowerCase();
+  const accountIdentity = member?.login || '';
   const combined = (linkIdentity + ' ' + accountIdentity).toLowerCase();
   return combined.includes(phrase);
 }

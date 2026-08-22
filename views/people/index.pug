@@ -179,7 +179,7 @@ block content
             - var serviceAccount = link && link.isServiceAccount
             - var serviceAccountMail = link ? link.serviceAccountMail : null
             - var shorthandName = link && link.corporateDisplayName ? link.corporateDisplayName : account.login;
-            - var corporateIdentity = link && link.corporateAlias ? link.corporateAlias : (link ? link.corporateUsername : null)
+            - var corporateIdentity = link ? link.corporateUsername : null
             - var email = link ? link.corporateMailAddress || link.userPrincipalName : null
 
             .row.vertical-pad-bottom

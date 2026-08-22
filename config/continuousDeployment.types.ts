@@ -11,6 +11,7 @@ export type ConfigContinuousDeployment = {
   branchName: string;
   build: string;
   commitId: string;
+  deploymentId: string;
   version: string;
   name: string;
 };

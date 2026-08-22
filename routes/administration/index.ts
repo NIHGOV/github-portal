@@ -4,30 +4,27 @@
 //
 
 import { NextFunction, Response, Router } from 'express';
-import asyncHandler from 'express-async-handler';
 const router: Router = Router();
 
-import { ReposAppRequest } from '../../interfaces';
-import { getProviders } from '../../lib/transitional';
+import { ReposAppRequest } from '../../interfaces/index.js';
+import { getProviders } from '../../lib/transitional.js';
 
-import getCompanySpecificDeployment from '../../middleware/companySpecificDeployment';
+import getCompanySpecificDeployment from '../../middleware/companySpecificDeployment.js';
 
-import RouteApp from './app';
-import RouteApps from './apps';
+import RouteApp from './app.js';
+import RouteApps from './apps.js';
 
-import { json2csvAsync } from 'json-2-csv';
+import json2csvModule from 'json-2-csv';
+const { json2csvAsync } = json2csvModule;
 import _ from 'lodash';
 
-router.use(
-  '*',
-  asyncHandler(async function (req: ReposAppRequest, res: Response, next: NextFunction) {
-    const { corporateAdministrationProfile } = getProviders(req);
-    if (corporateAdministrationProfile && corporateAdministrationProfile.urls) {
-      req.individualContext.setInitialViewProperty('_corpAdminUrls', corporateAdministrationProfile.urls);
-    }
-    return next();
-  })
-);
+router.use('/*splat', async function (req: ReposAppRequest, res: Response, next: NextFunction) {
+  const { corporateAdministrationProfile } = getProviders(req);
+  if (corporateAdministrationProfile && corporateAdministrationProfile.urls) {
+    req.individualContext.setInitialViewProperty('_corpAdminUrls', corporateAdministrationProfile.urls);
+  }
+  return next();
+});
 
 try {
   const dynamicStartupInstance = getCompanySpecificDeployment();
@@ -99,7 +96,6 @@ router.get('/users-report', async (req: ReposAppRequest, res, next) => {
                 corporateId: CorporateId,
                 corporateMailAddress: CorporateMailAddress,
                 corporateUsername: CorporateUsername,
-                corporateAlias: CorporateAlias,
                 corporateDisplayName: CorporateDisplayName,
               } = memberLink;
 
@@ -108,7 +104,6 @@ router.get('/users-report', async (req: ReposAppRequest, res, next) => {
                 ...{
                   CorporateId,
                   CorporateUsername,
-                  CorporateAlias,
                   CorporateDisplayName,
                   CorporateMailAddress,
                 },
@@ -129,7 +124,7 @@ router.get('/users-report', async (req: ReposAppRequest, res, next) => {
     await Promise.all(checks);
     // Define the header row for the CSV
     const header =
-      'UserLogin,UserId,Organizations,OwnedOrganizations,IsLinked,CorporateId,CorporateMailAddress,CorporateUsername,CorporateAlias,CorporateDisplayName';
+      'UserLogin,UserId,Organizations,OwnedOrganizations,IsLinked,CorporateId,CorporateMailAddress,CorporateUsername,CorporateDisplayName';
 
     // Sort the users object by user login and convert the values back into an array
     const cleanedObjects: object[] = _.sortBy(Object.values(users), 'UserLogin');

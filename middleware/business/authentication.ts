@@ -5,20 +5,20 @@
 
 import { Response, NextFunction } from 'express';
 
-import { ReposAppRequest, IAppSession } from '../../interfaces';
+import { ReposAppRequest, IAppSession, ReposAppUser, ReposApiRequest } from '../../interfaces/index.js';
 
 import Debug from 'debug';
 const debug = Debug.debug('user');
 
-import { getProviders } from '../../lib/transitional';
+import { CreateError, getProviders } from '../../lib/transitional.js';
 import {
   ICorporateIdentity,
   IGitHubIdentity,
   IndividualContext,
   GitHubIdentitySource,
-} from '../../business/user';
-import { storeOriginalUrlAsReferrer } from '../../lib/utils';
-import getCompanySpecificDeployment from '../companySpecificDeployment';
+} from '../../business/user/index.js';
+import { storeOriginalUrlAsReferrer } from '../../lib/utils.js';
+import getCompanySpecificDeployment from '../companySpecificDeployment.js';
 
 export async function requireAuthenticatedUserOrSignInExcluding(
   exclusionPaths: string[],
@@ -49,8 +49,16 @@ export async function requireAccessTokenClient(req: ReposAppRequest, res: Respon
   // Build an OAuth Access Token instance for the request, refreshing as needed
   const { oauthToken } = req.user.azure;
   if (authorizationCodeClient && oauthToken) {
-    const hydratedToken = JSON.parse(oauthToken);
-    let oauthTokenInstance = authorizationCodeClient.createToken(hydratedToken);
+    let hydratedToken: unknown;
+    try {
+      hydratedToken = JSON.parse(oauthToken);
+    } catch (parseError) {
+      console.error(
+        `[requireAccessTokenClient] JSON.parse(oauthToken) failed (correlationId=${req.correlationId}): ${parseError?.message ?? parseError}. oauthToken prefix: ${typeof oauthToken === 'string' ? oauthToken.slice(0, 40) : typeof oauthToken}`
+      );
+      return signoutThenSignIn(req, res);
+    }
+    let oauthTokenInstance = authorizationCodeClient.createToken(hydratedToken as any);
     if (oauthTokenInstance.expired()) {
       oauthTokenInstance = await oauthTokenInstance.refresh();
       const session = req.session as IAppSession;
@@ -66,7 +74,7 @@ export async function requireAccessTokenClient(req: ReposAppRequest, res: Respon
 }
 
 function signoutThenSignIn(req: ReposAppRequest, res: Response) {
-  const { insights } = getProviders(req);
+  const { insights } = req;
   req.logout({ keepSessionInfo: false }, (err) => {
     if (err) {
       insights?.trackException({ exception: err });
@@ -80,7 +88,7 @@ function redirectToSignIn(req: ReposAppRequest, res: Response) {
   storeOriginalUrlAsReferrer(
     req,
     res,
-    config.authentication.scheme === 'github' ? '/auth/github' : '/auth/azure',
+    `/auth/${config.authentication.scheme === 'aad' ? 'azure' : config.authentication.scheme}`,
     'user is not authenticated and needs to authenticate'
   );
 }
@@ -105,6 +113,16 @@ export async function requireAuthenticatedUserOrSignIn(
     if (!req.user[expectedAuthenticationProperty][expectedAuthenticationKey]) {
       return next(new Error('Invalid information present for the authentication provider.'));
     }
+    // Require a last-known authenticated date or they need to sign in again
+    const userAsAny = req.user as any;
+    if (!userAsAny.lastAuthenticated) {
+      return req.logout({ keepSessionInfo: false }, (err) => {
+        if (err) {
+          return next(err);
+        }
+        return redirectToSignIn(req, res);
+      });
+    }
     return next();
   }
   let shouldRedirectToSignIn = true;
@@ -117,7 +135,41 @@ export async function requireAuthenticatedUserOrSignIn(
   return shouldRedirectToSignIn ? redirectToSignIn(req, res) : next();
 }
 
-export function setIdentity(req: ReposAppRequest, res: Response, next: NextFunction) {
+export async function requireAuthenticatedUserOrFail(
+  req: ReposAppRequest,
+  res: Response,
+  next: NextFunction
+) {
+  const providers = getProviders(req);
+  const { config } = providers;
+  if (req.isAuthenticated()) {
+    const expectedAuthenticationProperty = config.authentication.scheme === 'github' ? 'github' : 'azure';
+    if (req.user && !req.user[expectedAuthenticationProperty]) {
+      console.warn(
+        `A user session was authenticated but did not have present the property "${expectedAuthenticationProperty}" expected for this type of authentication. Signing them out.`
+      );
+      return res.redirect('/signout');
+    }
+    const expectedAuthenticationKey = config.authentication.scheme === 'github' ? 'id' : 'oid';
+    if (!req.user[expectedAuthenticationProperty][expectedAuthenticationKey]) {
+      return next(new Error('Invalid information present for the authentication provider.'));
+    }
+    // Require a last-known authenticated date or they need to sign in again
+    const userAsAny = req.user as any;
+    if (!userAsAny.lastAuthenticated) {
+      return req.logout({ keepSessionInfo: false }, (err) => {
+        if (err) {
+          return next(err);
+        }
+        return next(CreateError.NotAuthenticated('User is not authenticated'));
+      });
+    }
+    return next();
+  }
+  return next(CreateError.NotAuthenticated('User is not authenticated'));
+}
+
+export async function setIdentity(req: ReposAppRequest, res: Response, next: NextFunction) {
   const activeContext = (req.individualContext || req.apiContext) as IndividualContext;
   if (!activeContext) {
     return next(new Error('No context available'));
@@ -127,19 +179,28 @@ export function setIdentity(req: ReposAppRequest, res: Response, next: NextFunct
   let requestForAuthentication = req;
   let sourceText = 'AUTHENTICATED SESSION';
 
-  const overwrittenRequestSource = req['userContextOverwriteRequest'];
-  if (overwrittenRequestSource) {
-    console.warn('userContextOverwriteRequest: *SUBSTITUTING* session identity with another source of data');
-    console.dir(overwrittenRequestSource);
-    requestForAuthentication = overwrittenRequestSource;
-    sourceText = 'OVERWRITTEN SOURCE OF TRUTH';
+  let user: ReposAppUser;
+  const overwrittenUserSource = req.userOverwriteRequest;
+  if (overwrittenUserSource) {
+    user = overwrittenUserSource;
+    console.warn('overwrittenUserSource: *SUBSTITUTING* session identity with another source of user info');
+  } else {
+    const overwrittenRequestSource = req['userContextOverwriteRequest'];
+    if (overwrittenRequestSource) {
+      console.warn(
+        'userContextOverwriteRequest: *SUBSTITUTING* session identity with another source of data'
+      );
+      console.dir(overwrittenRequestSource);
+      requestForAuthentication = overwrittenRequestSource;
+      sourceText = 'OVERWRITTEN SOURCE OF TRUTH';
+    }
+    user = requestForAuthentication.user;
   }
 
   let corporateIdentity: ICorporateIdentity = null;
   let gitHubIdentity: IGitHubIdentity = null;
 
   let s = `${contextName} ${sourceText}: `;
-  const user = requestForAuthentication.user;
 
   if (user.github) {
     s += `github(id=${user.github.id}, username=${user.github.username}) `;
@@ -161,18 +222,10 @@ export function setIdentity(req: ReposAppRequest, res: Response, next: NextFunct
   }
   debug(s);
 
-  // const { insights } = getProviders(req);
-
   activeContext.corporateIdentity = corporateIdentity;
   activeContext.setSessionBasedGitHubIdentity(gitHubIdentity);
 
-  if (activeContext.webContext) {
-    activeContext.webContext.pushBreadcrumb('Organizations');
-  }
-
   if (!corporateIdentity) {
-    // JUST TESTING:
-    // TODO: when and where does this happen?
     return next(new Error('Not a valid corporate user'));
   }
 

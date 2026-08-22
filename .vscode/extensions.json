@@ -1,3 +1,8 @@
 {
-  "recommendations": ["streetsidesoftware.code-spell-checker"]
+  "recommendations": [],
+  "unwantedRecommendations": [
+    "ms-azuretools.vscode-containers",
+    "streetsidesoftware.code-spell-checker",
+    "ms-vscode-remote.remote-containers"
+  ]
 }

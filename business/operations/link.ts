@@ -3,22 +3,22 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { Operations } from '.';
+import { Operations } from './index.js';
 import {
   ICreateLinkOptions,
   ICreatedLinkOutcome,
   LinkOperationSource,
   SupportedLinkType,
   ICorporateLink,
-} from '../../interfaces';
-import getCompanySpecificDeployment from '../../middleware/companySpecificDeployment';
-import { CreateError, ErrorHelper, setImmediateAsync } from '../../lib/transitional';
+} from '../../interfaces/index.js';
+import getCompanySpecificDeployment from '../../middleware/companySpecificDeployment.js';
+import { CreateError, ErrorHelper, setImmediateAsync } from '../../lib/transitional.js';
 
 export async function linkAccounts(
   operations: Operations,
   options: ICreateLinkOptions
 ): Promise<ICreatedLinkOutcome> {
-  const { config, linkProvider, graphProvider, insights } = operations.providers;
+  const { config, linkProvider, graphProvider, genericInsights: insights } = operations.providers;
   if (!linkProvider) {
     throw CreateError.ServerError('linkProvider required');
   }
@@ -77,10 +77,6 @@ export async function linkAccounts(
       link.corporateDisplayName = corporateAccount.displayName;
       link.corporateUsername = corporateAccount.userPrincipalName;
       link.corporateMailAddress = corporateAccount.mail;
-      // NOTE: strongly typed to the AAD graph info response right now instead of more generic
-      if (corporateAccount.mailNickname) {
-        link.corporateAlias = corporateAccount.mailNickname.toLowerCase();
-      }
       // Validate that the corporate account can be linked
       if (corporateInfo.type === SupportedLinkType.ServiceAccount) {
         if (!link.serviceAccountMail) {
@@ -148,7 +144,7 @@ export async function sendLinkedAccountMail(
   correlationId: string | null,
   throwIfError: boolean
 ): Promise<void> {
-  const { insights, mailProvider, mailAddressProvider, config } = operations.providers;
+  const { genericInsights: insights, mailProvider, mailAddressProvider, config } = operations.providers;
   if (!mailProvider) {
     return;
   }
@@ -167,10 +163,15 @@ export async function sendLinkedAccountMail(
   }
   const to = [mailAddress];
   const toAsString = to.join(', ');
+  const siteBaseUrlClear = config?.webServer?.baseUrl?.replace('https://', '');
+  const environmentSubjectPrefix =
+    config?.environment?.configuration === 'production'
+      ? ''
+      : `[${siteBaseUrlClear || config?.environment?.configuration || 'unknown'}] `;
   const mail = {
     to,
     bcc: operations.getLinksNotificationMailAddress(),
-    subject: `${link.corporateUsername} linked to ${link.thirdPartyUsername}`,
+    subject: `${environmentSubjectPrefix}${link.corporateUsername} linked to ${link.thirdPartyUsername}`,
     correlationId,
     content: undefined,
   };
@@ -189,28 +190,13 @@ export async function sendLinkedAccountMail(
     customStrings: companySpecificStrings,
     link,
   };
-  try {
-    mail.content = await operations.emailRender(viewName, contentOptions);
-  } catch (renderError) {
-    insights.trackException({
-      exception: renderError,
-      properties: {
-        content: contentOptions,
-        eventName: 'LinkMailRenderFailure',
-      } as any as { [key: string]: string },
-    });
-    if (throwIfError) {
-      throw renderError;
-    }
-    return;
-  }
   const customData = {
     content: contentOptions,
     receipt: null,
     eventName: undefined,
   };
   try {
-    const receipt = await operations.sendMail(mail);
+    const receipt = await operations.emailRenderSend(insights, viewName, mail, contentOptions);
     insights.trackEvent({
       name: 'LinkMailSuccess',
       properties: customData as any as { [key: string]: string },

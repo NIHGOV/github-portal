@@ -11,26 +11,93 @@ const debug = Debug.debug('insights');
 
 import type { TelemetryClient } from 'applicationinsights';
 
-function createWrappedClient(propertiesToInsert: any, client: TelemetryClient): TelemetryClient {
-  let c = client;
-  if (client) {
-    client.commonProperties = propertiesToInsert;
-  } else {
-    c = {
-      trackEvent: consoleHandler,
-      trackException: consoleHandler,
-      trackMetric: consoleMetric,
-      trackTrace: consoleHandler,
-      trackDependency: consoleHandler,
-      flush: (options) => {
-        options = options || {};
-        if (options.callback) {
-          return (options.callback as any)();
-        }
-      },
-    } as TelemetryClient;
+type TelemetryWithProperties = {
+  properties?: { [key: string]: unknown };
+};
+
+type TelemetryMethodName = 'trackDependency' | 'trackEvent' | 'trackException' | 'trackMetric' | 'trackTrace';
+
+function mergeProperties(
+  eventNameOrProperties: unknown,
+  commonProperties: { [key: string]: unknown }
+): unknown {
+  if (!eventNameOrProperties || typeof eventNameOrProperties !== 'object') {
+    return eventNameOrProperties;
   }
-  return c;
+
+  const telemetry = eventNameOrProperties as TelemetryWithProperties;
+  return {
+    ...telemetry,
+    properties: {
+      ...commonProperties,
+      ...(telemetry.properties || {}),
+    },
+  };
+}
+
+function wrapTelemetryMethod(
+  client: TelemetryClient,
+  methodName: TelemetryMethodName,
+  commonProperties: { [key: string]: unknown }
+) {
+  return (eventNameOrProperties) => {
+    const method = client[methodName] as (telemetry: unknown) => void;
+    return method.call(client, mergeProperties(eventNameOrProperties, commonProperties));
+  };
+}
+
+function createConsoleTelemetryClient(): TelemetryClient {
+  return {
+    trackEvent: consoleHandler,
+    trackException: consoleHandler,
+    trackMetric: consoleMetric,
+    trackTrace: consoleHandler,
+    trackDependency: consoleHandler,
+    flush: (options) => {
+      options = options || {};
+      if (options.callback) {
+        return (options.callback as any)();
+      }
+    },
+  } as TelemetryClient;
+}
+
+function createWrappedClient(propertiesToInsert: any, client: TelemetryClient): TelemetryClient {
+  const commonProperties = { ...(propertiesToInsert || {}) };
+  const telemetryClient = client || createConsoleTelemetryClient();
+  const wrappedClient = Object.create(telemetryClient) as TelemetryClient;
+
+  wrappedClient.commonProperties = commonProperties;
+  wrappedClient.trackDependency = wrapTelemetryMethod(
+    telemetryClient,
+    'trackDependency',
+    commonProperties
+  ) as TelemetryClient['trackDependency'];
+  wrappedClient.trackEvent = wrapTelemetryMethod(
+    telemetryClient,
+    'trackEvent',
+    commonProperties
+  ) as TelemetryClient['trackEvent'];
+  wrappedClient.trackException = wrapTelemetryMethod(
+    telemetryClient,
+    'trackException',
+    commonProperties
+  ) as TelemetryClient['trackException'];
+  wrappedClient.trackMetric = wrapTelemetryMethod(
+    telemetryClient,
+    'trackMetric',
+    commonProperties
+  ) as TelemetryClient['trackMetric'];
+  wrappedClient.trackTrace = wrapTelemetryMethod(
+    telemetryClient,
+    'trackTrace',
+    commonProperties
+  ) as TelemetryClient['trackTrace'];
+  wrappedClient.flush = telemetryClient.flush
+    ? telemetryClient.flush.bind(telemetryClient)
+    : createConsoleTelemetryClient().flush;
+
+  return wrappedClient;
 }
 
 const consoleHandler = (eventNameOrProperties) => {

@@ -6,14 +6,20 @@
 const teamTypes = ['read', 'write', 'admin'];
 const defaultLargeAdminTeamSize = 250;
 
-import { WebhookProcessor } from '../organizationProcessor';
-import { Operations } from '../..';
-import { Organization } from '../..';
+import { WebhookProcessor } from '../organizationProcessor.js';
+import { Operations } from '../../index.js';
+import { Organization } from '../../index.js';
 
-import RenderHtmlMail from '../../../lib/emailRender';
-import { IMailProvider } from '../../../lib/mailProvider';
-import getCompanySpecificDeployment from '../../../middleware/companySpecificDeployment';
-import { GitHubRepositoryPermission, IProviders } from '../../../interfaces';
+import getCompanySpecificDeployment from '../../../middleware/companySpecificDeployment.js';
+import {
+  AppInsightsTelemetryClient,
+  GitHubRepositoryPermission,
+  IProviders,
+  SiteConfiguration,
+} from '../../../interfaces/index.js';
+
+import type { IMailProvider } from '../../../lib/mailProvider/index.js';
+import { TelemetryClient } from 'applicationinsights';
 
 interface IAutomaticTeamsMail {
   to: string;
@@ -70,7 +76,12 @@ export default class AutomaticTeamsWebhookProcessor implements WebhookProcessor 
     return false;
   }
 
-  async run(providers: IProviders, organization: Organization, data: any): Promise<boolean> {
+  async run(
+    providers: IProviders,
+    insights: AppInsightsTelemetryClient,
+    organization: Organization,
+    data: any
+  ): Promise<boolean> {
     const operations = providers.operations as Operations;
     const eventType = data.properties.event;
     const eventAction = data.body.action;
@@ -88,6 +99,7 @@ export default class AutomaticTeamsWebhookProcessor implements WebhookProcessor 
         await setTeamPermission(
           operations,
           organization,
+          insights,
           repositoryBody,
           teamId,
           necessaryPermission,
@@ -109,6 +121,7 @@ export default class AutomaticTeamsWebhookProcessor implements WebhookProcessor 
           await setTeamPermission(
             operations,
             organization,
+            insights,
             repositoryBody,
             teamId,
             necessaryPermission,
@@ -120,6 +133,7 @@ export default class AutomaticTeamsWebhookProcessor implements WebhookProcessor 
             await setTeamPermission(
               operations,
               organization,
+              insights,
               repositoryBody,
               teamId,
               necessaryPermission,
@@ -148,6 +162,7 @@ export default class AutomaticTeamsWebhookProcessor implements WebhookProcessor 
           if (specificReason && !operations.isSystemAccountByUsername(whoChangedIt)) {
             await revertLargePermissionChange(
               operations,
+              insights,
               organization,
               repositoryBody,
               teamId,
@@ -212,6 +227,7 @@ export async function getTeamSize(organization: Organization, teamId): Promise<n
 
 async function revertLargePermissionChange(
   operations: Operations,
+  insights: AppInsightsTelemetryClient,
   organization: Organization,
   repositoryBody,
   teamId,
@@ -223,7 +239,6 @@ async function revertLargePermissionChange(
   specificReason = specificReason ? ': ' + specificReason : '';
   const blockReason = `the permission was upgraded by ${whoChangedIt} but a large team permission prevention feature has reverted the change${specificReason}`;
   console.log(blockReason);
-  const insights = operations.insights;
   insights.trackMetric({ name: 'JobAutomaticTeamsLargeTeamPermissionBlock', value: 1 });
   insights.trackEvent({
     name: 'JobAutomaticTeamsLargeTeamPermissionBlocked',
@@ -239,6 +254,7 @@ async function revertLargePermissionChange(
   const successfulAndOk = await setTeamPermission(
     operations,
     organization,
+    insights,
     repositoryBody,
     teamId,
     GitHubRepositoryPermission.Pull,
@@ -249,6 +265,7 @@ async function revertLargePermissionChange(
     if (owner === organization.name.toLowerCase()) {
       await largeTeamPermissionPreventionWarningMail(
         operations,
+        insights,
         organization,
         repositoryBody,
         teamId,
@@ -263,6 +280,7 @@ async function revertLargePermissionChange(
 
 async function largeTeamPermissionPreventionWarningMail(
   operations: Operations,
+  insights: AppInsightsTelemetryClient,
   organization: Organization,
   repositoryBody,
   teamId,
@@ -273,7 +291,6 @@ async function largeTeamPermissionPreventionWarningMail(
 ): Promise<void> {
   // System accounts should not need notifications
   const mailProvider = operations.providers.mailProvider;
-  const insights = operations.providers.insights;
   if (!mailProvider || operations.isSystemAccountByUsername(whoChangedIt)) {
     return;
   }
@@ -282,12 +299,11 @@ async function largeTeamPermissionPreventionWarningMail(
   if (!mailAddress) {
     return;
   }
-  const basedir = operations.config.typescript.appDirectory;
   const operationsMail = operations.getOperationsMailAddress();
   const companySpecific = getCompanySpecificDeployment();
   const largeTeamProtectionDetailsLink = companySpecific?.strings?.largeTeamProtectionDetailsLink;
   const config = operations.config;
-  await sendEmail(config, insights, basedir, mailProvider, mailAddress, operationsMail, {
+  await sendEmail(operations, config, insights, mailProvider, mailAddress, operationsMail, {
     repository: repositoryBody,
     whoChangedIt,
     teamName,
@@ -298,11 +314,11 @@ async function largeTeamPermissionPreventionWarningMail(
 }
 
 async function sendEmail(
-  config,
-  insights,
-  basedir,
+  operations: Operations,
+  config: SiteConfiguration,
+  insights: TelemetryClient,
   mailProvider: IMailProvider,
-  to,
+  to: string,
   operationsMail: string,
   body
 ) {
@@ -316,9 +332,8 @@ async function sendEmail(
     subject: `Team permission change for ${body.repository.full_name} repository reverted`,
     category: ['error', 'repos'],
   };
-  let mailContent = null;
   try {
-    mailContent = await RenderHtmlMail(basedir, 'largeTeamProtected', body, config);
+    await operations.emailTestRender('largeTeamProtected', body);
   } catch (renderError) {
     insights.trackException({
       exception: renderError,
@@ -329,13 +344,12 @@ async function sendEmail(
     });
     throw renderError;
   }
-  mail.content = mailContent;
   const customData: ICustomDataEventName = {
     content: body,
     receipt: '',
   };
   try {
-    const mailResult = await mailProvider.sendMail(mail);
+    const mailResult = await operations.emailRenderSend(insights, 'largeTeamProtected', mail, body);
     customData.receipt = mailResult;
   } catch (mailError) {
     customData.eventName = 'JobAutomaticTeamsLargeTeamPermissionBlockMailFailure';
@@ -351,6 +365,7 @@ async function sendEmail(
 async function setTeamPermission(
   operations: Operations,
   organization: Organization,
+  insights: TelemetryClient,
   repositoryBody: any,
   teamId,
   necessaryPermission: GitHubRepositoryPermission,
@@ -376,7 +391,6 @@ async function setTeamPermission(
     }
   }
   const description = `setting permission level ${necessaryPermission} for the team with ID ${teamId} on the repository ${repoName} inside the ${orgName} GitHub org because ${reason}`;
-  const insights = operations.insights;
   let error = null;
   try {
     await repository.setTeamPermission(teamId, necessaryPermission);

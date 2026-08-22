@@ -4,25 +4,16 @@
 //
 
 import { NextFunction, Response } from 'express';
-import { getProviders } from '../lib/transitional';
 
-export default function JsonErrorHandler(err, req, res: Response, next: NextFunction) {
-  if (err && err['json']) {
-    // jsonError objects should bubble up like before
-    return next(err);
-  }
-  // If any errors happened in the API routes that did not send a jsonError,
-  // just return as a JSON error and end here.
-  if (err && err['status']) {
-    res.status(err['status']);
-  } else {
-    res.status(500);
-  }
-  res.json({
-    message: err && err.message ? err.message : 'Error',
-  });
-  const providers = getProviders(req);
-  if (providers && providers.insights) {
-    providers.insights.trackException({ exception: err });
-  }
+import type { ReposAppRequest } from '../interfaces/web.js';
+
+export default function jsonErrorHandler(
+  err: Error,
+  _req: ReposAppRequest,
+  _res: Response,
+  next: NextFunction
+) {
+  // All errors bubble through to the site error handler which
+  // knows how to render JSON for /api/ routes.
+  return next(err);
 }

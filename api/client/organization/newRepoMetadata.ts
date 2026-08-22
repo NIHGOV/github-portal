@@ -4,36 +4,29 @@
 //
 
 import { NextFunction, Response, Router } from 'express';
-import asyncHandler from 'express-async-handler';
 
-import { jsonError } from '../../../middleware/jsonError';
-import { ReposAppRequest } from '../../../interfaces';
+import { CreateError } from '../../../lib/transitional.js';
+import { ReposAppRequest } from '../../../interfaces/index.js';
 
 const router: Router = Router();
 
-router.get(
-  '/',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
-    const { organization } = req;
-    const metadata = organization.getRepositoryCreateMetadata();
-    res.json(metadata);
-  })
-);
+router.get('/', async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  const { organization } = req;
+  const metadata = organization.getRepositoryCreateMetadata();
+  res.json(metadata);
+});
 
-router.get(
-  '/byProjectReleaseType',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
-    const { organization } = req;
-    const options = {
-      projectType: req.query.projectType,
-    };
-    const metadata = organization.getRepositoryCreateMetadata(options);
-    res.json(metadata);
-  })
-);
+router.get('/byProjectReleaseType', async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  const { organization } = req;
+  const options = {
+    projectType: req.query.projectType,
+  };
+  const metadata = organization.getRepositoryCreateMetadata(options);
+  res.json(metadata);
+});
 
-router.use('*', (req, res: Response, next: NextFunction) => {
-  return next(jsonError('no API or function available within this path', 404));
+router.use('/*splat', (req, res: Response, next: NextFunction) => {
+  return next(CreateError.NotFound('no API or function available within this path'));
 });
 
 export default router;

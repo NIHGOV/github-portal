@@ -4,17 +4,21 @@
 //
 
 import { NextFunction, Response, Router } from 'express';
-import asyncHandler from 'express-async-handler';
 
-import { Repository } from '../../../../business';
-import { jsonError } from '../../../../middleware';
-import { setContextualRepository } from '../../../../middleware/github/repoPermissions';
+import { Repository } from '../../../../business/index.js';
+import { CreateError } from '../../../../lib/transitional.js';
+import { setContextualRepository } from '../../../../middleware/github/repoPermissions.js';
+import { stringParam } from '../../../../lib/utils.js';
 
-import { OrganizationMembershipState, ReposAppRequest, VoidedExpressRoute } from '../../../../interfaces';
-import { IndividualContext } from '../../../../business/user';
-import { createRepositoryFromClient } from '../../newOrgRepo';
+import {
+  OrganizationMembershipState,
+  ReposAppRequest,
+  VoidedExpressRoute,
+} from '../../../../interfaces/index.js';
+import { IndividualContext } from '../../../../business/user/index.js';
+import { createRepositoryFromClient, setRepositoryCreateSourceThenNext } from '../../newOrgRepo.js';
 
-import routeContextualRepo from './repo';
+import routeContextualRepo from './repo.js';
 
 const router: Router = Router();
 
@@ -23,12 +27,16 @@ async function validateActiveMembership(req: ReposAppRequest, res: Response, nex
   const activeContext = (req.individualContext || req.apiContext) as IndividualContext;
   if (!activeContext.link) {
     return next(
-      jsonError('You must be linked and a member of the organization to create and manage repos', 400)
+      CreateError.InvalidParameters(
+        'You must be linked and a member of the organization to create and manage repos'
+      )
     );
   }
   const membership = await organization.getOperationalMembership(activeContext.getGitHubIdentity().username);
   if (!membership || membership.state !== OrganizationMembershipState.Active) {
-    return next(jsonError('You must be a member of the organization to create and manage repos', 400));
+    return next(
+      CreateError.InvalidParameters('You must be a member of the organization to create and manage repos')
+    );
   }
   req['knownRequesterMailAddress'] = activeContext.link.corporateMailAddress;
   return next();
@@ -36,26 +44,24 @@ async function validateActiveMembership(req: ReposAppRequest, res: Response, nex
 
 router.post(
   '/',
-  asyncHandler(validateActiveMembership),
-  asyncHandler(createRepositoryFromClient as VoidedExpressRoute)
+  validateActiveMembership,
+  setRepositoryCreateSourceThenNext.bind('client'),
+  createRepositoryFromClient as VoidedExpressRoute
 );
 
-router.use(
-  '/:repoName',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
-    const { organization } = req;
-    const { repoName } = req.params;
-    let repository: Repository = null;
-    repository = organization.repository(repoName);
-    setContextualRepository(req, repository);
-    return next();
-  })
-);
+router.use('/:repoName', async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  const { organization } = req;
+  const repoName = stringParam(req, 'repoName');
+  let repository: Repository = null;
+  repository = organization.repository(repoName);
+  setContextualRepository(req, repository);
+  return next();
+});
 
 router.use('/:repoName', routeContextualRepo);
 
-router.use('*', (req, res: Response, next: NextFunction) => {
-  return next(jsonError('no API or function available for repos', 404));
+router.use('/*splat', (req, res: Response, next: NextFunction) => {
+  return next(CreateError.NotFound('no API or function available for repos'));
 });
 
 export default router;

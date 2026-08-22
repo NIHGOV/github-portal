@@ -134,22 +134,30 @@ block content
     if dynamicSettings
       h4 Operations
       form(method='post')
-        ul.list-inline
-          if dynamicSettings.active === true
-            li: input.btn.btn-default(type='submit', name='deactivate', value='Deactivate organization')
-          else
-            li: input.btn.btn-primary(type='submit', name='activate', value='Activate organization')
-
-          if installationConfigured
+        if !installationConfigured
+          div.alert.alert-warning
+            strong Step 1:
+            |  Add this app installation to the organization's configuration, then
+            strong  Step 2:
+            |  activate the organization.
+          ul.list-inline
+            li
+              input.btn.btn-primary(type='submit', name='configure', value='Step 1 — Add this installation to configuration')
+            li
+              input.btn.btn-default(type='submit', name='activate', value='Step 2 — Activate organization', disabled)
+              |  &nbsp;
+              em (complete Step 1 first)
+        else
+          ul.list-inline
+            if dynamicSettings.active === true
+              li: input.btn.btn-default(type='submit', name='deactivate', value='Deactivate organization')
+            else
+              li: input.btn.btn-primary(type='submit', name='activate', value='Activate organization')
             li: input.btn.btn-danger(type='submit', name='force-delete-config', value='Force delete config')
             if dynamicSettings && dynamicSettings.installations && dynamicSettings.installations.length > 1 || dynamicSettings.active === false
               li: input.btn.btn-default(type='submit', name='remove-configuration', value='Remove this installation from configuration')
             else if dynamicSettings.active === false
-              li: strong The app must be deactivated all installations can be removed.
-          else
-            li
-              p: string This additional application needs to be added to the dynamic configuration for the organization.
-              input.btn.btn-primary(type='submit', name='configure', value='Add this installation to configuration')
+              li: strong The app must be deactivated before all installations can be removed.
 
         h4 Dynamic Configuration
         +displayConfiguration(dynamicSettings, true)

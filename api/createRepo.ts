@@ -9,43 +9,42 @@
 
 import _ from 'lodash';
 
-import { jsonError } from '../middleware';
 import {
   CreateError,
+  ErrorHelper,
   getProviders,
   ICustomizedNewRepoProperties,
   ICustomizedNewRepositoryLogic,
   INewRepositoryContext,
   splitSemiColonCommas,
-} from '../lib/transitional';
-import { Organization, Repository } from '../business';
-import { RepositoryMetadataEntity } from '../business/entities/repositoryMetadata/repositoryMetadata';
-import RenderHtmlMail from '../lib/emailRender';
+} from '../lib/transitional.js';
+import { Operations, Organization, Repository } from '../business/index.js';
+import { RepositoryMetadataEntity } from '../business/entities/repositoryMetadata/repositoryMetadata.js';
 
 import {
   RepoWorkflowEngine,
   IRepositoryWorkflowOutput,
   IApprovalPackage,
-} from '../routes/org/repoWorkflowEngine';
-import { IMailProvider } from '../lib/mailProvider';
-import { IndividualContext } from '../business/user';
-import NewRepositoryLockdownSystem from '../business/features/newRepositories/newRepositoryLockdown';
+} from '../routes/org/repoWorkflowEngine.js';
+import { IndividualContext } from '../business/user/index.js';
+import NewRepositoryLockdownSystem from '../business/features/newRepositories/newRepositoryLockdown.js';
 import {
   ICreateRepositoryResult,
   ICorporateLink,
   ICachedEmployeeInformation,
   ReposAppRequest,
   getRepositoryMetadataProvider,
-  CoreCapability,
-  operationsWithCapability,
-  IOperationsGitHubRestLibrary,
-  IOperationsHierarchy,
-  IOperationsNotifications,
   GitHubRepositoryVisibility,
   RepositoryLockdownState,
   GitHubRepositoryPermission,
-} from '../interfaces';
-import getCompanySpecificDeployment from '../middleware/companySpecificDeployment';
+  ReposApiRequest,
+  IProviders,
+  AppInsightsTelemetryClient,
+} from '../interfaces/index.js';
+import getCompanySpecificDeployment from '../middleware/companySpecificDeployment.js';
+import { safeStringify } from '../lib/safeStringify.js';
+
+import type { CreateRepositoryRequest } from './client/newOrgRepo.js';
 
 const defaultMailView = 'newRepository';
 
@@ -69,12 +68,27 @@ const hardcodedApprovalTypes = [
 ];
 
 export interface ICreateRepositoryApiResult {
+  insights: AppInsightsTelemetryClient;
   github: any;
   name: string;
   repositoryId: number;
   organizationName: string;
   notified?: string[];
+  tasks?: IRepositoryWorkflowOutput[];
 }
+
+export type CreateRepositoryMicrosoftProperties = {
+  onBehalfOf: string; // we store who created it (login) in metadata
+  justification: string;
+  license?: string;
+  approvalType: string;
+  approvalUrl: string;
+  notify: string; // emails; has commas, not an array
+  administrators?: string[];
+  teams: { [key: string]: string[] };
+  template: string; // msft template
+  projectType: string;
+};
 
 export enum CreateRepositoryEntrypoint {
   Api = 'api',
@@ -85,8 +99,8 @@ export interface IReposAppRequestWithCreateResponse extends ReposAppRequest {
   repoCreateResponse?: ICreateRepositoryApiResult;
 }
 
-export async function CreateRepository(
-  req,
+export async function createRepositoryCore(
+  req: CreateRepositoryRequest,
   organization: Organization,
   logic: ICustomizedNewRepositoryLogic,
   createContext: INewRepositoryContext,
@@ -94,11 +108,20 @@ export async function CreateRepository(
   entrypoint: CreateRepositoryEntrypoint,
   individualContext?: IndividualContext
 ): Promise<ICreateRepositoryApiResult> {
+  req.createRepositorySource = entrypoint === CreateRepositoryEntrypoint.Api ? 'api' : 'client';
   if (!organization) {
-    throw jsonError(new Error('No organization available in the route.'), 400);
+    throw CreateError.InvalidParameters('No organization available in the route.');
+  }
+  let serviceShortName: string = null;
+  const serviceOwner: string = null;
+  if (entrypoint === CreateRepositoryEntrypoint.Api) {
+    const apiRequest = req as unknown as ReposApiRequest;
+    const { apiKeyToken } = apiRequest;
+    serviceShortName = apiKeyToken.displayUsername || '(service)';
   }
   const providers = getProviders(req);
-  const { config, operations, mailProvider, insights } = providers;
+  const { config, operations, mailProvider } = providers;
+  const { insights } = req;
   if (config?.github?.repos?.newRepositoriesOffline) {
     throw CreateError.NotAuthorized(config.github.repos.newRepositoriesOffline);
   }
@@ -123,7 +146,7 @@ export async function CreateRepository(
       delete parameters[fieldName];
     }
   });
-  const msProperties = {
+  const msProperties: CreateRepositoryMicrosoftProperties = {
     onBehalfOf: properties['ms.onBehalfOf'] || req.headers['ms-onbehalfof'],
     justification: properties['ms.justification'] || req.headers['ms-justification'],
     license: properties['ms.license'] || req.headers['ms-license'],
@@ -140,28 +163,26 @@ export async function CreateRepository(
   if (msLicense) {
     msLicense = msLicense.toLowerCase();
     if (supportedLicenseExpressions.indexOf(msLicense) < 0) {
-      throw jsonError(new Error('The provided license expression is not currently supported'), 422);
+      throw CreateError.UnprocessableEntity('The provided license expression is not currently supported');
     }
   }
   if (msProperties.administrators && !Array.isArray(msProperties.administrators)) {
-    throw jsonError(new Error('Administrators must be an array of logins'), 422);
+    throw CreateError.UnprocessableEntity('Administrators must be an array of logins');
   }
   parameters.org = organization.name;
   const existingRepoId = req.body.existingrepoid;
   let metadata: RepositoryMetadataEntity;
   let response: any = null;
   if (existingRepoId && !organization.isNewRepositoryLockdownSystemEnabled()) {
-    throw jsonError(
-      new Error(
-        `Repository ID ${existingRepoId} provided for a repository within the ${organization.name} org that is not configured for existing repository classification`
-      ),
-      422
+    throw CreateError.UnprocessableEntity(
+      `Repository ID ${existingRepoId} provided for a repository within the ${organization.name} org that is not configured for existing repository classification`
     );
   }
   let repository: Repository = null;
   let repoCreateResponse: ICreateRepositoryApiResult = null;
+  // CodeQL [SM01513] this is not technically a security decision, as it's reacting to GitHub-native events
   if (!existingRepoId) {
-    providers.insights?.trackEvent({
+    insights?.trackEvent({
       name: 'ApiRepoTryCreateForOrg',
       properties: {
         parameterName: parameters.name,
@@ -179,7 +200,7 @@ export async function CreateRepository(
         repository = organization.repositoryFromEntity(createResult.repository.getEntity());
       }
     } catch (error) {
-      providers.insights?.trackEvent({
+      insights?.trackEvent({
         name: 'ApiRepoCreateForOrgGitHubFailure',
         properties: {
           parameterName: parameters.name,
@@ -191,7 +212,7 @@ export async function CreateRepository(
       });
       if (error?.cause) {
         const cause = error.cause;
-        req.insights.trackException({
+        individualContext.insights?.trackException({
           exception: cause,
           properties: {
             event: 'ApiRepoCreateGitHubErrorInside',
@@ -201,17 +222,18 @@ export async function CreateRepository(
           },
         });
       }
-      req.insights.trackException({
+      individualContext.insights?.trackException({
         exception: error,
         properties: {
           event: 'ApiRepoCreateGitHubError',
           message: error && error.message ? error.message : error,
         },
       });
-      throw jsonError(error, error.status || 500);
+      ErrorHelper.EnsureHasStatus(error, 500);
+      throw error;
     }
     response = createResult.response;
-    providers.insights?.trackEvent({
+    insights?.trackEvent({
       name: 'ApiRepoCreateForOrg',
       properties: {
         parameterName: parameters.name,
@@ -226,6 +248,7 @@ export async function CreateRepository(
     delete response.cost;
     // from this point on any errors should roll back
     const repoCreateResponse: ICreateRepositoryApiResult = {
+      insights,
       github: response,
       name: response && response.name ? response.name : undefined,
       organizationName: repository.organization.name,
@@ -236,22 +259,26 @@ export async function CreateRepository(
     // Store create metadata
     metadata.created = new Date();
     metadata.createdByThirdPartyUsername = msProperties.onBehalfOf;
-    if (individualContext && individualContext.corporateIdentity.id) {
+    // prettier-ignore
+    // CodeQL [SM01513] this is a logging action and not a security decision
+    if (individualContext?.corporateIdentity?.id) {
       metadata.createdByCorporateId = individualContext.corporateIdentity.id;
       metadata.createdByCorporateUsername = individualContext.corporateIdentity.username;
       metadata.createdByCorporateDisplayName = individualContext.corporateIdentity.displayName;
+    } else if (metadata.createdByThirdPartyUsername) { // CodeQL [SM01513] this is a logging action and not a security decision
+      await tryAnnotateMetadataWithLinkForLogin(providers, metadata, metadata.createdByCorporateUsername);
     }
     // TODO: we also want to store corporate manager information, eventually
     try {
       const account = await operations.getAccountByUsername(metadata.createdByThirdPartyUsername);
       metadata.createdByThirdPartyId = account.id.toString();
     } catch (noAvailableUsername) {
-      providers.insights?.trackEvent({
+      insights?.trackEvent({
         name: 'ApiRepoCreateInvalidUsername',
         properties: {
           username: metadata.createdByThirdPartyUsername,
           error: noAvailableUsername.message,
-          encodedError: JSON.stringify(noAvailableUsername),
+          encodedError: safeStringify(noAvailableUsername),
         },
       });
     }
@@ -297,6 +324,7 @@ export async function CreateRepository(
     repository = repositoryByName;
     metadata.lockdownState = RepositoryLockdownState.Unlocked;
     repoCreateResponse = {
+      insights,
       github: response,
       name: response && response.name ? response.name : undefined,
       repositoryId: Number(existingRepoId),
@@ -308,6 +336,12 @@ export async function CreateRepository(
   metadata.initialLicense = msProperties.license;
   metadata.releaseReviewType = msProperties.approvalType;
   metadata.releaseReviewUrl = msProperties.approvalUrl;
+  const validTemplateNames = Object.getOwnPropertyNames(providers.config.github.templates.definitions || {});
+  if (msProperties.template && !validTemplateNames.includes(msProperties.template)) {
+    throw CreateError.InvalidParameters(
+      `Template '${msProperties.template}' is not one of the supported template choices: ${validTemplateNames.join(', ')}`
+    );
+  }
   metadata.initialTemplate = msProperties.template;
   if (msProperties.administrators) {
     metadata.initialAdministrators = msProperties.administrators;
@@ -339,16 +373,15 @@ export async function CreateRepository(
   let entityId = existingRepoId || null;
   try {
     if (!entityId) {
+      metadata.metadataSource =
+        entrypoint === CreateRepositoryEntrypoint.Client ? 'portal:create-by-user' : 'portal:create-by-api';
       entityId = await repositoryMetadataProvider.createRepositoryMetadata(metadata);
     }
   } catch (insertRequestError) {
-    const err = jsonError(
-      new Error(
-        `Rolling back, problems creating repo metadata for ${metadata.repositoryName} and repo ${metadata.repositoryId}`
-      ),
-      500
+    const err = CreateError.ServerError(
+      `Rolling back, problems creating repo metadata for ${metadata.repositoryName} and repo ${metadata.repositoryId}`
     );
-    req.insights.trackException({
+    individualContext?.insights?.trackException({
       exception: insertRequestError,
       properties: {
         event: 'ApiRepoCreateRollbackError',
@@ -381,15 +414,22 @@ export async function CreateRepository(
     createEntrypoint: entrypoint,
   };
   // req.approvalRequest['ms.approvalId'] = requestId; // TODO: is this ever used?
-  const repoWorkflow = new RepoWorkflowEngine(providers, organization, approvalPackage);
-  let output = [];
+  const repoWorkflow = new RepoWorkflowEngine(providers, organization, repository, approvalPackage);
+  let output: IRepositoryWorkflowOutput[] = [];
   try {
     output = await generateAndRunSecondaryTasks(repoWorkflow);
   } catch (rollbackNeededError) {
     console.dir(rollbackNeededError);
   }
   if (!req.repoCreateResponse) {
-    req.repoCreateResponse = { tasks: null };
+    req.repoCreateResponse = {
+      insights,
+      tasks: null,
+      github: null,
+      name: null,
+      repositoryId: null,
+      organizationName: null,
+    };
   }
   req.repoCreateResponse.tasks = output;
   if (logic?.afterRepositoryCreated) {
@@ -420,8 +460,8 @@ export async function CreateRepository(
         req,
         logic,
         createContext,
-        mailProvider,
-        req.apiKeyRow,
+        serviceShortName,
+        serviceOwner,
         req.correlationId,
         output,
         repoWorkflow.request,
@@ -480,17 +520,18 @@ async function sendEmail(
   req: IReposAppRequestWithCreateResponse,
   logic: ICustomizedNewRepositoryLogic,
   createContext: INewRepositoryContext,
-  mailProvider: IMailProvider,
-  apiKeyRow,
+  serviceShortName: string,
+  serviceOwner: string,
   correlationId: string,
   repoCreateResults,
   approvalRequest: RepositoryMetadataEntity,
-  msProperties,
+  msProperties: CreateRepositoryMicrosoftProperties,
   existingRepoId: any,
   repository: Repository,
   createdUserLink: ICorporateLink
 ): Promise<void> {
-  const { config, insights, viewServices } = getProviders(req);
+  const { insights } = req;
+  const { config, viewServices } = getProviders(req);
   const deployment = getCompanySpecificDeployment();
   const emailTemplate = deployment?.views?.email?.repository?.new || defaultMailView;
   const excludeNotificationsValue = config.notifications?.reposNotificationExcludeForUsers;
@@ -519,13 +560,9 @@ async function sendEmail(
     targetType = 'Transfer';
   }
   let managerInfo: ICachedEmployeeInformation = null;
-  if (operations.hasCapability(CoreCapability.Hierarchy) && approvalRequest.createdByCorporateId) {
+  if (approvalRequest.createdByCorporateId) {
     try {
-      const opsHierarchy = operationsWithCapability<IOperationsHierarchy>(
-        operations,
-        CoreCapability.Hierarchy
-      );
-      managerInfo = await opsHierarchy.getCachedEmployeeManagementInformation(
+      managerInfo = await operations.getCachedEmployeeManagementInformation(
         approvalRequest.createdByCorporateId
       );
     } catch (ignoreError) {
@@ -533,7 +570,6 @@ async function sendEmail(
     }
   }
   const headline = `${targetType} ready`;
-  const serviceShortName = apiKeyRow && apiKeyRow.service ? apiKeyRow.service : undefined;
   let subject = serviceShortName
     ? `${approvalRequest.repositoryName} ${targetType.toLowerCase()} created by ${serviceShortName}`
     : `${approvalRequest.repositoryName} ${targetType.toLowerCase()} created`;
@@ -581,10 +617,7 @@ async function sendEmail(
       }
     }
   }
-  const skuName = operations.hasCapability(CoreCapability.GitHubRestApi)
-    ? operationsWithCapability<IOperationsGitHubRestLibrary>(operations, CoreCapability.GitHubRestApi)
-        .githubSkuName
-    : 'GitHub';
+  const skuName = operations.githubSkuName || 'GitHub';
   const app = config.brand?.companyName ? `${config.brand.companyName} ${skuName}` : skuName;
   const contentOptions = Object.assign(
     additionalViewProperties?.viewProperties || {} /* allow a custom provider to override */,
@@ -607,21 +640,15 @@ async function sendEmail(
       liveReposSiteUrl: config.urls ? config.urls.repos : null,
       api: serviceShortName, // when used by the client single-page app, this is not considered an API call
       service: serviceShortName,
-      serviceOwner: apiKeyRow ? apiKeyRow.owner : undefined,
-      serviceDescription: apiKeyRow ? apiKeyRow.description : undefined,
+      serviceOwner,
       viewServices,
       isNotBootstrap: true,
     }
   );
   try {
-    mail.content = await RenderHtmlMail(
-      config.typescript.appDirectory,
-      emailTemplate,
-      contentOptions,
-      config
-    );
+    await (operations as Operations).emailTestRender(emailTemplate, contentOptions);
   } catch (renderError) {
-    req.insights.trackException({
+    insights.trackException({
       exception: renderError,
       properties: {
         correlationId,
@@ -653,7 +680,12 @@ async function sendEmail(
         bcc: JSON.stringify(mail.to || ''),
       },
     });
-    customData.receipt = await mailProvider.sendMail(mail);
+    customData.receipt = await (operations as Operations).emailRenderSend(
+      insights,
+      emailTemplate,
+      mail,
+      contentOptions
+    );
     insights?.trackEvent({ name: 'ApiRepoCreateMailSuccess', properties: customData });
     req.repoCreateResponse.notified = emails;
   } catch (mailError) {
@@ -664,13 +696,7 @@ async function sendEmail(
   delete additionalMail.cc;
   let notifyMailAddress: string = null;
   const skipAdditionalSend = config?.notifications?.skipDedicatedNewRepoMail;
-  if (operations.hasCapability(CoreCapability.Notifications)) {
-    const opsNotifications = operationsWithCapability<IOperationsNotifications>(
-      operations,
-      CoreCapability.Notifications
-    );
-    notifyMailAddress = opsNotifications.getRepositoriesNotificationMailAddress();
-  }
+  notifyMailAddress = operations.getRepositoriesNotificationMailAddress();
   const operationsMails = notifyMailAddress ? [notifyMailAddress] : [];
   if (!skipAdditionalSend && operationsMails && operationsMails.length) {
     additionalMail.to = operationsMails;
@@ -678,21 +704,49 @@ async function sendEmail(
       ', '
     )}. A repo has been created or classified.`;
     try {
-      additionalMail.content = await RenderHtmlMail(
-        config.typescript.appDirectory,
-        emailTemplate,
-        contentOptions,
-        config
-      );
+      await (operations as Operations).emailTestRender(emailTemplate, contentOptions);
     } catch (renderError) {
       console.dir(renderError);
       return;
     }
     try {
-      await mailProvider.sendMail(additionalMail);
+      await (operations as Operations).emailRenderSend(
+        insights,
+        emailTemplate,
+        additionalMail,
+        contentOptions
+      );
     } catch (ignoredError) {
       console.dir(ignoredError);
       return;
     }
+  }
+}
+
+async function tryAnnotateMetadataWithLinkForLogin(
+  providers: IProviders,
+  metadata: RepositoryMetadataEntity,
+  login: string
+) {
+  const { linkProvider } = providers;
+  const insights = providers.genericInsights;
+  try {
+    const link = await linkProvider.getByThirdPartyUsername(login);
+    if (link?.corporateId) {
+      metadata.createdByCorporateId = link.corporateId;
+    }
+    if (link?.corporateUsername) {
+      metadata.createdByCorporateUsername = link.corporateUsername;
+    }
+    if (link?.corporateDisplayName) {
+      metadata.createdByCorporateDisplayName = link.corporateDisplayName;
+    }
+  } catch (error) {
+    insights?.trackException({
+      exception: error,
+      properties: {
+        name: 'create_repo.metadata.tryAnnotateMetadataWithLink.error',
+      },
+    });
   }
 }

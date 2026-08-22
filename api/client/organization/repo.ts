@@ -4,26 +4,25 @@
 //
 
 import { NextFunction, Response, Router } from 'express';
-import asyncHandler from 'express-async-handler';
 
-import { jsonError } from '../../../middleware';
-import { CreateError, ErrorHelper, getProviders } from '../../../lib/transitional';
-import { IndividualContext } from '../../../business/user';
-import NewRepositoryLockdownSystem from '../../../business/features/newRepositories/newRepositoryLockdown';
+import { CreateError, ErrorHelper, getProviders } from '../../../lib/transitional.js';
+import { IndividualContext } from '../../../business/user/index.js';
+import NewRepositoryLockdownSystem from '../../../business/features/newRepositories/newRepositoryLockdown.js';
 import {
   AddRepositoryPermissionsToRequest,
   getContextualRepositoryPermissions,
-} from '../../../middleware/github/repoPermissions';
-import getCompanySpecificDeployment from '../../../middleware/companySpecificDeployment';
+} from '../../../middleware/github/repoPermissions.js';
+import getCompanySpecificDeployment from '../../../middleware/companySpecificDeployment.js';
 
-import RouteRepoPermissions from './repoPermissions';
+import RouteRepoPermissions from './repoPermissions.js';
 import {
   LocalApiRepoAction,
   getRepositoryMetadataProvider,
   NoCacheNoBackground,
   GitHubRepositoryVisibility,
-} from '../../../interfaces';
-import { RequestWithRepo } from '../../../middleware/business/repository';
+} from '../../../interfaces/index.js';
+import { RequestWithRepo } from '../../../middleware/business/repository.js';
+import { checkArchivistPermission, checkDeletePermission } from '../../../lib/repositoryPermissionChecks.js';
 
 enum RepositoryChangeAction {
   Archive,
@@ -34,90 +33,84 @@ enum RepositoryChangeAction {
 const router: Router = Router();
 
 const deployment = getCompanySpecificDeployment();
-deployment?.routes?.api?.organization?.repo && deployment?.routes?.api?.organization?.repo(router);
+if (deployment?.routes?.api?.organization?.repo) {
+  deployment?.routes?.api?.organization?.repo(router);
+}
 
 router.use('/permissions', RouteRepoPermissions);
 
-router.get(
-  '/',
-  asyncHandler(async (req: RequestWithRepo, res: Response, next: NextFunction) => {
-    const { repository } = req;
-    try {
-      await repository.getDetails({ backgroundRefresh: false });
-      const clone = Object.assign({}, repository.getEntity());
-      delete (clone as any).temp_clone_token; // never share this back
-      delete (clone as any).cost;
+router.get('/', async (req: RequestWithRepo, res: Response, next: NextFunction) => {
+  const { repository } = req;
+  try {
+    await repository.getDetails(NoCacheNoBackground);
+    const clone = Object.assign({}, repository.getEntity());
+    delete (clone as any).temp_clone_token; // never share this back
+    delete (clone as any).cost;
 
-      return res.json(repository.getEntity()) as unknown as void;
-    } catch (repoError) {
-      if (ErrorHelper.IsNotFound(repoError)) {
-        // // Attempt fallback by ID (?)
-      }
-      return next(jsonError(repoError));
+    return res.json(clone) as unknown as void;
+  } catch (repoError) {
+    if (ErrorHelper.IsNotFound(repoError)) {
+      // // Attempt fallback by ID (?)
     }
-  })
-);
+    return next(repoError);
+  }
+});
 
-router.get(
-  '/exists',
-  asyncHandler(async (req: RequestWithRepo, res: Response, next: NextFunction) => {
-    let exists = false;
-    let name: string = undefined;
-    const { repository } = req;
-    try {
-      const originalName = repository.name;
-      await repository.getDetails();
-      if (repository && repository.name) {
-        name = repository.getEntity().name as string;
-        if (name.toLowerCase() !== originalName.toLowerCase()) {
-          // A renamed repository will return the new name here
-          exists = false;
-        } else {
-          exists = true;
-        }
+router.get('/exists', async (req: RequestWithRepo, res: Response, next: NextFunction) => {
+  let exists = false;
+  let name: string = undefined;
+  const { repository } = req;
+  try {
+    const originalName = repository.name;
+    await repository.getDetails();
+    if (repository && repository.name) {
+      name = repository.getEntity().name as string;
+      if (name.toLowerCase() !== originalName.toLowerCase()) {
+        // A renamed repository will return the new name here
+        exists = false;
+      } else {
+        exists = true;
       }
-    } catch (repoError) {}
-    return res.json({ exists, name }) as unknown as void;
-  })
-);
-
-router.get(
-  '/archived',
-  asyncHandler(async (req: RequestWithRepo, res: Response, next: NextFunction) => {
-    const { repository } = req;
-    try {
-      await repository.getDetails();
-      const data = {
-        archivedAt: null,
-      };
-      if (repository?.archived) {
-        const archivedAt = await repository.getArchivedAt();
-        if (archivedAt) {
-          data.archivedAt = archivedAt.toISOString();
-        }
-      }
-      return res.json(data) as unknown as void;
-    } catch (error) {
-      return next(error);
     }
-  })
-);
+  } catch (repoError) {}
+  return res.json({ exists, name }) as unknown as void;
+});
+
+router.get('/archived', async (req: RequestWithRepo, res: Response, next: NextFunction) => {
+  const { repository } = req;
+  try {
+    await repository.getDetails();
+    const data = {
+      archivedAt: null,
+    };
+    if (repository?.archived) {
+      const archivedAt = await repository.getArchivedAt();
+      if (archivedAt) {
+        data.archivedAt = archivedAt.toISOString();
+      }
+    }
+    return res.json(data) as unknown as void;
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.post(
   '/privatize',
-  asyncHandler(AddRepositoryPermissionsToRequest),
-  asyncHandler(RepositoryStateChangeHandler.bind(null, RepositoryChangeAction.Privatize))
+  AddRepositoryPermissionsToRequest,
+  RepositoryStateChangeHandler.bind(null, RepositoryChangeAction.Privatize)
 );
 
 router.post(
   '/archive',
-  asyncHandler(AddRepositoryPermissionsToRequest),
-  asyncHandler(RepositoryStateChangeHandler.bind(null, RepositoryChangeAction.Archive))
+  AddRepositoryPermissionsToRequest,
+  RepositoryStateChangeHandler.bind(null, RepositoryChangeAction.Archive)
 );
 
 router.post(
   '/unarchive',
-  asyncHandler(AddRepositoryPermissionsToRequest),
-  asyncHandler(RepositoryStateChangeHandler.bind(null, RepositoryChangeAction.UnArchive))
+  AddRepositoryPermissionsToRequest,
+  RepositoryStateChangeHandler.bind(null, RepositoryChangeAction.UnArchive)
 );
 
 async function RepositoryStateChangeHandler(
@@ -127,8 +120,9 @@ async function RepositoryStateChangeHandler(
   next: NextFunction
 ) {
   const activeContext = (req.individualContext || req.apiContext) as IndividualContext;
+  const corporateId = activeContext.link.corporateId;
   const providers = getProviders(req);
-  const { insights } = providers;
+  const { insights, repository } = req;
   const repoPermissions = getContextualRepositoryPermissions(req);
   let phrase: string = null;
   let insightsPrefix: string = null;
@@ -150,18 +144,56 @@ async function RepositoryStateChangeHandler(
       localAction = LocalApiRepoAction.Privatize;
       break;
     default:
-      return next(jsonError('Invalid action', 400));
+      return next(CreateError.InvalidParameters('Invalid action'));
   }
   const completedPhrase = `${phrase}d`;
-  if (!repoPermissions.allowAdministration) {
-    return next(jsonError(`You do not have permission to ${phrase} this repo`, 403));
+  const isArchivistAction =
+    action === RepositoryChangeAction.Archive || action === RepositoryChangeAction.UnArchive;
+  const permissionCheck = isArchivistAction
+    ? checkArchivistPermission(repoPermissions)
+    : { allowed: repoPermissions.allowAdministration, requiresApproval: false };
+  if (!permissionCheck.allowed) {
+    return next(CreateError.NotAuthorized(`You do not have permission to ${phrase} this repo`));
   }
-  const { repository } = req;
+  if (permissionCheck.requiresApproval) {
+    // Use the company-specific approval workflow
+    if (!deployment?.features?.repositoryActions?.submitActionForApproval) {
+      return next(
+        CreateError.FeatureNotEnabled(
+          `This action requires approval but the approval workflow is not configured.`
+        )
+      );
+    }
+    const justification = req.body?.justification || 'No justification provided';
+    try {
+      const result = await deployment.features.repositoryActions.submitActionForApproval(
+        providers,
+        activeContext,
+        repository,
+        localAction,
+        justification
+      );
+      if (result.error) {
+        return next(CreateError.InvalidParameters(result.error));
+      }
+      return res.status(202).json({
+        message:
+          result.message ||
+          `Your request to ${phrase} ${repository.full_name} has been submitted for approval.`,
+        requiresApproval: true,
+        requestSubmitted: result.requestSubmitted,
+        grantId: result.grantId,
+        approvalUrl: result.approvalUrl,
+      }) as unknown as void;
+    } catch (approvalError) {
+      return next(CreateError.ServerError(approvalError.message, approvalError));
+    }
+  }
   try {
     insights?.trackEvent({
       name: `${insightsPrefix}Started`,
       properties: {
-        requestedById: activeContext.link.corporateId,
+        requestedById: corporateId,
         repoName: repository.name,
         orgName: repository.organization.name,
         repoId: repository.id ? String(repository.id) : 'unknown',
@@ -202,7 +234,7 @@ async function RepositoryStateChangeHandler(
     insights?.trackEvent({
       name: `${insightsPrefix}Success`,
       properties: {
-        requestedById: activeContext.link.corporateId,
+        requestedById: corporateId,
         repoName: repository.name,
         orgName: repository.organization.name,
         repoId: repository.id ? String(repository.id) : 'unknown',
@@ -216,34 +248,62 @@ async function RepositoryStateChangeHandler(
     }
     return res.json({
       message: `You ${completedPhrase}: ${repository.full_name}`,
+      requiresApproval: false,
     });
   } catch (error) {
     insights?.trackException({ exception: error });
     insights?.trackEvent({
       name: `${insightsPrefix}Failed`,
       properties: {
-        requestedById: activeContext.link.corporateId,
+        requestedById: corporateId,
         repoName: repository.name,
         orgName: repository.organization.name,
         repoId: repository.id ? String(repository.id) : 'unknown',
       },
     });
-    return next(jsonError(error));
+    return next(error);
   }
 }
 
 router.delete(
   '/',
-  asyncHandler(AddRepositoryPermissionsToRequest),
-  asyncHandler(async function (req: RequestWithRepo, res: Response, next: NextFunction) {
+  AddRepositoryPermissionsToRequest,
+  async function (req: RequestWithRepo, res: Response, next: NextFunction) {
     // NOTE: duplicated code from /routes/org/repos.ts
     const providers = getProviders(req);
-    const { insights } = providers;
+    const { insights } = req;
     const insightsPrefix = 'DeleteRepo';
     const activeContext = (req.individualContext || req.apiContext) as IndividualContext;
     const { organization, repository } = req;
     const repoPermissions = getContextualRepositoryPermissions(req);
-    if (repoPermissions.allowAdministration) {
+    const deletePermissionCheck = checkDeletePermission(repoPermissions);
+    if (deletePermissionCheck.allowed) {
+      if (deletePermissionCheck.requiresApproval) {
+        // Use the company-specific approval workflow
+        if (!deployment?.features?.repositoryActions?.submitActionForApproval) {
+          return next(
+            CreateError.FeatureNotEnabled(
+              'This action requires approval but the approval workflow is not configured.'
+            )
+          );
+        }
+        const justification = req.body?.justification || 'No justification provided';
+        try {
+          const result = await deployment.features.repositoryActions.submitActionForApproval(
+            providers,
+            activeContext,
+            repository,
+            LocalApiRepoAction.Delete,
+            justification
+          );
+          if (result.error) {
+            return next(CreateError.InvalidParameters(result.error));
+          }
+          return res.json(result) as unknown as void;
+        } catch (approvalError) {
+          return next(CreateError.ServerError(approvalError.message, approvalError));
+        }
+      }
       try {
         insights?.trackEvent({
           name: `${insightsPrefix}Started`,
@@ -284,6 +344,8 @@ router.delete(
           },
         });
         return res.json({
+          requiresApproval: false,
+          requestSubmitted: false,
           message: `You deleted: ${repository.full_name}`,
         }) as unknown as void;
       } catch (error) {
@@ -297,17 +359,17 @@ router.delete(
             repoId: repository.id ? String(repository.id) : 'unknown',
           },
         });
-        return next(jsonError(error));
+        return next(error);
       }
     }
     if (!organization.isNewRepositoryLockdownSystemEnabled) {
-      return next(jsonError('This endpoint is not available as configured in this app.', 400));
+      return next(CreateError.InvalidParameters('This endpoint is not available as configured in this app.'));
     }
     const daysAfterCreateToAllowSelfDelete = 21; // could be a config setting if anyone cares
     try {
       // make sure ID is known
       if (await repository.isDeleted()) {
-        return next(jsonError('The repository has already been deleted', 404));
+        return next(CreateError.NotFound('The repository has already been deleted'));
       }
       const metadata = await repository.getRepositoryMetadata();
       await NewRepositoryLockdownSystem.Statics.ValidateUserCanSelfDeleteRepository(
@@ -319,13 +381,12 @@ router.delete(
     } catch (noExistingMetadata) {
       if (noExistingMetadata.status === 404) {
         return next(
-          jsonError(
-            'This repository does not have any metadata available regarding who can setup it up. No further actions available.',
-            400
+          CreateError.InvalidParameters(
+            'This repository does not have any metadata available regarding who can setup it up. No further actions available.'
           )
         );
       }
-      return next(jsonError(noExistingMetadata, 404));
+      return next(CreateError.NotFound(noExistingMetadata.message, noExistingMetadata));
     }
     const { operations } = getProviders(req);
     const repositoryMetadataProvider = getRepositoryMetadataProvider(operations);
@@ -341,14 +402,16 @@ router.delete(
       true /* deleted by the original user instead of ops */
     );
     return res.json({
+      requiresApproval: false,
+      requestSubmitted: false,
       message: `You deleted your repo, ${repository.full_name}.`,
     }) as unknown as void;
-  })
+  }
 );
 
-router.use('*', (req, res: Response, next: NextFunction) => {
+router.use('/*splat', (req, res: Response, next: NextFunction) => {
   console.warn(req.baseUrl);
-  return next(jsonError('no API or function available within this specific repo', 404));
+  return next(CreateError.NotFound('no API or function available within this specific repo'));
 });
 
 export default router;

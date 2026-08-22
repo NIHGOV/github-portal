@@ -31,12 +31,31 @@ Alternative if admin is disabled: assign a user-assigned managed identity with A
 | `AZUREAPPSERVICE_PUBLISHPROFILE_34824FEBDA0F4C8CACF5CB97111CBFFB` | `staging_nihdevgithubportal.yml` | Add `azure/login` OIDC step; drop `publish-profile:` |
 | `AZUREAPPSERVICE_PUBLISHPROFILE_990190F22A5149AC859307273BAE196C` | `main_nihgithubportal.yml`       | Same                                                 |
 
+### ✅ Secrets converted to variables (June 2026)
+
+Non-sensitive values moved from secrets to repository variables (visible in Actions but not credential material):
+
+| Variable                   | Value                  | Used in                                                         |
+| -------------------------- | ---------------------- | --------------------------------------------------------------- |
+| `DEV_SERVICEBUS_NAMESPACE` | `nihdevgithubportalsb` | `staging_terraform_dev.yml`, `staging_nihdevgithubportalfh.yml` |
+| `DEV_TF_STORAGE_CONTAINER` | `tfstate`              | `staging_terraform_dev.yml`                                     |
+
+### Pending: staging → main merge (production equivalents — tracked in #1128)
+
+After the next staging → main merge, create the following repository variables in GitHub:
+
+| Variable                    | Value                     | Used in                                                 |
+| --------------------------- | ------------------------- | ------------------------------------------------------- |
+| `PROD_SERVICEBUS_NAMESPACE` | prod Service Bus name     | `main_terraform_prod.yml`, `main_nihgithubportalfh.yml` |
+| `PROD_TF_STORAGE_CONTAINER` | `tfstate` (or equivalent) | `main_terraform_prod.yml`                               |
+
+Then delete the corresponding `PROD_SERVICEBUS_CONNECTIONSTRING` secret once managed identity is verified working in prod (mirrors the dev→managed-identity migration).
+
 ### Keeping as secrets (decision: June 2026)
 
-`AAD_CLIENT_ID`, `AAD_TENANT_ID`, `AAD_SUBSCRIPTION_ID`, `PROD_AAD_CLIENT_ID`,
-`PROD_AAD_TENANT_ID`, `PROD_AAD_SUBSCRIPTION_ID` — remain as encrypted secrets.
-Although these are GUIDs rather than credentials, the team prefers to keep them
-in the secrets store to avoid any risk of accidental exposure.
+All other identifiers (client IDs, tenant IDs, subscription IDs, resource group names,
+hostnames, usernames, app IDs, slugs, storage account names) remain as encrypted secrets
+per team preference — none of their business if breached.
 
 ---
 
@@ -50,28 +69,25 @@ Long-term goal: represent the entire `GitHub_OpenSource_Portal_Dev` (and eventua
 
 Before the workflow can run, a storage account for Terraform state must exist:
 
-1. ~~Create a storage account in `GitHub_OpenSource_Portal_Dev` (e.g. `nihdevgithubportaltf`)~~ ✅ Done
-2. Create a blob container in it (e.g. `tfstate`) — or confirm it exists
-3. ~~Grant service principal **Storage Blob Data Contributor** on `nihdevgithubportaltf`~~ ✅ Done
-4. Add GitHub Secrets:
-   - `DEV_TF_STORAGE_ACCOUNT` → `nihdevgithubportaltf`
-   - `DEV_TF_STORAGE_CONTAINER` → container name (e.g. `tfstate`)
-   - ~~`GH_SECRETS_PAT`~~ — not needed; ACI workflows look up Log Analytics from Azure at deploy time via `az monitor`
+- [x] ~~Create a storage account in `GitHub_OpenSource_Portal_Dev` (e.g. `nihdevgithubportaltf`)~~
+- [x] Create a blob container in it (e.g. `tfstate`) — or confirm it exists
+- [x] ~~Grant service principal **Storage Blob Data Contributor** on `nihdevgithubportaltf`~~
+- [x] Add GitHub Secrets:
+  - `DEV_TF_STORAGE_ACCOUNT` → `nihdevgithubportaltf`
+  - `DEV_TF_STORAGE_CONTAINER` → container name (e.g. `tfstate`)
+  - ~~`GH_SECRETS_PAT`~~ — not needed; ACI workflows look up Log Analytics from Azure at deploy time via `az monitor`
 
-### Resources managed
+### Dev resources managed
 
-- [ ] `azurerm_log_analytics_workspace` — `nihdevgithubportal-logs`
+- [x] `azurerm_log_analytics_workspace` — `nihdevgithubportal-logs`
 - [x] Log Analytics ID/key wired into ACI deploys: looked up at runtime via `az monitor log-analytics workspace show/get-shared-keys` — no secrets required
 
-### Future: full resource group coverage (tracked in GitHub Issues)
+### Prod bootstrap (one-time, before Terraform prod apply)
 
-- [ ] Redis Cache (`nihdevgithubportal`) — see issue
-- [ ] PostgreSQL Flexible Server (`nihdevgithubportaldb`) — see issue
-- [ ] Service Bus namespace — see issue
-- [ ] Container Registry — see issue
-- [ ] App Service (`nihdevgithubportal`) — see issue
-- [ ] ACI container groups (firehose, cache builder) — see issue
-- [ ] Repeat entire stack for `GitHub_OpenSource_Portal` (prod) — see issue
+- [ ] Create/confirm Terraform state storage account for prod (e.g. `nihgithubportaltf`) in `GitHub_OpenSource_Portal`
+- [ ] Create blob container (e.g. `tfstate`) in it
+- [ ] Grant service principal **Storage Blob Data Contributor** on the prod state storage account
+- [ ] Add GitHub Secret `PROD_TF_STORAGE_ACCOUNT` → prod storage account name (also listed in ACI Production above)
 
 ---
 
@@ -79,42 +95,95 @@ Before the workflow can run, a storage account for Terraform state must exist:
 
 Replaced hardcoded-secret YAML files with GitHub Actions workflows and `infra/aci/` reference configs.
 
+**Update (Aug 2026):** Deleted `infra/aci/{staging,prod}-firehose.yml` and `infra/aci/{staging,prod}-cachebuilder.yml` — they documented the old static ACR credential + Service Bus connection-string approach, which the active workflows no longer use (managed identity + OIDC `az acr credential show` instead).
+
+**Update (Aug 2026):** Added the `azure-cli` devcontainer feature to `.devcontainer/devcontainer.json` so `az` is available out of the box, matching the `az login`/OIDC workflows referenced throughout this plan.
+
 ### Staging
 
+- [x] Add GitHub Secret `DEV_RG` → `GitHub_OpenSource_Portal_Dev`
+- [x] Add GitHub Secret `DEV_REGISTRY_SERVER` → dev ACR hostname
 - [x] Add GitHub Secret `DEV_REDIS_TLS_HOST`
 - [x] Add GitHub Secret `DEV_REDIS_KEY`
 - [x] Add GitHub Secret `DEV_POSTGRES_HOST`
 - [x] Add GitHub Secret `DEV_POSTGRES_DB`
 - [x] Add GitHub Secret `DEV_POSTGRES_USER`
 - [x] Add GitHub Secret `DEV_POSTGRES_PASSWORD`
-- [x] Add GitHub Secret `DEV_SERVICEBUS_CONNECTIONSTRING`
+- [x] Add GitHub Secret `DEV_WEBHOOK_SHARED_SECRET` → webhook HMAC secret from dev GitHub App settings
 - [x] Add GitHub Secret `DEV_GITHUB_APP_OPERATIONS_APP_ID`
 - [x] Add GitHub Secret `DEV_GITHUB_APP_OPERATIONS_KEY`
 - [x] Add GitHub Secret `DEV_GITHUB_APP_OPERATIONS_SLUG`
-- [ ] Run `staging_nihdevgithubportalfh.yml` manually — verify firehose container starts and logs appear
-- [ ] Run `staging_nihdevgithubportalcb.yml` manually — verify cache builder runs and `portaldescription` is written to DB for ARPA-H
-- [ ] Restart `nihdevgithubportal` App Service — confirm ARPA-H org description shows on homepage
+- [x] Add GitHub Variable `DEV_SERVICEBUS_NAMESPACE` → `nihdevgithubportalsb` ✅ done
+- [x] ~~Run Terraform dev workflow~~ — ✅ complete: namespace + identity + role assignment all created
+- [x] Run `staging_nihdevgithubportalfh.yml` — ✅ firehose deployed and verified
+- [x] ~~Run `staging_nihdevgithubportalcb.yml`~~ — ✅ cache builder deployed and verified
+- [x] Run `staging_nihdevgithubportalfh.yml` manually — ✅ firehose container starts, polls `events` queue every 10s
+- [x] Run `staging_nihdevgithubportalcb.yml` manually — ✅ cache builder runs, saves repo permissions to DB
+- [x] Restart `nihdevgithubportal` App Service — ✅ ARPA-H org description appears on homepage
 
 ### Production
 
 - [ ] Add GitHub Secret `PROD_RG` → `GitHub_OpenSource_Portal`
 - [ ] Add GitHub Secrets `PROD_AAD_CLIENT_ID`, `PROD_AAD_CLIENT_SECRET`, `PROD_AAD_SUBSCRIPTION_ID`, `PROD_AAD_TENANT_ID` (may match existing `AAD_*` values)
+- [ ] Add GitHub Secret `PROD_REGISTRY_SERVER` → prod ACR hostname (e.g. `nihgithubportal.azurecr.io`)
 - [ ] Add GitHub Secret `PROD_REDIS_TLS_HOST`
 - [ ] Add GitHub Secret `PROD_REDIS_KEY`
 - [ ] Add GitHub Secret `PROD_POSTGRES_HOST`
 - [ ] Add GitHub Secret `PROD_POSTGRES_DB`
 - [ ] Add GitHub Secret `PROD_POSTGRES_USER`
 - [ ] Add GitHub Secret `PROD_POSTGRES_PASSWORD`
-- [ ] Add GitHub Secret `PROD_SERVICEBUS_CONNECTIONSTRING`
+- [ ] Add GitHub Secret `PROD_WEBHOOK_SHARED_SECRET` → webhook HMAC secret from the prod GitHub App settings (needed by firehose; learned from staging)
+- [ ] ~~`PROD_SERVICEBUS_CONNECTIONSTRING`~~ — never needed; went straight to managed identity
+- [ ] Add GitHub Variable `PROD_SERVICEBUS_NAMESPACE` → prod Service Bus namespace name
+- [ ] Add GitHub Variable `PROD_TF_STORAGE_CONTAINER` → `tfstate` (or equivalent)
+- [ ] Add GitHub Secret `PROD_TF_STORAGE_ACCOUNT` → prod Terraform state storage account name (also required for Terraform prod bootstrap below)
 - [ ] Add GitHub Secret `PROD_GITHUB_APP_OPERATIONS_APP_ID`
 - [ ] Add GitHub Secret `PROD_GITHUB_APP_OPERATIONS_KEY`
 - [ ] Add GitHub Secret `PROD_GITHUB_APP_OPERATIONS_SLUG`
+- [ ] Apply `WEBSITE_RUN_FROM_PACKAGE=1`, Entra env vars, and all required App Service settings to `nihgithubportal` (see High Priority §0)
+- [ ] Run Terraform prod workflow (`main_terraform_prod.yml`, action: apply) — provisions `nihgithubportal-firehose` managed identity, Service Bus namespace, queue, and role assignment
 - [ ] Run `main_nihgithubportalfh.yml` manually — verify firehose starts
 - [ ] Run `main_nihgithubportalcb.yml` manually — verify cache builder runs
+- [ ] Run `main_nihgithubportal.yml` — deploy app to `nihgithubportal` App Service
+- [ ] Verify `nihgithubportal` App Service starts and portal is accessible
 
 ---
 
-## Completed (June 2026 — GitHub Copilot agentic session)
+## Managed Identity — Service Bus (June 2026)
+
+Replaces `SERVICEBUS_CONNECTIONSTRING` secret with Azure managed identity + `DefaultAzureCredential`.
+No credential to rotate or leak; ACI picks up the identity at runtime.
+
+### How it works
+
+1. Terraform provisions `azurerm_user_assigned_identity` (`nihdevgithubportal-firehose` / `nihgithubportal-firehose`)
+2. Terraform assigns `Azure Service Bus Data Receiver` role on the Service Bus namespace
+3. ACI deploy workflow passes `--assign-identity <identity-resource-id>` and `AZURE_CLIENT_ID=<client-id>` so `DefaultAzureCredential` selects the right identity
+4. `GITHUB_WEBHOOKS_SERVICEBUS_ENDPOINT=<namespace>.servicebus.windows.net` (no `https://` — SDK prepends `sb://` internally)
+5. `lib/queues/servicebus.ts` uses `useEntraAuthentication` flag to branch between credential and connection-string mode
+
+### Staging status (tracked in #1127) ✅ Complete
+
+- [x] Code changes on `staging` branch
+- [x] `DEV_SERVICEBUS_NAMESPACE` variable set in GitHub → `nihdevgithubportalsb`
+- [x] `nihdevgithubportalsb` Service Bus namespace created (Terraform)
+- [x] `nihdevgithubportal-firehose` managed identity created (Terraform)
+- [x] `Azure Service Bus Data Receiver` role assignment created (Terraform, after User Access Administrator granted)
+- [x] Firehose container deployed and verified
+- [x] Cache builder deployed and verified
+
+### Production (after staging → main merge — tracked in #1128)
+
+- [ ] `PROD_SERVICEBUS_NAMESPACE` variable set in GitHub → prod namespace name
+- [ ] `PROD_TF_STORAGE_CONTAINER` variable set in GitHub → `tfstate`
+- [ ] Terraform prod apply run
+- [ ] `nihgithubportalsb` Service Bus namespace created (Terraform)
+- [ ] `nihgithubportal-firehose` managed identity created (Terraform)
+- [ ] `Azure Service Bus Data Receiver` role assignment created (Terraform)
+- [ ] Firehose container deployed and verified
+- [ ] Cache builder deployed and verified
+
+---
 
 ### ✅ Fixed admin apps page showing wrong GitHub App slug and broken "Install in new org" link (June 2026)
 
@@ -131,6 +200,84 @@ Code fix:
 - `AGENTS.md` — documented `GITHUB_APP_OPERATIONS_SLUG` in the required App Service settings table
 
 **⚠️ Required before merging to main:** Verify `GITHUB_APP_OPERATIONS_SLUG` is set correctly on both App Services (`nihdevgithubportal` and `nihgithubportal`). The value must exactly match the slug shown at `github.com/organizations/NIHGOV/settings/apps/…` (e.g. `dev-nih-github-management-portal` on staging). An incorrect slug causes broken "Install in new org" links and silently misidentifies bot commits in `getApplicationsAsLogins()`.
+
+## Completed (June 2026 — GitHub Copilot agentic session)
+
+### ✅ Resolved staging ← main merge conflicts; preserved all NIH-only changes (June 2026)
+
+Merged `origin/main` into `staging`, resolving 14 conflicts across workflow files, Terraform configs, `lib/queues/servicebus.ts`, `.cspell.json`, and `PLAN.md`. All NIH-specific changes (managed identity, Service Bus, Terraform infrastructure) were preserved by taking `--ours` on all conflicts.
+
+### ✅ Added CodeQL inline suppression comments for 41 false-positive alerts (June 2026)
+
+41 CodeQL alerts across 20 files suppressed with `// codeql[rule-id]` comments.
+The `js/missing-rate-limiting` alerts remain suppressed because CodeQL cannot trace cross-file middleware registration — the suppressions are still correct explanatory annotations even though enforcement is now on by default (see rate limiting section below).
+
+- `js/missing-rate-limiting` (37 alerts) — inline suppressions retained as documentation; enforcement enabled separately (see below)
+- `js/unvalidated-dynamic-method-call` (3 alerts) — `business/*Search.ts` guards method existence via `this[sortMethodName]` check
+- `js/insufficient-password-hash` (1 alert) — `middleware/rateLimit.ts` uses SHA-256 as a cache key compactor, not a credential hash
+
+### ✅ Enabled rate limiting enforcement; tightened unauthenticated threshold (June 2026)
+
+`config/rateLimit.json` was previously shipped with `mode=disabled` and `audit.enabled=0` — rate limiting infrastructure existed but was entirely inert. Changed defaults:
+
+- `mode`: `disabled` → `enforce`
+- `audit.enabled`: `0` → `1`
+- `thresholdUnauthenticated`: `120` → `20` req/min/path (authenticated users retain 120)
+
+Enforcement can be overridden via `RATE_LIMIT_MODE` / `RATE_LIMIT_AUDIT_*` App Service settings without a code change.
+
+Also added a test (`middleware/rateLimit.test.ts`) confirming that the tighter unauthenticated threshold blocks at 20 while authenticated users at the same path still pass through at 120.
+
+### ✅ Resolved all 45 bun audit vulnerabilities (June 2026)
+
+- Direct bumps: `liquidjs` 10.25.5 → 10.27.0 (7 CVEs); `axios` 1.15.0 → 1.17.0 (19 CVEs)
+- Transitive overrides added: `cookie`, `fast-xml-parser`, `joi`, `js-yaml`, `json-bigint`, `on-headers`, `protobufjs`, `smol-toml`, `uuid`, `xml2js`
+- `bun audit` now reports 0 vulnerabilities
+
+### ✅ Build traceability in ACI container startup logs (June 2026)
+
+Containers now log three lines on startup:
+
+```text
+build: 8.5.<run_number>, opensource-management-portal
+commit: <8-char SHA>
+actions: https://github.com/NIHGOV/github-portal/actions/runs/<run_id>
+```
+
+- `config/continuousDeployment.js` — reads `GITHUB_SHA` (short form) and `GITHUB_RUN_ID`; attaches as `continuousDeployment.commit` / `.runUrl`
+- `middleware/initialize.ts` — logs `commit:` and `actions:` lines separately when values are present
+- All four CB/FH deploy workflows — pass `GITHUB_SHA`, `GITHUB_RUN_ID`, `GITHUB_RUN_NUMBER` as env vars to the containers
+
+### ✅ Fixed container CI/CD pipeline: SHA-tagged images, race condition, missing source paths (June 2026)
+
+**Race condition fixed:** ACR build workflows now push `portal:<full-sha>` alongside `portal:latest`. CB/FH deploys consume `portal:<sha>` directly, so rapid back-to-back pushes can never cause a deploy to pull the wrong image.
+
+**workflow_run default-branch bug fixed:** `workflow_run`-triggered workflows always execute from the repository's default branch (`main`), not the branch that triggered them. This meant all CB/FH deploy workflow changes on `staging` were silently ignored, and containers kept deploying `portal:latest` from `main`'s old workflow version.
+
+Fix: consolidated `deploy-cb` and `deploy-fh` as jobs inside `staging_create_acr_image.yml` / `main_create_acr_image.yml` (`needs: build`). Since these workflows trigger on `push` to their respective branch, they always run the correct branch version with `${{ github.sha }}` directly.
+
+The standalone `staging_nihdevgithubportalcb/fh.yml` and `main_nihgithubportalcb/fh.yml` are now **manual-dispatch only** with an `image_tag` input (default: `latest`) for rollbacks and targeted redeploys without a full rebuild.
+
+**Missing source paths fixed:** `api/**`, `bin/**`, `middleware/**`, `routes/**`, `typings/**`, `index.ts`, `job.ts` added to path filters in all ACR build workflows. Changes to these directories now correctly trigger a new container image.
+
+### ✅ Removed duplicate/stale main_create_acr_image.yaml (June 2026)
+
+`.github/workflows/main_create_acr_image.yaml` had the same workflow `name:` and identical push path triggers as `main_create_acr_image.yml` but ran a completely different job — a GraphQL org query + PowerShell `Create-EnvOrgs.ps1` script. It was silently failing on every `main` push (trying to `rm env-orgs.json` which doesn't exist) while the real ACR build ran alongside it. Deleted.
+
+### ✅ Removed static-mode org config artifacts (June 2026)
+
+- Deleted `.github/scripts/Create-EnvOrgs.ps1` — generated an incomplete org JSON (no `installations` block) for the old file-based `GITHUB_ORGANIZATIONS_FILE` mode; not wired into any active workflow
+- Removed stale `GITHUB_ORGANIZATIONS_FILE: ../env-orgs.json` from `infra/aci/prod-firehose.yml` and `infra/aci/staging-firehose.yml` (contradicted by the adjacent `GITHUB_ORGANIZATIONS_SOURCE: postgres`)
+
+### ✅ Fixed update_orgsettings workflows: OIDC login, double-$ typo, deprecated psql action (June 2026)
+
+Both `staging_update_orgsettings_table.yaml` and `main_update_orgsettings_table.yaml`:
+
+- `azure/login`: replaced deprecated JSON `creds:` format with OIDC `client-id`/`tenant-id`/`subscription-id`; added `permissions: id-token: write` block
+- PSQL step: replaced deprecated `azure/postgresql@v1.2.0` with `apt install postgresql-client` + `psql` CLI — works with any Postgres endpoint
+- Fixed `$${{ secrets.*_PSQL_SERVER }}` double-`$` typo (would have passed literal `$<value>` as server name, silently breaking the connection)
+
+---
 
 ## Completed (May 2026 — GitHub Copilot agentic session)
 
@@ -584,3 +731,39 @@ Dependabot and `npm audit` are reactive (known CVEs). [Socket.dev](https://socke
 - Session production guards (rejects `memory`/`file` providers in production)
 - Rate limiting on all API routes (GHAS alerts resolved May 2026)
 - Redis v5 auth handled correctly via `createClient({ password })` (fixed May 2026)
+
+---
+
+## Future: full resource group import via aztfexport
+
+**Prerequisites:** staging verified stable, staging → main merged, prod stabilized.
+
+Use `aztfexport` to import all remaining resources into the existing Terraform state backends.
+No data will be modified — `terraform import` only updates state; actual Azure resources are untouched.
+
+### Dev (`GitHub_OpenSource_Portal_Dev`)
+
+1. Run locally (requires `az login` + `aztfexport` installed):
+
+   ```bash
+   aztfexport resource-group GitHub_OpenSource_Portal_Dev --output-dir /tmp/aztfexport-dev
+   ```
+
+2. Feed output to agent — reconcile with existing `infra/terraform/dev/main.tf`, remove duplicate blocks for resources already in state (Service Bus namespace, queue, managed identity, role assignment, Log Analytics)
+3. Add `lifecycle { ignore_changes = [app_settings] }` to App Service resource to prevent Terraform from blanking sensitive settings not in HCL
+4. Run `terraform plan` — must show zero destructive changes before committing
+5. Commit cleaned HCL to `infra/terraform/dev/`
+
+### Prod (`GitHub_OpenSource_Portal`)
+
+Repeat same process against prod resource group using `infra/terraform/prod/` and `nihgithubportaltf` state backend.
+
+### Resources to import (both envs)
+
+- [ ] Redis Cache
+- [ ] PostgreSQL Flexible Server
+- [ ] Container Registry (ACR)
+- [ ] App Service (with `ignore_changes = [app_settings]`)
+- [ ] ACI container groups (firehose, cache builder)
+- [ ] Virtual network / subnets (if any)
+- [ ] Any remaining role assignments, diagnostic settings

@@ -4,6 +4,7 @@
 //
 
 import { NextFunction, Response } from 'express';
+
 import {
   IndividualContext,
   IIndividualContextOptions,
@@ -11,12 +12,14 @@ import {
   WebContext,
   SessionUserProperties,
   WebApiContext,
-} from '../../business/user';
-import { ReposAppRequest } from '../../interfaces';
-import { getProviders } from '../../lib/transitional';
+} from '../../business/user/index.js';
+import { getProviders } from '../../lib/transitional.js';
+
+import type { ReposApiRequest, ReposAppRequest } from '../../interfaces/index.js';
 
 export function webContextMiddleware(req: ReposAppRequest, res: Response, next: NextFunction) {
-  const { operations, insights } = getProviders(req);
+  const { operations, genericInsights } = getProviders(req);
+  const requestInsights = req.insights || genericInsights;
   if (req.apiContext) {
     const msg = 'INVALID: API and web contexts should not be mixed';
     console.warn(msg);
@@ -38,7 +41,7 @@ export function webContextMiddleware(req: ReposAppRequest, res: Response, next: 
   const options: IIndividualContextOptions = {
     corporateIdentity: null,
     link: null,
-    insights,
+    insights: requestInsights,
     operations,
     webApiContext: null,
     webContext,
@@ -48,21 +51,34 @@ export function webContextMiddleware(req: ReposAppRequest, res: Response, next: 
   return next();
 }
 
-export function apiContextMiddleware(req, res: Response, next: NextFunction) {
-  const { operations, insights } = getProviders(req);
+export function apiContextMiddleware(req: ReposApiRequest, res: Response, next: NextFunction) {
+  const { genericInsights } = getProviders(req);
+  const requestInsights = req.insights || genericInsights;
+  const { operations } = getProviders(req);
   if (req.individualContext) {
     const msg = 'INVALID: API and web contexts should not be mixed';
     console.warn(msg);
     return next(new Error(msg));
   }
   const webApiContext = new WebApiContext();
+  // when using an authenticated session, provide a web context for session-based features
+  let webContext: WebContext | null = null;
+  if ((req as any).isAuthenticated?.() && (req as any).session) {
+    const webContextOptions: IWebContextOptions = {
+      baseUrl: '/',
+      request: req as unknown as ReposAppRequest,
+      response: res,
+      sessionUserProperties: new SessionUserProperties((req as any).user),
+    };
+    webContext = new WebContext(webContextOptions);
+  }
   const options: IIndividualContextOptions = {
     corporateIdentity: null,
     link: null,
-    insights,
+    insights: requestInsights,
     operations,
     webApiContext,
-    webContext: null,
+    webContext,
   };
   const individualContext = new IndividualContext(options);
   req.apiContext = individualContext;

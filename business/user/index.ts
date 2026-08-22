@@ -3,25 +3,28 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import pugLoad from 'pug-load';
+import { Response } from 'express';
 import fs from 'fs';
 import objectPath from 'object-path';
+import pugLoad from 'pug-load';
+import type { TelemetryClient } from 'applicationinsights';
 
 import Debug from 'debug';
 const debug = Debug.debug('context');
 
-import { addBreadcrumb, isCodespacesAuthenticating } from '../../lib/utils';
-import { Operations } from '../operations';
-import { UserContext } from './aggregate';
+import { isCodespacesAuthenticating } from '../../lib/utils.js';
+import { Operations } from '../operations/index.js';
+import { UserContext } from './aggregate.js';
 import {
   ReposAppRequest,
-  IReposAppResponse,
   IProviders,
   UserAlertType,
   IAppSession,
   ICorporateLink,
   IDictionary,
-} from '../../interfaces';
+} from '../../interfaces/index.js';
+
+import { SessionFlag } from '../features/sessionFlags.js';
 
 // - - - identity
 
@@ -50,7 +53,7 @@ export interface ICorporateIdentity {
 export interface IWebContextOptions {
   baseUrl?: string;
   request: ReposAppRequest;
-  response: IReposAppResponse;
+  response: Response;
   sessionUserProperties: SessionUserProperties;
 }
 
@@ -205,7 +208,7 @@ class PugPlugins {
 export class WebContext {
   private _baseUrl: string;
   private _request: ReposAppRequest;
-  private _response: IReposAppResponse;
+  private _response: Response;
   private _sessionUserProperties: SessionUserProperties;
   private _tokens: ReposGitHubTokensSessionAdapter;
 
@@ -238,9 +241,41 @@ export class WebContext {
     return `${approvalScheme}://${displayHostname}${slashPrefix}${relative}`;
   }
 
-  pushBreadcrumb(title: string, optionalLink?: string | boolean): void {
-    const req = this._request;
-    addBreadcrumb(req, title, optionalLink);
+  hasSessionFlag(flag: string): boolean {
+    const session = this._request['session'] as IAppSession;
+    return session?.sessionFlags?.includes(flag) || false;
+  }
+
+  addSessionFlag(flag: string): boolean {
+    const session = this._request['session'] as IAppSession;
+    if (!session) {
+      return false;
+    }
+    if (!session.sessionFlags) {
+      session.sessionFlags = [];
+    }
+    if (!session.sessionFlags.includes(flag)) {
+      session.sessionFlags.push(flag);
+    }
+    return true;
+  }
+
+  removeSessionFlag(flag: string): boolean {
+    const session = this._request['session'] as IAppSession;
+    if (!session?.sessionFlags) {
+      return false;
+    }
+    const index = session.sessionFlags.indexOf(flag);
+    if (index >= 0) {
+      session.sessionFlags.splice(index, 1);
+      return true;
+    }
+    return false;
+  }
+
+  getSessionFlags(): string[] {
+    const session = this._request['session'] as IAppSession;
+    return session?.sessionFlags ? [...session.sessionFlags] : [];
   }
 
   // NOTE: This function is direct from the legacy provider... it could move to
@@ -405,7 +440,7 @@ export class WebContext {
 export interface IIndividualContextOptions {
   corporateIdentity: ICorporateIdentity;
   link: ICorporateLink | null | undefined;
-  insights: any;
+  insights: TelemetryClient;
   webApiContext: WebApiContext | null | undefined;
   webContext: WebContext | null | undefined;
   operations: Operations;
@@ -421,6 +456,7 @@ export class IndividualContext {
   private _operations: Operations;
   private _aggregations: UserContext;
   private _initialView: IDictionary<any>;
+  private _insights: TelemetryClient;
 
   constructor(options: IIndividualContextOptions) {
     this._initialView = {};
@@ -430,6 +466,7 @@ export class IndividualContext {
     this._additionalLinks = [];
     this._webContext = options.webContext;
     this._operations = options.operations;
+    this._insights = options.insights;
   }
 
   get corporateIdentity(): ICorporateIdentity {
@@ -456,6 +493,10 @@ export class IndividualContext {
 
   get hasAdditionalLinks() {
     return this._additionalLinks.length > 0;
+  }
+
+  get insights() {
+    return this._insights;
   }
 
   setAdditionalLinks(additionalLinks: ICorporateLink[]) {
@@ -527,8 +568,7 @@ export class IndividualContext {
       corporateId: corporateIdentity.id,
       corporateUsername: corporateIdentity.username,
       corporateDisplayName: corporateIdentity.displayName,
-      corporateMailAddress: null,
-      corporateAlias: null,
+      corporateMailAddress: corporateIdentity.username ?? null,
       isServiceAccount: false,
       serviceAccountMail: undefined,
     };
@@ -536,10 +576,22 @@ export class IndividualContext {
   }
 
   async isPortalAdministrator(): Promise<boolean> {
+    const { insights } = this;
     const operations = this._operations;
     const ghi = this.getGitHubIdentity()?.username;
     const link = this._link;
-    this._isPortalAdministrator = await operations.isPortalSudoer(ghi, link);
+    let isSudoer = await operations.isPortalSudoer(insights, ghi, link);
+    if (isSudoer && this._webContext?.hasSessionFlag(SessionFlag.NegatePortalAdmin)) {
+      insights?.trackEvent({
+        name: 'PortalAdminNegatedBySessionFlag',
+        properties: {
+          githubLogin: ghi,
+          corporateId: this._corporateIdentity?.id,
+        },
+      });
+      isSudoer = false;
+    }
+    this._isPortalAdministrator = isSudoer;
     return this._isPortalAdministrator;
   }
 

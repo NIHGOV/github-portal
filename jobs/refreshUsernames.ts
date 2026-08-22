@@ -6,39 +6,41 @@
 // Job: Backfill aliases (3)
 // Job: User attributes hygiene - alias backfills (4)
 
-import job from '../job';
+import job from '../job.js';
 
-import throat from 'throat';
-import { shuffle } from 'lodash';
+import { throat } from '../vendor/throat/index.js';
 
-import { sleep } from '../lib/utils';
-import { IProviders, IReposJobResult, UnlinkPurpose } from '../interfaces';
-import { ErrorHelper } from '../lib/transitional';
+import lodash from 'lodash';
+const { shuffle } = lodash;
+
+import { sleep } from '../lib/utils.js';
+import { IProviders, IReposJobResult, UnlinkPurpose } from '../interfaces/index.js';
+import { ErrorHelper } from '../lib/transitional.js';
+
+const INSIGHTS_PREFIX = 'JobRefreshUsernames';
 
 job.runBackgroundJob(refresh, {
-  insightsPrefix: 'JobRefreshUsernames',
+  insightsPrefix: INSIGHTS_PREFIX,
 });
 
 async function refresh(providers: IProviders): Promise<IReposJobResult> {
-  const { config, operations, insights, linkProvider, graphProvider } = providers;
+  const { config, operations, genericInsights: insights, linkProvider, graphProvider } = providers;
+  insights?.trackEvent({
+    name: `${INSIGHTS_PREFIX}Start`,
+    properties: {
+      time: new Date(),
+    },
+  });
   if (config?.jobs?.refreshWrites !== true) {
     console.log('job is currently disabled to avoid metadata refresh/rewrites');
     return;
   }
 
-  const backfillAliasesOnly = config.process.get('BACKFILL_ALIASES') === '1';
   const terminateLinksAndMemberships = config.process.get('REFRESH_USERNAMES_TERMINATE_ACCOUNTS') === '1';
 
   console.log('reading all links');
-  let allLinks = shuffle(await linkProvider.getAll());
+  const allLinks = shuffle(await linkProvider.getAll());
   console.log(`READ: ${allLinks.length} links`);
-
-  let backfilledCount = 0;
-  if (backfillAliasesOnly) {
-    console.log(`backfilling aliases only`);
-    allLinks = allLinks.filter((link) => !link.corporateAlias);
-    console.log(`FILTERED: ${allLinks.length} links needing aliases`);
-  }
 
   insights.trackEvent({
     name: 'JobRefreshUsernamesReadLinks',
@@ -54,7 +56,7 @@ async function refresh(providers: IProviders): Promise<IReposJobResult> {
   let updatedAvatars = 0;
   let updatedAadNames = 0;
   let updatedCorporateMails = 0;
-  let updatedAadUpns = 0; // should be super rare
+  let updatedAadUpns = 0;
 
   const userDetailsThroatCount = 1;
   const secondsDelayAfterError = 5;
@@ -133,15 +135,6 @@ async function refresh(providers: IProviders): Promise<IReposJobResult> {
                 changed = true;
                 ++updatedCorporateMails;
               }
-              if (graphInfo.mailNickname && link.corporateAlias !== graphInfo.mailNickname.toLowerCase()) {
-                link.corporateAlias = graphInfo.mailNickname.toLowerCase();
-                changed = true;
-                if (backfillAliasesOnly) {
-                  ++backfilledCount;
-                }
-              } else if (!graphInfo.mailNickname && backfillAliasesOnly) {
-                console.warn(`No mailNickname for ${link.corporateId} (${link.corporateUsername})`);
-              }
             }
           } catch (graphLookupError) {
             // Ignore graph lookup issues, other jobs handle terminated employees
@@ -172,7 +165,9 @@ async function refresh(providers: IProviders): Promise<IReposJobResult> {
             });
             if (terminateLinksAndMemberships) {
               try {
-                await operations.terminateLinkAndMemberships(id, { purpose: UnlinkPurpose.Deleted });
+                await operations.terminateLinkAndMemberships(insights, id, {
+                  purpose: UnlinkPurpose.Deleted,
+                });
                 insights.trackEvent({
                   name: 'JobRefreshUsernamesUnlinkDelete',
                   properties: { githubid: id, error: getDetailsError.message },
@@ -204,12 +199,6 @@ async function refresh(providers: IProviders): Promise<IReposJobResult> {
     )
   );
 
-  if (backfillAliasesOnly) {
-    console.log();
-    console.log(`Backfilled ${backfilledCount} aliases`);
-    console.log();
-  }
-
   console.log('All done with', errors, 'errors. Not found errors:', notFoundErrors);
   console.dir(errorList);
   console.log();
@@ -220,6 +209,12 @@ async function refresh(providers: IProviders): Promise<IReposJobResult> {
   console.log(`Corporate name changes: ${updatedAadNames}`);
   console.log(`Corporate username changes: ${updatedAadUpns}`);
   console.log(`Updated corporate mails: ${updatedCorporateMails}`);
+  insights?.trackEvent({
+    name: `${INSIGHTS_PREFIX}end`,
+    properties: {
+      time: new Date(),
+    },
+  });
 
   return {
     successProperties: {

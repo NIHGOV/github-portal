@@ -9,31 +9,42 @@ import os from 'os';
 import { DateTime } from 'luxon';
 
 import ProcessOrganizationWebhook, {
-  IGitHubWebhookProperties,
-} from '../business/webhooks/organizationProcessor';
-import {
+  GitHubWebhookProperties,
+} from '../business/webhooks/organizationProcessor.js';
+import { sleep } from '../lib/utils.js';
+import { normalizeWebhookRawBody, validateWebhookSignature } from '../lib/webhookSignature.js';
+import getCompanySpecificDeployment from '../middleware/companySpecificDeployment.js';
+import job from '../job.js';
+
+import type { IQueueMessage } from '../lib/queues/index.js';
+import type {
   IGitHubAppInstallation,
   IGitHubWebhookEnterprise,
   IProviders,
   IReposJob,
   IReposJobResult,
-} from '../interfaces';
-import { sleep } from '../lib/utils';
-import { IQueueMessage } from '../lib/queues';
-import getCompanySpecificDeployment from '../middleware/companySpecificDeployment';
-import job from '../job';
+} from '../interfaces/index.js';
 
-const runningAsOngoingDeployment = true;
+const RUNNING_AS_ONGOING_DEPLOYMENT = true;
+const HARD_ABORT_MS = 1000 * 60 * 5; // 5 minutes
+const EVENTS_TO_COMPLETELY_IGNORE = ['installation', 'ping', 'star', 'watch'];
+const USER_ACTIONS_TO_HANDLE = ['transferred', 'created'];
+const EVENTS_TO_ALWAYS_HANDLE = ['repository_advisory'];
+const RECENT_EVENT_METRIC_INTERVAL_MS = 1000 * 60 * 5; // 5 minutes
+const INSIGHTS_PREFIX = 'events';
 
-const hardAbortMs = 1000 * 60 * 5; // 5 minutes
+let recentlyProcessedEvents: number;
 
 job.run(firehose, {
-  insightsPrefix: 'JobFirehose',
+  insightsPrefix: INSIGHTS_PREFIX,
 });
 
 async function firehose(providers: IProviders, { started }: IReposJob): Promise<IReposJobResult> {
+  const { genericInsights: insights } = providers;
   const processedEventTypes = {};
   const interestingEvents = 0;
+  recentlyProcessedEvents = 0;
+  let recentBatchStarted = new Date();
   let processedEvents = 0;
   const config = providers.config;
   const jobMinutesFrequency = config.github.webhooks.runtimeMinutes
@@ -41,12 +52,38 @@ async function firehose(providers: IProviders, { started }: IReposJob): Promise<
     : 5;
   const runtimeSeconds =
     (jobMinutesFrequency - 1) * 60 + 30; /* 30 second flex in the last minute instead of 60s */
-  config.github?.webhooks?.serviceBus?.queue &&
+  if (config.github?.webhooks?.serviceBus?.queue) {
     console.log(`bus: ${config.github.webhooks.serviceBus.queue}`);
-  if (runningAsOngoingDeployment) {
+  }
+  const reportRecentMetrics = function () {
+    const now = new Date();
+    const elapsedMs = now.getTime() - recentBatchStarted.getTime();
+    const elapsedMinutes = elapsedMs / (1000 * 60);
+    const events = recentlyProcessedEvents;
+    const eventsPerMinute = events / elapsedMinutes;
+    insights?.trackMetric({ name: INSIGHTS_PREFIX + '.recent.count', value: eventsPerMinute });
+    insights?.trackEvent({
+      name: INSIGHTS_PREFIX + '.recent.counted',
+      properties: {
+        eventsProcessed: events,
+        from: recentBatchStarted.toISOString(),
+        to: now.toISOString(),
+        elapsedMinutes: elapsedMinutes.toFixed(2),
+        eventsPerMinute: eventsPerMinute.toFixed(2),
+      },
+    });
+    recentlyProcessedEvents = 0;
+    recentBatchStarted = now;
+  };
+  const recentInterval = setInterval(() => {
+    reportRecentMetrics();
+  }, RECENT_EVENT_METRIC_INTERVAL_MS);
+  if (RUNNING_AS_ONGOING_DEPLOYMENT) {
     console.log('webhook processor is configured to keep running, it will not exit');
   } else {
     setTimeout(() => {
+      clearInterval(recentInterval);
+      reportRecentMetrics();
       const finishing = DateTime.utc().toISO();
       console.log(
         `Ending run after ${runtimeSeconds}s at ${finishing} after finding ${interestingEvents} events of interest and processing ${processedEvents}`
@@ -68,7 +105,7 @@ async function firehose(providers: IProviders, { started }: IReposJob): Promise<
     ? parseInt(config.github.webhooks.emptyQueueDelaySeconds)
     : 10;
 
-  if (runningAsOngoingDeployment) {
+  if (RUNNING_AS_ONGOING_DEPLOYMENT) {
     console.log(
       `Webhooks processor started ${started} and will run with empty delays of ${emptyQueueDelaySeconds}s`
     );
@@ -77,10 +114,20 @@ async function firehose(providers: IProviders, { started }: IReposJob): Promise<
       `Job started ${started} and will run for ${runtimeSeconds}s with empty delays of ${emptyQueueDelaySeconds}s`
     );
   }
-  const insights = providers.insights;
   const webhooksConfig = config.github.webhooks;
   if (!webhooksConfig) {
     throw new Error('No webhoooks queue configuration');
+  }
+  if (!webhooksConfig.sharedSecret && !webhooksConfig.allowInvalidSignature) {
+    throw new Error(
+      'No GITHUB_WEBHOOK_SHARED_SECRET configured. Webhook HMAC-SHA256 validation requires a shared secret. ' +
+        'If you intentionally want to allow invalid signatures, set GITHUB_WEBHOOK_ALLOW_INVALID_SIGNATURE=1.'
+    );
+  }
+  if (!webhooksConfig.sharedSecret) {
+    console.warn(
+      'WARNING: No GITHUB_WEBHOOK_SHARED_SECRET configured. HMAC-SHA256 validation is disabled (GITHUB_WEBHOOK_ALLOW_INVALID_SIGNATURE=1).'
+    );
   }
   const webhookQueueProcessor = providers.webhookQueueProcessor;
   if (!webhookQueueProcessor) {
@@ -97,17 +144,11 @@ async function firehose(providers: IProviders, { started }: IReposJob): Promise<
     `Parallelism for this run will be ${parallelism} logical threads, offset by ${sliceDelayPerThread}s`
   );
   insights?.trackEvent({
-    name: 'JobFirehoseStarted',
+    name: INSIGHTS_PREFIX + '.started',
     properties: {
       hostname: os.hostname(),
-      // queue: serviceBusConfig.queue,
-      // subscription: serviceBusConfig.subscriptionName,
-      // messagesInQueue: messagesInQueue.toString(),
-      // deadLetters: deadLetters.toString(),
     },
   });
-  // insights.trackMetric({ name: 'FirehoseMessagesInQueue', value: messagesInQueue });
-  // insights.trackMetric({ name: 'FirehoseDeadLetters', value: deadLetters });
   const threads: Promise<void>[] = [];
   let delay = 0;
   for (let i = 0; i < parallelism; i++) {
@@ -126,6 +167,7 @@ async function firehose(providers: IProviders, { started }: IReposJob): Promise<
     threadNumber: number,
     startupDelay: number
   ): Promise<void> {
+    const { genericInsights: insights } = providers;
     if (startupDelay > 0) {
       const ms = startupDelay * 1000;
       console.log(`[thread ${threadNumber}] delay ${ms}ms`);
@@ -133,15 +175,13 @@ async function firehose(providers: IProviders, { started }: IReposJob): Promise<
     }
     console.log(`[thread ${threadNumber}] started`);
     try {
-      // eslint-disable-next-line no-constant-condition
       while (true) {
         await iterate(providers, threadNumber);
       }
     } catch (error) {
-      const insights = providers.insights;
-      insights.trackException({ exception: error });
-      insights.trackEvent({
-        name: 'JobFirehoseFatalError',
+      insights?.trackException({ exception: error });
+      insights?.trackEvent({
+        name: INSIGHTS_PREFIX + '.fatal_error',
         properties: {
           message: error.message,
         },
@@ -152,7 +192,7 @@ async function firehose(providers: IProviders, { started }: IReposJob): Promise<
   async function iterate(providers: IProviders, threadNumber: number): Promise<void> {
     const { webhookQueueProcessor } = providers;
     let messages: IQueueMessage[] = null;
-    let intervalHandle = setTimeout(hardAbort, hardAbortMs);
+    let intervalHandle = setTimeout(hardAbort, HARD_ABORT_MS);
     try {
       messages = await webhookQueueProcessor.receiveMessages();
     } catch (getError) {
@@ -169,7 +209,8 @@ async function firehose(providers: IProviders, { started }: IReposJob): Promise<
       await sleep(emptyQueueDelaySeconds * 1000);
       return;
     }
-    intervalHandle = setTimeout(hardAbort, hardAbortMs);
+    recentlyProcessedEvents += messages.length;
+    intervalHandle = setTimeout(hardAbort, HARD_ABORT_MS);
     try {
       for (const message of messages) {
         try {
@@ -187,25 +228,33 @@ async function firehose(providers: IProviders, { started }: IReposJob): Promise<
   }
 
   async function handle(providers: IProviders, message: IQueueMessage): Promise<void> {
-    const { operations, insights, webhookQueueProcessor } = providers;
+    const { genericInsights: insights, webhookQueueProcessor } = providers;
     let totalSeconds: number = null;
     const logicAppStarted = message.customProperties.started
       ? DateTime.fromISO(message.customProperties.started)
       : null;
     if (logicAppStarted) {
-      // const enqueued = lockedMessage && lockedMessage.brokerProperties ? lockedMessage.brokerProperties.EnqueuedTimeUtc : null;
-      // const serviceBusDelay = moment.utc(enqueued, 'ddd, DD MMM YYYY HH:mm:ss'); // console.log('delays - bus delay: ' + serviceBusDelay.fromNow() + ', logic app to now: ' + logicAppStarted.fromNow() + ', total ms: ' + totalMs.toString());
       totalSeconds = DateTime.utc().diff(logicAppStarted, 'seconds').seconds;
-      insights.trackMetric({ name: 'JobFirehoseQueueDelay', value: totalSeconds });
+      insights?.trackMetric({ name: INSIGHTS_PREFIX + '.queue_delay', value: totalSeconds });
     }
+    if (!checkWebhookSignature(providers, message)) {
+      return;
+    }
+    const webhook = message.body as any;
+    const eventType = message.customProperties['event'] || '';
+    const action = webhook?.action || '';
     let deletedAlready = false;
     const acknowledgeEvent = function () {
       if (deletedAlready) {
-        console.warn(`[message ${message.identifier} was already deleted] [start latency ${totalSeconds}s]`);
+        console.warn(
+          `\t\t\t\t\t[message ${message.identifier} was already deleted] [start latency ${totalSeconds}s] event=${eventType} action=${action}`
+        );
         return;
       }
       deletedAlready = true;
-      console.log(`[message ${message.identifier}] deleted [start latency ${totalSeconds}s]`);
+      console.log(
+        `\t\t\t\t\t[message ${message.identifier}] deleted [start latency ${totalSeconds}s] event=${eventType} action=${action}`
+      );
       webhookQueueProcessor
         .deleteMessage(message)
         .then((ok) => {
@@ -215,101 +264,193 @@ async function firehose(providers: IProviders, { started }: IReposJob): Promise<
           console.dir(deleteError);
         });
     };
-    const webhook = message.body as any;
-    const eventType = message.customProperties['event'] || '';
-    let organization = null;
-    const installation = webhook.installation as IGitHubAppInstallation;
-    const enterprise = webhook.enterprise as IGitHubWebhookEnterprise;
-    let orgName = null;
-    const deployment = getCompanySpecificDeployment();
-    const processedElsewhere = deployment?.features?.firehose?.processWebhook
-      ? await deployment.features.firehose.processWebhook(
-          providers,
-          webhook,
-          eventType,
-          enterprise,
-          installation,
-          acknowledgeEvent
-        )
-      : false;
-    if (processedElsewhere === true) {
-      console.log(`[the webhook was processed by a company-specific handler: ${message.identifier}]`);
-      acknowledgeEvent();
-      return;
+    await routeAndProcessWebhook(providers, message, acknowledgeEvent, processedEventTypes);
+  }
+}
+
+// HMAC-SHA256 signature validation: adding additional validation to the open source
+// project so that any static analysis understands that HMAC256 validation is also in
+// place even if validated upstream in the message system.
+function checkWebhookSignature(providers: IProviders, message: IQueueMessage): boolean {
+  const { genericInsights: insights, webhookQueueProcessor } = providers;
+  const signature256 = message.customProperties['signature256'] as string;
+  const deliveryId = message.customProperties['delivery'] || '';
+  const appId = message.customProperties['appid'] || '';
+  const eventStarted = message.customProperties['started'] || '';
+  const eventName = message.customProperties['event'] || '';
+  const clientTrackingId = message.customProperties['x-ms-client-tracking-id'] || '';
+  const sharedSecret = providers.config?.github?.webhooks?.sharedSecret;
+  const allowInvalidSignature = providers.config?.github?.webhooks?.allowInvalidSignature === true;
+  const acceptUnsigned = providers.config?.github?.webhooks?.acceptUnsigned === true;
+  const rawBody = normalizeWebhookRawBody(message.unparsedBody);
+  const signatureResult = validateWebhookSignature({
+    signature: signature256,
+    rawBody,
+    secret: sharedSecret,
+    allowInvalidSignature,
+    acceptUnsigned,
+  });
+  const telemetryProperties = {
+    delivery: deliveryId,
+    event: eventName,
+    started: eventStarted,
+    appId,
+    clientTrackingId,
+  };
+  if (signatureResult.outcome === 'missing') {
+    insights?.trackEvent({
+      name: INSIGHTS_PREFIX + '.signature256_missing',
+      properties: telemetryProperties,
+    });
+    if (signatureResult.proceed) {
+      console.warn(`[audit] No signature256 for delivery=${deliveryId} event=${eventName}, allowing`);
+    } else {
+      console.warn(`No signature256 for delivery=${deliveryId} event=${eventName}, skipping`);
+      webhookQueueProcessor.deleteMessage(message).catch((deleteError) => console.dir(deleteError));
+      return false;
     }
-    if (installation) {
-      if (installation.target_type && installation.target_type === 'Organization') {
-        const id = installation.target_id;
-        try {
-          const orgById = operations.getOrganizationById(id);
-          orgName = orgById.name;
-        } catch (notConfiguredById) {
-          console.log(`not configured: org ID ${id}`);
-          acknowledgeEvent();
-          return;
-        }
-      } else if (installation.target_type) {
-        console.log(`invalid target type ${installation.target_type} for installation id=${installation.id}`);
+  } else if (signatureResult.outcome === 'invalid') {
+    insights?.trackEvent({
+      name: INSIGHTS_PREFIX + '.signature256_invalid',
+      properties: {
+        ...telemetryProperties,
+        received: signatureResult.received.slice(0, 12),
+      },
+    });
+    if (signatureResult.proceed) {
+      console.warn(`[audit] Invalid signature256 for delivery=${deliveryId} event=${eventName}, allowing`);
+    } else {
+      console.warn(`Invalid signature256 for delivery=${deliveryId} event=${eventName}, skipping`);
+      webhookQueueProcessor.deleteMessage(message).catch((deleteError) => console.dir(deleteError));
+      return false;
+    }
+  } else {
+    insights?.trackEvent({
+      name: INSIGHTS_PREFIX + '.signature256_valid',
+      properties: telemetryProperties,
+    });
+  }
+  return true;
+}
+
+async function routeAndProcessWebhook(
+  providers: IProviders,
+  message: IQueueMessage,
+  acknowledgeEvent: () => void,
+  processedEventTypes: Record<string, number>
+): Promise<void> {
+  const { operations, genericInsights: insights } = providers;
+  const webhook = message.body as any;
+  const eventType = message.customProperties['event'] || '';
+  const action = webhook?.action || '';
+  const installation = webhook.installation as IGitHubAppInstallation;
+  const enterprise = webhook.enterprise as IGitHubWebhookEnterprise;
+  if (EVENTS_TO_ALWAYS_HANDLE.includes(eventType)) {
+    // always process these events
+  } else if (EVENTS_TO_COMPLETELY_IGNORE.includes(eventType)) {
+    acknowledgeEvent();
+    return;
+  } else if (webhook?.sender?.type === 'User' && !USER_ACTIONS_TO_HANDLE.includes(action)) {
+    acknowledgeEvent();
+    insights?.trackEvent({
+      name: 'user_type.ignored',
+      properties: {
+        eventType,
+        action,
+        target_type: installation?.target_type || '',
+      },
+    });
+    console.log(
+      `Ignored user event ${message.identifier}: event=${eventType} action=${action} target_type=${installation?.target_type || ''}`
+    );
+    return;
+  }
+  const deployment = getCompanySpecificDeployment();
+  const processedElsewhere = deployment?.features?.firehose?.processWebhook
+    ? await deployment.features.firehose.processWebhook(
+        providers,
+        webhook,
+        eventType,
+        enterprise,
+        installation,
+        acknowledgeEvent
+      )
+    : false;
+  if (processedElsewhere === true) {
+    console.log(`[the webhook was processed by a company-specific handler: ${message.identifier}]`);
+    acknowledgeEvent();
+    return;
+  }
+  let orgName = null;
+  if (installation) {
+    if (installation.target_type && installation.target_type === 'Organization') {
+      const id = installation.target_id;
+      try {
+        const orgById = operations.getOrganizationById(id);
+        orgName = orgById.name;
+      } catch (notConfiguredById) {
+        console.log(`not configured: org ID ${id}`);
         acknowledgeEvent();
         return;
       }
-    }
-    if (!orgName && webhook.organization) {
-      orgName = webhook.organization ? webhook.organization.login : null;
-    }
-    if (!orgName) {
+    } else if (installation.target_type) {
+      console.log(`invalid target type ${installation.target_type} for installation id=${installation.id}`);
       acknowledgeEvent();
-      if (eventType === 'ping' || eventType === 'installation') {
-        // common events
-        return;
-      } else {
-        throw new Error('No organization.login present in the event body');
-      }
-    }
-    try {
-      organization = operations.getOrganization(orgName);
-    } catch (noOrganizationError) {
-      acknowledgeEvent();
-      const isKnownOrganization = operations.isIgnoredOrganization(orgName);
-      if (isKnownOrganization) {
-        // While we receive events for organizations being onboarded or known but ignored,
-        // these are not exceptional events, just events to skip.
-        insights.trackEvent({
-          name: 'JobFirehoseKnownOrganizationIgnored',
-          properties: {
-            orgName,
-          },
-        });
-      } else {
-        insights.trackException({ exception: noOrganizationError });
-        insights.trackEvent({
-          name: 'JobFirehoseMissingOrganizationConfiguration',
-          properties: {
-            orgName,
-          },
-        });
-      }
       return;
     }
-    const options = {
-      providers,
-      organization,
-      event: {
-        properties: message.customProperties as unknown as IGitHubWebhookProperties,
-        rawBody: message.unparsedBody,
-        body: message.body,
-      },
-      acknowledgeValidEvent: acknowledgeEvent,
-    };
-    try {
-      const interestingEvents = await ProcessOrganizationWebhook(options);
-      if (interestingEvents && eventType) {
-        processedEventTypes[eventType] += interestingEvents;
-      }
-    } catch (processingError) {
-      console.warn('Queue processing error during task phase:');
-      console.warn(processingError);
+  }
+  if (!orgName && webhook.organization) {
+    orgName = webhook.organization ? webhook.organization.login : null;
+  }
+  if (!orgName) {
+    acknowledgeEvent();
+    throw new Error('No organization.login present in the event body');
+  }
+  let organization = null;
+  try {
+    organization = operations.getOrganization(orgName);
+  } catch (noOrganizationError) {
+    acknowledgeEvent();
+    const isKnownOrganization = operations.isIgnoredOrganization(orgName);
+    if (isKnownOrganization) {
+      // While we receive events for organizations being onboarded or known but ignored,
+      // these are not exceptional events, just events to skip.
+      insights?.trackEvent({
+        name: INSIGHTS_PREFIX + '.known_organization_ignored',
+        properties: {
+          orgName,
+        },
+      });
+    } else {
+      insights?.trackException({ exception: noOrganizationError });
+      insights?.trackEvent({
+        name: INSIGHTS_PREFIX + '.missing_organization_configuration',
+        properties: {
+          orgName,
+        },
+      });
     }
+    return;
+  }
+  const options = {
+    providers,
+    insights,
+    organization,
+    event: {
+      properties: message.customProperties as unknown as GitHubWebhookProperties,
+      rawBody: message.unparsedBody,
+      body: message.body,
+    },
+    acknowledgeValidEvent: acknowledgeEvent,
+  };
+  try {
+    const interestingEvents = await ProcessOrganizationWebhook(options);
+    if (interestingEvents && eventType) {
+      processedEventTypes[eventType] += interestingEvents;
+    }
+  } catch (processingError) {
+    console.warn('Queue processing error during task phase:');
+    console.warn(processingError);
   }
 }
 

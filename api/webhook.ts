@@ -4,85 +4,109 @@
 //
 
 import { NextFunction, Response, Router } from 'express';
-import asyncHandler from 'express-async-handler';
-
 import moment from 'moment';
-import { ReposAppRequest } from '../interfaces';
 
-import { jsonError } from '../middleware';
-import { getProviders, isWebhookIngestionEndpointEnabled } from '../lib/transitional';
+import { CreateError, getProviders, isWebhookIngestionEndpointEnabled } from '../lib/transitional.js';
+import {
+  normalizeWebhookRawBody,
+  requireWebhookRawBody,
+  validateWebhookSignature,
+} from '../lib/webhookSignature.js';
 
-import OrganizationWebhookProcessor from '../business/webhooks/organizationProcessor';
+import OrganizationWebhookProcessor from '../business/webhooks/organizationProcessor.js';
+
+import type { ReposAppRequest } from '../interfaces/index.js';
+
+// This is a reference implementation but not heavily exercised as we use
+// Service Bus internally with a different set of technologies and patterns.
+// See the root README.md for more info.
 
 const router: Router = Router();
 
 interface IRequestWithRaw extends ReposAppRequest {
-  _raw?: any;
+  _raw?: string | Buffer;
 }
 
-router.use(
-  asyncHandler(async (req: IRequestWithRaw, res: Response, next: NextFunction) => {
-    if (!isWebhookIngestionEndpointEnabled(req)) {
-      return next(
-        jsonError(
-          'This feature is currently disabled. Only queue-based firehose ingestion will work at this time.',
-          401
-        )
-      );
-    }
+// codeql[js/missing-rate-limiting] - rate limiting is enforced globally in middleware/index.ts (120 req/min per identity; configure via RATE_LIMIT_MODE/RATE_LIMIT_AUDIT_* env vars)
+router.use(async (req: IRequestWithRaw, res: Response, next: NextFunction) => {
+  const { insights } = req;
+  if (!isWebhookIngestionEndpointEnabled(req)) {
+    return next(
+      CreateError.NotAuthenticated(
+        'This feature is currently disabled. Only queue-based firehose ingestion will work at this time.'
+      )
+    );
+  }
 
-    const providers = getProviders(req);
-    const { operations } = providers;
-    const body = req.body;
-    const orgName = body && body.organization && body.organization.login ? body.organization.login : null;
-    if (!orgName) {
-      return next(jsonError(new Error('No organization login in the body'), 400));
+  const providers = getProviders(req);
+  const webhooksConfig = providers.config?.github?.webhooks;
+  const { operations } = providers;
+  const body = req.body;
+  const orgName = body && body.organization && body.organization.login ? body.organization.login : null;
+  if (!orgName) {
+    return next(CreateError.InvalidParameters('No organization login in the body'));
+  }
+  try {
+    if (!req.organization) {
+      req.organization = operations.getOrganization(orgName);
     }
-    try {
-      if (!req.organization) {
-        req.organization = operations.getOrganization(orgName);
-      }
-    } catch (noOrganization) {
-      return next(
-        jsonError(new Error('This API endpoint is not configured for the provided organization name.'))
-      );
-    }
-    const properties = {
-      delivery: req.headers['x-github-delivery'] as string,
-      event: req.headers['x-github-event'] as string,
-      signature: req.headers['x-hub-signature'] as string,
-      started: moment().utc().format(),
-    };
-    if (!properties.delivery || !properties.signature || !properties.event) {
-      return next(
-        jsonError(new Error('Missing X-GitHub-Delivery, X-GitHub-Event, and/or X-Hub-Signature'), 400)
-      );
-    }
-    const event = {
-      properties: properties,
-      body: req.body,
-      rawBody: req._raw,
-    };
-    const options = {
-      providers,
-      organization: req.organization,
-      event,
-    };
-    let error = null;
-    let result = null;
-    try {
-      result = await OrganizationWebhookProcessor(options);
-    } catch (hookError) {
-      error = hookError;
-    }
-    const obj = error || result;
-    const statusCode = obj.statusCode || obj.status || (error ? 400 : 200);
-    if (error) {
-      return next(jsonError(error, statusCode));
-    }
-    res.status(statusCode);
-    res.json(result);
-  })
-);
+  } catch (noOrganization) {
+    return next(new Error('This API endpoint is not configured for the provided organization name.'));
+  }
+  const signature256 = req.headers['x-hub-signature-256'] as string;
+  const properties = {
+    delivery: req.headers['x-github-delivery'] as string,
+    event: req.headers['x-github-event'] as string,
+    signature: signature256 || (req.headers['x-hub-signature'] as string),
+    started: moment().utc().format(),
+  };
+  if (!properties.delivery || !properties.event) {
+    return next(CreateError.InvalidParameters('Missing X-GitHub-Delivery and/or X-GitHub-Event'));
+  }
+  let rawBody: string;
+  try {
+    rawBody = normalizeWebhookRawBody(requireWebhookRawBody(req._raw, 'HTTP webhook raw body'));
+  } catch (rawBodyError) {
+    return next(CreateError.InvalidParameters(rawBodyError.message, rawBodyError));
+  }
+  const signatureResult = validateWebhookSignature({
+    signature: signature256,
+    rawBody,
+    secret: webhooksConfig?.sharedSecret,
+    allowInvalidSignature: webhooksConfig?.allowInvalidSignature === true,
+    acceptUnsigned: webhooksConfig?.acceptUnsigned === true,
+  });
+  if (signatureResult.outcome === 'missing' && !signatureResult.proceed) {
+    return next(CreateError.NotAuthenticated('Missing or unconfigured X-Hub-Signature-256'));
+  }
+  if (signatureResult.outcome === 'invalid' && !signatureResult.proceed) {
+    return next(CreateError.NotAuthenticated('Invalid X-Hub-Signature-256'));
+  }
+  const event = {
+    properties: properties,
+    body: req.body,
+    rawBody,
+  };
+  const options = {
+    providers,
+    insights,
+    organization: req.organization,
+    event,
+  };
+  let error = null;
+  let result = null;
+  try {
+    result = await OrganizationWebhookProcessor(options);
+  } catch (hookError) {
+    error = hookError;
+  }
+  const obj = error || result;
+  const statusCode = obj.statusCode || obj.status || (error ? 400 : 200);
+  if (error) {
+    return next(CreateError.CreateStatusCodeError(statusCode, error.message, error));
+  }
+  res.status(statusCode);
+  res.json(result);
+});
 
 export default router;

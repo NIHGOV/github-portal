@@ -4,19 +4,17 @@
 //
 
 import { NextFunction, Response, Router } from 'express';
-import asyncHandler from 'express-async-handler';
 const router: Router = Router();
 
-import { getProviders } from '../lib/transitional';
-
-import { requirePortalAdministrationPermission } from '../middleware/business/administration';
-import { PostgresLinkProvider } from '../lib/linkProviders/postgres/postgresLinkProvider';
-import { Operations } from '../business';
-import { Organization } from '../business';
-import { Account } from '../business';
-import { ILinkProvider } from '../lib/linkProviders';
-import { ICorporateLink, ReposAppRequest, IProviders, UnlinkPurpose } from '../interfaces';
-import { isCodespacesAuthenticating } from '../lib/utils';
+import { getProviders } from '../lib/transitional.js';
+import { requirePortalAdministrationPermission } from '../middleware/business/administration.js';
+import { PostgresLinkProvider } from '../lib/linkProviders/postgres/postgresLinkProvider.js';
+import { Operations } from '../business/index.js';
+import { Organization } from '../business/index.js';
+import { Account } from '../business/index.js';
+import { ICorporateLink, ReposAppRequest, IProviders, UnlinkPurpose } from '../interfaces/index.js';
+import { isCodespacesAuthenticating, stringParam } from '../lib/utils.js';
+import type { ILinkProvider } from '../lib/linkProviders/index.js';
 
 // - - - Middleware: require that the user isa portal administrator to continue
 router.use(requirePortalAdministrationPermission);
@@ -270,7 +268,7 @@ async function getGitHubAccountInformationById(operations: Operations, id: strin
 }
 
 router.get('/whois/id/:githubid', function (req: ReposAppRequest, res: Response, next: NextFunction) {
-  const thirdPartyId = req.params.githubid;
+  const thirdPartyId = stringParam(req, 'githubid');
   const providers = getProviders(req);
   queryByGitHubId(providers, thirdPartyId)
     .then((query) => {
@@ -299,136 +297,57 @@ interface IIDValue {
   value: string;
 }
 
-router.get(
-  '/whois/link/:linkid',
-  asyncHandler(async function (req: ReposAppRequest, res: Response, next: NextFunction) {
-    const linkId = req.params.linkid;
-    const { linkProvider: lp } = getProviders(req);
-    const linkProvider = lp as PostgresLinkProvider;
-    const link = await linkProvider.getByPostgresLinkId(linkId);
-    return req.individualContext.webContext.render({
-      view: 'organization/whois/linkEditorPage',
-      title: `Link ${linkId}`,
-      state: {
-        query: {
-          link,
-        },
+router.get('/whois/link/:linkid', async function (req: ReposAppRequest, res: Response, next: NextFunction) {
+  const linkId = stringParam(req, 'linkid');
+  const { linkProvider: lp } = getProviders(req);
+  const linkProvider = lp as PostgresLinkProvider;
+  const link = await linkProvider.getByPostgresLinkId(linkId);
+  return req.individualContext.webContext.render({
+    view: 'organization/whois/linkEditorPage',
+    title: `Link ${linkId}`,
+    state: {
+      query: {
+        link,
       },
-    });
-  })
-);
+    },
+  });
+});
 
-router.post(
-  '/whois/link/:linkid',
-  asyncHandler(async function (req: ReposAppRequest, res: Response, next: NextFunction) {
-    const { config } = getProviders(req);
-    const linkId = req.params.linkid;
-    const isLinkDelete = req.body['delete-link'];
-    req.body['isServiceAccount'] = req.body['isServiceAccount'] === 'yes';
-    const keys = [
-      'corporateId',
-      'corporateUsername',
-      'corporateDisplayName',
-      'thirdPartyId',
-      'thirdPartyUsername',
-      'thirdPartyAvatar',
-      'isServiceAccount',
-      'serviceAccountMail',
-    ];
-    for (const key of keys) {
-      if (!isLinkDelete && !req.body[key]) {
-        return next(new Error(`Must provide a value for ${key}`));
-      }
-      break;
+router.post('/whois/link/:linkid', async function (req: ReposAppRequest, res: Response, next: NextFunction) {
+  const { config } = getProviders(req);
+  const linkId = stringParam(req, 'linkid');
+  const isLinkDelete = req.body['delete-link'];
+  req.body['isServiceAccount'] = req.body['isServiceAccount'] === 'yes';
+  const keys = [
+    'corporateId',
+    'corporateUsername',
+    'corporateDisplayName',
+    'thirdPartyId',
+    'thirdPartyUsername',
+    'thirdPartyAvatar',
+    'isServiceAccount',
+    'serviceAccountMail',
+  ];
+  for (const key of keys) {
+    if (!isLinkDelete && !req.body[key]) {
+      return next(new Error(`Must provide a value for ${key}`));
     }
-    const { linkProvider: lp } = getProviders(req);
-    const linkProvider = lp as PostgresLinkProvider;
-    const link = await linkProvider.getByPostgresLinkId(linkId);
-    const messages = [`Link ID ${linkId}`];
-    let hadUpdates = false;
-    for (const key of keys) {
-      // loose comparisons
-      if (!isLinkDelete && link[key] != req.body[key]) {
-        messages.push(`${key}: value has been updated from "${link[key]}" to "${req.body[key]}"`);
-        link[key] = req.body[key];
-        hadUpdates = true;
-      }
+    break;
+  }
+  const { linkProvider: lp } = getProviders(req);
+  const linkProvider = lp as PostgresLinkProvider;
+  const link = await linkProvider.getByPostgresLinkId(linkId);
+  const messages = [`Link ID ${linkId}`];
+  let hadUpdates = false;
+  for (const key of keys) {
+    // loose comparisons
+    if (!isLinkDelete && link[key] != req.body[key]) {
+      messages.push(`${key}: value has been updated from "${link[key]}" to "${req.body[key]}"`);
+      link[key] = req.body[key];
+      hadUpdates = true;
     }
-    const renderOutput = function () {
-      req.individualContext.webContext.render({
-        view: 'organization/whois/linkUpdate',
-        title: `Updating link ${linkId}`,
-        state: {
-          messages,
-          linkId,
-          signinPathSegment: isCodespacesAuthenticating(config, 'aad') ? 'sign-in' : 'signin',
-        },
-      });
-    };
-    if (isLinkDelete) {
-      messages.push(`Deleting link ${linkId}`);
-      try {
-        await linkProvider.deleteLink(link);
-        messages.push('Link deleted OK');
-      } catch (error) {
-        messages.push(error.toString());
-      }
-      return renderOutput();
-    }
-    if (hadUpdates) {
-      messages.push('Updating values');
-      await linkProvider.updateLink(link);
-      return renderOutput();
-    } else {
-      messages.push('No link values changed, it was not updated');
-      return renderOutput();
-    }
-  })
-);
-
-router.post(
-  '/whois/link/',
-  asyncHandler(async function (req: ReposAppRequest, res: Response, next: NextFunction) {
-    const { config, operations } = getProviders(req);
-    const allowAdministratorManualLinking = operations?.config?.features?.allowAdministratorManualLinking;
-    if (!allowAdministratorManualLinking) {
-      return next(new Error('The manual linking feature is not enabled'));
-    }
-
-    // set isServiceAccount to true only if it contains the value "yes", otherwise use false
-    req.body['isServiceAccount'] = req.body['isServiceAccount'] === 'yes';
-
-    // create link object with the values received from the request
-    const link: ICorporateLink = {
-      corporateId: req.body['corporateId'],
-      corporateUsername: req.body['corporateUsername'],
-      corporateDisplayName: req.body['corporateDisplayName'],
-      thirdPartyId: req.body['thirdPartyId'],
-      thirdPartyUsername: req.body['thirdPartyUsername'],
-      thirdPartyAvatar: req.body['thirdPartyAvatar'],
-      isServiceAccount: req.body['isServiceAccount'],
-      serviceAccountMail: req.body['serviceAccountMail'],
-      // these both values are currently not transferred, but required by the link object
-      corporateMailAddress: '',
-      corporateAlias: '',
-    };
-
-    const messages = [];
-    // Add only the non empty strings to the message log
-    for (const [key, value] of Object.entries(link)) {
-      if (value) {
-        messages.push(`${key}: value has been set to "${value}"`);
-      }
-    }
-
-    const linkProvider = operations.providers.linkProvider as PostgresLinkProvider;
-
-    // try to create link, if it fails it will directly throw into the users face
-    const linkId = await linkProvider.createLink(link);
-    // Add the created link id to the messages
-    messages.push(`Link ID ${linkId}`);
-
-    // render the output
+  }
+  const renderOutput = function () {
     req.individualContext.webContext.render({
       view: 'organization/whois/linkUpdate',
       title: `Updating link ${linkId}`,
@@ -438,11 +357,81 @@ router.post(
         signinPathSegment: isCodespacesAuthenticating(config, 'aad') ? 'sign-in' : 'signin',
       },
     });
-  })
-);
+  };
+  if (isLinkDelete) {
+    messages.push(`Deleting link ${linkId}`);
+    try {
+      await linkProvider.deleteLink(link);
+      messages.push('Link deleted OK');
+    } catch (error) {
+      messages.push(error.toString());
+    }
+    return renderOutput();
+  }
+  if (hadUpdates) {
+    messages.push('Updating values');
+    await linkProvider.updateLink(link);
+    return renderOutput();
+  } else {
+    messages.push('No link values changed, it was not updated');
+    return renderOutput();
+  }
+});
+
+// codeql[js/missing-rate-limiting] - rate limiting is enforced globally in middleware/index.ts (120 req/min per identity; configure via RATE_LIMIT_MODE/RATE_LIMIT_AUDIT_* env vars)
+router.post('/whois/link/', async function (req: ReposAppRequest, res: Response, next: NextFunction) {
+  const { config, operations } = getProviders(req);
+  const allowAdministratorManualLinking = operations?.config?.features?.allowAdministratorManualLinking;
+  if (!allowAdministratorManualLinking) {
+    return next(new Error('The manual linking feature is not enabled'));
+  }
+
+  // set isServiceAccount to true only if it contains the value "yes", otherwise use false
+  req.body['isServiceAccount'] = req.body['isServiceAccount'] === 'yes';
+
+  // create link object with the values received from the request
+  const link: ICorporateLink = {
+    corporateId: req.body['corporateId'],
+    corporateUsername: req.body['corporateUsername'],
+    corporateDisplayName: req.body['corporateDisplayName'],
+    thirdPartyId: req.body['thirdPartyId'],
+    thirdPartyUsername: req.body['thirdPartyUsername'],
+    thirdPartyAvatar: req.body['thirdPartyAvatar'],
+    isServiceAccount: req.body['isServiceAccount'],
+    serviceAccountMail: req.body['serviceAccountMail'],
+    // these both values are currently not transferred, but required by the link object
+    corporateMailAddress: '',
+  };
+
+  const messages = [];
+  // Add only the non empty strings to the message log
+  for (const [key, value] of Object.entries(link)) {
+    if (value) {
+      messages.push(`${key}: value has been set to "${value}"`);
+    }
+  }
+
+  const linkProvider = operations.providers.linkProvider as PostgresLinkProvider;
+
+  // try to create link, if it fails it will directly throw into the users face
+  const linkId = await linkProvider.createLink(link);
+  // Add the created link id to the messages
+  messages.push(`Link ID ${linkId}`);
+
+  // render the output
+  req.individualContext.webContext.render({
+    view: 'organization/whois/linkUpdate',
+    title: `Updating link ${linkId}`,
+    state: {
+      messages,
+      linkId,
+      signinPathSegment: isCodespacesAuthenticating(config, 'aad') ? 'sign-in' : 'signin',
+    },
+  });
+});
 
 router.post('/whois/id/:githubid', function (req: ReposAppRequest, res: Response, next: NextFunction) {
-  const thirdPartyId = req.params.githubid;
+  const thirdPartyId = stringParam(req, 'githubid');
   const markAsServiceAccount = req.body['mark-as-service-account'];
   const unmarkServiceAccount = req.body['unmark-service-account'];
   const removeCollaboration = req.body['remove-collaboration'] || req.body['remove-collaboration-100'];
@@ -477,7 +466,7 @@ router.post('/whois/id/:githubid', function (req: ReposAppRequest, res: Response
 });
 
 router.get('/whois/aad/:upn', function (req: ReposAppRequest, res: Response, next: NextFunction) {
-  const upn = req.params.upn;
+  const upn = stringParam(req, 'upn');
   const providers = getProviders(req);
   queryByCorporateUsername(providers, upn)
     .then((query) => {
@@ -497,8 +486,9 @@ router.get('/whois/aad/:upn', function (req: ReposAppRequest, res: Response, nex
     .catch(next);
 });
 
+// codeql[js/missing-rate-limiting] - rate limiting is enforced globally in middleware/index.ts (120 req/min per identity; configure via RATE_LIMIT_MODE/RATE_LIMIT_AUDIT_* env vars)
 router.get('/whois/github/:username', function (req: ReposAppRequest, res: Response, next: NextFunction) {
-  const login = req.params.username;
+  const login = stringParam(req, 'username');
   const providers = getProviders(req);
   queryByGitHubLogin(providers, login)
     .then((query) => {
@@ -517,7 +507,7 @@ router.get('/whois/github/:username', function (req: ReposAppRequest, res: Respo
 });
 
 router.post('/whois/github/:username', function (req: ReposAppRequest, res: Response, next: NextFunction) {
-  const username = req.params.username;
+  const username = stringParam(req, 'username');
   const markAsServiceAccount = req.body['mark-as-service-account'];
   const unmarkServiceAccount = req.body['unmark-service-account'];
   const removeCollaboration = req.body['remove-collaboration'] || req.body['remove-collaboration-100'];
@@ -555,10 +545,11 @@ async function destructiveLogic(
   providers: IProviders,
   identifier: IIDValue,
   action: OperationsAction,
-  req,
+  req: ReposAppRequest,
   res,
   next
 ): Promise<any> {
+  const { insights } = req;
   const { operations } = providers;
   let usernameInfo = null;
   const state = {
@@ -609,7 +600,8 @@ async function destructiveLogic(
   }
 
   let linkQuery = null;
-  if (thirdPartyId) {
+  // prettier-ignore
+  if (thirdPartyId) { // CodeQL [SM01513] this is a logic branch on the type of data and not a security decision
     try {
       linkQuery = await queryByGitHubId(providers, thirdPartyId);
     } catch (oops) {
@@ -656,7 +648,7 @@ async function destructiveLogic(
   }
   if (thirdPartyId) {
     const purpose = dataAsTerminated ? UnlinkPurpose.Termination : UnlinkPurpose.Operations;
-    state.results = await operations.terminateLinkAndMemberships(thirdPartyId, { purpose });
+    state.results = await operations.terminateLinkAndMemberships(insights, thirdPartyId, { purpose });
   } else {
     state.messages.push('Could not terminate the account, no link was found');
   }
@@ -690,46 +682,43 @@ router.get('/bulkRepoDelete', (req: ReposAppRequest, res) => {
   });
 });
 
-router.post(
-  '/bulkRepoDelete',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
-    const { operations } = getProviders(req);
-    let repositories = req.body.repositories;
-    // TODO: FEATURE FLAG: add a feature flag whether this API is available.
-    if (!repositories) {
-      return next(new Error('No repositories provided'));
+router.post('/bulkRepoDelete', async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  const { operations } = getProviders(req);
+  let repositories = req.body.repositories;
+  // TODO: FEATURE FLAG: add a feature flag whether this API is available.
+  if (!repositories) {
+    return next(new Error('No repositories provided'));
+  }
+  repositories = repositories.split('\n');
+  const log = [];
+  for (let repositoryName of repositories) {
+    repositoryName = (repositoryName || '').trim();
+    if (!repositoryName.length) {
+      continue;
     }
-    repositories = repositories.split('\n');
-    const log = [];
-    for (let repositoryName of repositories) {
-      repositoryName = (repositoryName || '').trim();
-      if (!repositoryName.length) {
+    const githubcom = 'github.com';
+    const ghi = repositoryName.indexOf(githubcom);
+    if (ghi >= 0) {
+      const name = repositoryName.substr(ghi + githubcom.length + 1);
+      const divider = name.indexOf('/');
+      if (divider <= 0) {
         continue;
       }
-      const githubcom = 'github.com';
-      const ghi = repositoryName.indexOf(githubcom);
-      if (ghi >= 0) {
-        const name = repositoryName.substr(ghi + githubcom.length + 1);
-        const divider = name.indexOf('/');
-        if (divider <= 0) {
-          continue;
-        }
-        const orgName = name.substr(0, divider);
-        const repoName = name.substr(divider + 1);
-        const repository = operations.getOrganization(orgName).repository(repoName);
-        try {
-          await repository.delete();
-          // let metaStatus = more && more.headers ? more.headers.status : null;
-          log.push(`${name}: deleted`);
-        } catch (deleteError) {
-          log.push(`${name}: error: ${deleteError}`);
-        }
-      } else {
-        log.push(`Skipping, does not appear to be a GitHub repo URL: ${repositoryName}`);
+      const orgName = name.substr(0, divider);
+      const repoName = name.substr(divider + 1);
+      const repository = operations.getOrganization(orgName).repository(repoName);
+      try {
+        await repository.delete();
+        // let metaStatus = more && more.headers ? more.headers.status : null;
+        log.push(`${name}: deleted`);
+      } catch (deleteError) {
+        log.push(`${name}: error: ${deleteError}`);
       }
+    } else {
+      log.push(`Skipping, does not appear to be a GitHub repo URL: ${repositoryName}`);
     }
-    return res.json(log) as unknown as void;
-  })
-);
+  }
+  return res.json(log) as unknown as void;
+});
 
 export default router;

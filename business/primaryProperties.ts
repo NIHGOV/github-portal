@@ -32,4 +32,5 @@ export const RepositoryPrimaryProperties = [
   'watchers',
   'license',
   'default_branch',
+  'visibility',
 ];

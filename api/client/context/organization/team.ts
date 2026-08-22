@@ -4,29 +4,29 @@
 //
 
 import { NextFunction, Response, Router } from 'express';
-import asyncHandler from 'express-async-handler';
 
-import { TeamJoinApprovalEntity } from '../../../../business/entities/teamJoinApproval/teamJoinApproval';
+import { TeamJoinApprovalEntity } from '../../../../business/entities/teamJoinApproval/teamJoinApproval.js';
 import {
   ReposAppRequest,
   OrganizationMembershipState,
   ITeamMembershipRoleState,
-} from '../../../../interfaces';
-import { IGraphEntry } from '../../../../lib/graphProvider';
-import { jsonError } from '../../../../middleware';
+  GitHubTeamRole,
+} from '../../../../interfaces/index.js';
+import { IGraphEntry } from '../../../../lib/graphProvider/index.js';
 import {
   AddTeamMembershipToRequest,
   AddTeamPermissionsToRequest,
   getContextualTeam,
   getTeamMembershipFromRequest,
   getTeamPermissionsFromRequest,
-} from '../../../../middleware/github/teamPermissions';
-import { submitTeamJoinRequest } from '../../../../routes/org/team';
-import { postActionDecision, TeamApprovalDecision } from '../../../../routes/org/team/approval';
-import { PermissionWorkflowEngine } from '../../../../routes/org/team/approvals';
-import { CreateError, getProviders } from '../../../../lib/transitional';
-import { IndividualContext } from '../../../../business/user';
-import getCompanySpecificDeployment from '../../../../middleware/companySpecificDeployment';
+} from '../../../../middleware/github/teamPermissions.js';
+import { submitTeamJoinRequest } from '../../../../routes/org/team/index.js';
+import { postActionDecision, TeamApprovalDecision } from '../../../../routes/org/team/approval/index.js';
+import { PermissionWorkflowEngine } from '../../../../routes/org/team/approvals.js';
+import { CreateError, getProviders } from '../../../../lib/transitional.js';
+import { stringParam } from '../../../../lib/utils.js';
+import { IndividualContext } from '../../../../business/user/index.js';
+import getCompanySpecificDeployment from '../../../../middleware/companySpecificDeployment.js';
 
 const router: Router = Router();
 
@@ -41,37 +41,34 @@ interface ITeamApprovalsJsonResponse {
 
 router.get(
   '/permissions',
-  asyncHandler(AddTeamPermissionsToRequest),
-  asyncHandler(AddTeamMembershipToRequest),
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  AddTeamPermissionsToRequest,
+  AddTeamMembershipToRequest,
+  async (req: ReposAppRequest, res: Response, next: NextFunction) => {
     const membership = getTeamMembershipFromRequest(req);
     const permissions = getTeamPermissionsFromRequest(req);
     return res.json({ permissions, membership }) as unknown as void;
-  })
+  }
 );
 
-router.get(
-  '/join/request',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
-    const { approvalProvider } = getProviders(req);
-    const team = getContextualTeam(req);
-    const activeContext = (req.individualContext || req.apiContext) as IndividualContext;
-    let request: TeamJoinApprovalEntity = null;
-    if (activeContext.link) {
-      // no point query currently implemented
-      let approvals = await approvalProvider.queryPendingApprovalsForTeam(String(team.id));
-      approvals = approvals.filter((approval) => approval.corporateId === activeContext.corporateIdentity.id);
-      request = approvals.length > 0 ? approvals[0] : null;
-    }
-    const response: ITeamRequestJsonResponse = { request };
-    return res.json(response) as unknown as void;
-  })
-);
+router.get('/join/request', async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  const { approvalProvider } = getProviders(req);
+  const team = getContextualTeam(req);
+  const activeContext = (req.individualContext || req.apiContext) as IndividualContext;
+  let request: TeamJoinApprovalEntity = null;
+  if (activeContext.link) {
+    // no point query currently implemented
+    let approvals = await approvalProvider.queryPendingApprovalsForTeam(String(team.id));
+    approvals = approvals.filter((approval) => approval.corporateId === activeContext.corporateIdentity.id);
+    request = approvals.length > 0 ? approvals[0] : null;
+  }
+  const response: ITeamRequestJsonResponse = { request };
+  return res.json(response) as unknown as void;
+});
 
 router.post(
   '/join',
-  asyncHandler(AddTeamMembershipToRequest),
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  AddTeamMembershipToRequest,
+  async (req: ReposAppRequest, res: Response, next: NextFunction) => {
     try {
       const providers = getProviders(req);
       const { approvalProvider } = providers;
@@ -122,16 +119,17 @@ router.post(
       );
       return res.json(outcome) as unknown as void;
     } catch (error) {
-      return next(jsonError(error));
+      return next(error);
     }
-  })
+  }
 );
 
+// codeql[js/missing-rate-limiting] - rate limiting is enforced globally in middleware/index.ts (120 req/min per identity; configure via RATE_LIMIT_MODE/RATE_LIMIT_AUDIT_* env vars)
 router.post(
   '/join/approvals/:approvalId',
-  asyncHandler(AddTeamPermissionsToRequest),
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
-    const { approvalId: id } = req.params;
+  AddTeamPermissionsToRequest,
+  async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+    const id = stringParam(req, 'approvalId');
     if (!id) {
       return next(CreateError.InvalidParameters('invalid approval'));
     }
@@ -176,14 +174,15 @@ router.post(
     } catch (outcomeError) {
       return next(CreateError.ServerError(outcomeError));
     }
-  })
+  }
 );
 
+// codeql[js/missing-rate-limiting] - rate limiting is enforced globally in middleware/index.ts (120 req/min per identity; configure via RATE_LIMIT_MODE/RATE_LIMIT_AUDIT_* env vars)
 router.get(
   '/join/approvals/:approvalId',
-  asyncHandler(AddTeamPermissionsToRequest),
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
-    const { approvalId: id } = req.params;
+  AddTeamPermissionsToRequest,
+  async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+    const id = stringParam(req, 'approvalId');
     if (!id) {
       return next(CreateError.InvalidParameters('invalid approval'));
     }
@@ -207,13 +206,13 @@ router.get(
       }
     }
     return res.json({ approval: request, management }) as unknown as void;
-  })
+  }
 );
 
 router.get(
   '/join/approvals',
-  asyncHandler(AddTeamPermissionsToRequest),
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  AddTeamPermissionsToRequest,
+  async (req: ReposAppRequest, res: Response, next: NextFunction) => {
     const { approvalProvider } = getProviders(req);
     const team = getContextualTeam(req);
     const permissions = getTeamPermissionsFromRequest(req);
@@ -225,15 +224,16 @@ router.get(
       response.approvals = await approvalProvider.queryPendingApprovalsForTeam(String(team.id));
     }
     return res.json(response) as unknown as void;
-  })
+  }
 );
 
+// codeql[js/missing-rate-limiting] - rate limiting is enforced globally in middleware/index.ts (120 req/min per identity; configure via RATE_LIMIT_MODE/RATE_LIMIT_AUDIT_* env vars)
 router.post(
   '/role/:login',
-  asyncHandler(AddTeamPermissionsToRequest),
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  AddTeamPermissionsToRequest,
+  async (req: ReposAppRequest, res: Response, next: NextFunction) => {
     const { role } = req.body;
-    const { login } = req.params;
+    const login = stringParam(req, 'login');
     if (!login) {
       return next(CreateError.InvalidParameters('invalid login'));
     }
@@ -255,15 +255,45 @@ router.post(
     } catch (outcomeError) {
       return next(CreateError.ServerError(outcomeError));
     }
-  })
+  }
+);
+
+// codeql[js/missing-rate-limiting] - rate limiting is enforced globally in middleware/index.ts (120 req/min per identity; configure via RATE_LIMIT_MODE/RATE_LIMIT_AUDIT_* env vars)
+router.delete(
+  '/role/:login',
+  AddTeamPermissionsToRequest,
+  async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+    const { role } = req.body;
+    if (role !== GitHubTeamRole.Member) {
+      return next(CreateError.InvalidParameters('invalid role to remove'));
+    }
+    const login = stringParam(req, 'login');
+    if (!login) {
+      return next(CreateError.InvalidParameters('invalid login'));
+    }
+    const permissions = getTeamPermissionsFromRequest(req);
+    if (!permissions.allowAdministration) {
+      return next(CreateError.NotAuthorized('you do not have permission to administer this team'));
+    }
+    const team = getContextualTeam(req);
+    try {
+      await team.removeMembership(login);
+      return res.json({
+        ok: true,
+      }) as unknown as void;
+    } catch (outcomeError) {
+      return next(CreateError.ServerError(outcomeError));
+    }
+  }
 );
 
 const deployment = getCompanySpecificDeployment();
-deployment?.routes?.api?.context?.organization?.team &&
+if (deployment?.routes?.api?.context?.organization?.team) {
   deployment?.routes?.api?.context?.organization?.team(router);
+}
 
-router.use('*', (req, res: Response, next: NextFunction) => {
-  return next(jsonError('no API or function available for contextual team', 404));
+router.use('/*splat', (req, res: Response, next: NextFunction) => {
+  return next(CreateError.NotFound('no API or function available for contextual team'));
 });
 
 export default router;

@@ -21,11 +21,15 @@ const onlySupportedThirdPartyType = 'github';
 
 import { randomUUID } from 'crypto';
 
-import { ICorporateLink, ICorporateLinkExtended, ICorporateLinkProperties } from '../../../interfaces';
+import {
+  ICorporateLink,
+  ICorporateLinkExtended,
+  ICorporateLinkProperties,
+} from '../../../interfaces/index.js';
 
-import { CorporateLinkPostgres } from './postgresLink';
-import { PostgresPoolQueryAsync, PostgresPoolQuerySingleRowAsync } from '../../postgresHelpers';
-import { ILinkProvider } from '..';
+import { CorporateLinkPostgres } from './postgresLink.js';
+import { PostgresPoolQueryAsync, PostgresPoolQuerySingleRowAsync } from '../../postgresHelpers.js';
+import { ILinkProvider } from '../index.js';
 
 const linkProviderInstantiationTypeProperty = '_i';
 
@@ -53,7 +57,6 @@ const linkInterfacePropertyMapping: IPostgresLinkProperties = {
   corporateUsername: 'corporateusername',
   corporateDisplayName: 'corporatename',
   corporateMailAddress: 'corporatemail',
-  corporateAlias: 'corporatealias',
 
   isServiceAccount: 'serviceaccount',
   serviceAccountMail: 'serviceaccountmail',
@@ -72,7 +75,6 @@ const coreColumns = [
   'corporateusername',
   'corporatename',
   'corporatemail',
-  'corporatealias',
   'serviceaccount',
   'serviceaccountmail',
   'created',

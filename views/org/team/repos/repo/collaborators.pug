@@ -38,8 +38,7 @@ block content
                     p
                       | Active Directory
                       | &nbsp;
-                      a.btn.btn-sm.btn-muted(href=teamMember.corporateProfileUrl(), target='_new')
-                        = teamMember.corporateAlias() || teamMember.link.aadupn
+                      = teamMember.link.corporateUsername
                       if teamMember.contactEmail
                         - var teamMemberMailValue = typeof(teamMember.contactEmail) === 'function' ? teamMember.contactEmail() : teamMember.contactEmail;
                         | &nbsp; &nbsp;
@@ -90,8 +89,7 @@ block content
                     p
                       | Active Directory
                       br
-                      a.btn.btn-sm.btn-muted(href=teamMember.corporateProfileUrl(), target='_new')
-                        = teamMember.corporateAlias() || teamMember.link.aadupn
+                      = teamMember.link.corporateUsername
                   else
                     p Outside Collaborator
                 td

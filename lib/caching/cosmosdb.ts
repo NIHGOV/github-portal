@@ -3,23 +3,27 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { ICacheHelper } from '.';
-import { CosmosClient, Database, Container } from '@azure/cosmos';
-import BlobCache, { IBlobCacheOptions } from './blob';
-import { sleep } from '../utils';
-import { ErrorHelper, getSafeCosmosResourceKey, sha256 } from '../transitional';
-
+import type { ICacheHelper } from './index.js';
+import { CosmosClient, Database, Container, PatchOperationType } from '@azure/cosmos';
 import Debug from 'debug';
+import { TokenCredential } from '@azure/identity';
+
+import BlobCache, { type BlobCacheOptions } from './blob.js';
+import { sleep } from '../utils.js';
+import { CreateError, ErrorHelper, getSafeCosmosResourceKey, sha256 } from '../transitional.js';
+
 const debug = Debug.debug('cache');
 
 export interface ICosmosCacheOptions {
   endpoint: string;
-  key: string;
+  key?: string;
   database?: string;
   collection?: string;
   prefix?: string;
 
-  blobFallback?: IBlobCacheOptions;
+  blobFallback?: BlobCacheOptions;
+  tokenCredential?: TokenCredential;
+  blobTokenCredential?: TokenCredential;
 }
 
 const objectIdKeyReplacement = 'cached_id';
@@ -36,10 +40,11 @@ export default class CosmosCache implements ICacheHelper {
   private _keyPrefix: string;
 
   constructor(options: ICosmosCacheOptions) {
-    this._options = options;
+    this._options = { ...options };
     this._keyPrefix = options.prefix || '';
     if (options.blobFallback && options.blobFallback.account) {
-      this._blobCache = new BlobCache(options.blobFallback);
+      const tokenCredential = options.blobTokenCredential || options.tokenCredential;
+      this._blobCache = new BlobCache({ ...options.blobFallback, tokenCredential });
     }
   }
 
@@ -74,12 +79,16 @@ export default class CosmosCache implements ICacheHelper {
     if (this._initialized) {
       return;
     }
-    const { endpoint, key } = this._options;
+    const { endpoint, tokenCredential } = this._options;
+    let { key } = this._options;
     if (!endpoint) {
       throw new Error('options.endpoint required');
     }
-    if (!key) {
-      throw new Error('options.key required');
+    if (!key && !tokenCredential) {
+      throw CreateError.InvalidParameters('options.key or options.tokenCredential required');
+    }
+    if (tokenCredential) {
+      key = null;
     }
     if (!this._options.collection) {
       throw new Error('options.collection required');
@@ -87,13 +96,16 @@ export default class CosmosCache implements ICacheHelper {
     if (!this._options.database) {
       throw new Error('options.database required');
     }
-    this._client = new CosmosClient({ endpoint, key });
-    this._database = (
-      await this._client.databases.createIfNotExists({ id: this._options.database })
-    ).database;
-    this._collection = (
-      await this._database.containers.createIfNotExists({ id: this._options.collection })
-    ).container;
+    this._client = key
+      ? new CosmosClient({ endpoint, key })
+      : new CosmosClient({ endpoint, aadCredentials: tokenCredential });
+    const createIfNotExists = false;
+    this._database = createIfNotExists
+      ? (await this._client.databases.createIfNotExists({ id: this._options.database })).database
+      : this._client.database(this._options.database);
+    this._collection = createIfNotExists
+      ? (await this._database.containers.createIfNotExists({ id: this._options.collection })).container
+      : this._database.container(this._options.collection);
     if (this._blobCache) {
       await this._blobCache.initialize();
     }
@@ -107,8 +119,14 @@ export default class CosmosCache implements ICacheHelper {
     let response = null;
     try {
       response = await this._collection.item(key, key).read();
+      if (response?.statusCode === 404) {
+        // throw CreateError.NotFound(`The key ${key} was not found`);
+        return;
+      }
     } catch (cosmosError) {
-      console.dir(cosmosError);
+      if (!CreateError.NotFound(cosmosError)) {
+        console.dir(cosmosError);
+      }
       throw cosmosError;
     }
     if (response.resource) {
@@ -130,8 +148,14 @@ export default class CosmosCache implements ICacheHelper {
     let response = null;
     try {
       response = await this._collection.item(key, key).read();
+      if (response?.statusCode === 404) {
+        // throw CreateError.NotFound(`The key ${key} was not found`);
+        return;
+      }
     } catch (cosmosError) {
-      console.dir(cosmosError);
+      if (!CreateError.NotFound(cosmosError)) {
+        console.dir(cosmosError);
+      }
       throw cosmosError;
     }
     if (response.resource?.blobKey) {
@@ -211,11 +235,11 @@ export default class CosmosCache implements ICacheHelper {
       if (approxSize > largess) {
         if (this._blobCache) {
           debug(`storing in blob instead... key=${originalKey}, dataSize=${approxSize}`);
-          const ttlSeconds = object.ttl;
+          const ttlSeconds = object.ttl as number;
           delete object.ttl;
-          (await ttlSeconds)
+          await (ttlSeconds
             ? this._blobCache.setObjectCompressedWithExpire(originalKey, object, ttlSeconds / 60)
-            : this._blobCache.setObject(originalKey, object);
+            : this._blobCache.setObject(originalKey, object));
           item = {
             blobKey: originalKey,
             id: key,
@@ -340,6 +364,37 @@ export default class CosmosCache implements ICacheHelper {
         console.dir(cosmosError);
       }
       throw cosmosError;
+    }
+  }
+
+  readonly supportsIncrementWithExpire = true;
+
+  async incrementWithExpire(key: string, minutesToExpire: number): Promise<number> {
+    this.throwIfNotInitialized();
+    key = this.key(key);
+    const ttl = minutesToExpire * 60;
+    debug(`COSMOS INCREMENT: ${key}`);
+    try {
+      const { resource } = await this._collection.item(key, key).patch({
+        operations: [{ op: PatchOperationType.incr, path: '/count', value: 1 }],
+      });
+      return resource.count as number;
+    } catch (patchError) {
+      if (ErrorHelper.IsNotFound(patchError)) {
+        try {
+          await this._collection.items.create({ id: key, count: 1, ttl });
+          return 1;
+        } catch (createError) {
+          if (ErrorHelper.IsConflict(createError)) {
+            const { resource } = await this._collection.item(key, key).patch({
+              operations: [{ op: PatchOperationType.incr, path: '/count', value: 1 }],
+            });
+            return resource.count as number;
+          }
+          throw createError;
+        }
+      }
+      throw patchError;
     }
   }
 

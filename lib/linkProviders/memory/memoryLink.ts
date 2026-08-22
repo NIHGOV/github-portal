@@ -3,8 +3,8 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { ICorporateLinkExtended, ICorporateLinkExtendedDirectMethods } from '../../../interfaces';
-import { MemoryLinkProvider } from './memoryLinkProvider';
+import { ICorporateLinkExtended, ICorporateLinkExtendedDirectMethods } from '../../../interfaces/index.js';
+import { MemoryLinkProvider } from './memoryLinkProvider.js';
 
 export interface IInternalMemoryLinkOptions {
   provider: MemoryLinkProvider;
@@ -58,14 +58,6 @@ export class CorporateMemoryLink implements ICorporateLinkExtended {
 
   get corporateMailAddress() {
     return this._entity[this._provider.propertyMapping.corporateMailAddress];
-  }
-
-  get corporateAlias() {
-    return this._entity[this._provider.propertyMapping.corporateAlias];
-  }
-
-  set corporateAlias(value: string) {
-    _updateColumn(this, this._provider.propertyMapping.corporateAlias, value);
   }
 
   get corporateUsername(): string {

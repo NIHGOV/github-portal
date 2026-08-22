@@ -4,31 +4,35 @@
 //
 
 import { NextFunction, Response, Router } from 'express';
-import asyncHandler from 'express-async-handler';
 
-import { Organization } from '../../../business';
-import { IProviders, ReposAppRequest } from '../../../interfaces';
+import { Organization } from '../../../business/index.js';
+import { IProviders, ReposAppRequest } from '../../../interfaces/index.js';
 
-import { jsonError } from '../../../middleware';
-import getCompanySpecificDeployment from '../../../middleware/companySpecificDeployment';
-import { ErrorHelper, getProviders } from '../../../lib/transitional';
-import { IndividualContext } from '../../../business/user';
+import getCompanySpecificDeployment from '../../../middleware/companySpecificDeployment.js';
+import { CreateError, ErrorHelper, getProviders } from '../../../lib/transitional.js';
+import { stringParam } from '../../../lib/utils.js';
+import { IndividualContext } from '../../../business/user/index.js';
 
-import routeApprovals from './approvals';
-import routeIndividualContextualOrganization from './organization';
-import routeOrgs from './orgs';
-import routeRepos from './repos';
-import routeTeams from './teams';
-import routeAdministration from './administration';
-import routeSample from './sample';
-import routeSettings from './settings';
+import routeApprovals from './approvals.js';
+import routeDiagnostics from './diagnostics.js';
+import routeIndividualContextualOrganization from './organization/index.js';
+import routeOrgs from './orgs.js';
+import routeRepos from './repos.js';
+import routeTeams from './teams.js';
+import routeAdministration from './administration/index.js';
+import routeFeatures from './features.js';
+import routeSample from './sample.js';
+import routeSettings from './settings.js';
 
 const router: Router = Router();
 
 const deployment = getCompanySpecificDeployment();
-deployment?.routes?.api?.context?.index && deployment?.routes?.api?.context?.index(router);
+if (deployment?.routes?.api?.context?.index) {
+  deployment?.routes?.api?.context?.index(router);
+}
 
 router.use('/approvals', routeApprovals);
+router.use('/diagnostics', routeDiagnostics);
 
 router.get('/', (req: ReposAppRequest, res) => {
   const { config } = getProviders(req);
@@ -44,12 +48,12 @@ router.get('/', (req: ReposAppRequest, res) => {
     build: continuousDeployment,
     hasAdditionalLinks: activeContext.hasAdditionalLinks,
   };
-  return res.json(data);
+  return res.json(data) as unknown as void;
 });
 
 router.get(
   '/specialized/multipleLinkGitHubIdentities',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  async (req: ReposAppRequest, res: Response, next: NextFunction) => {
     const { operations } = getProviders(req);
     const activeContext = (req.individualContext || req.apiContext) as IndividualContext;
     const links = (activeContext?.link ? [activeContext.link, ...activeContext.additionalLinks] : []).map(
@@ -75,29 +79,26 @@ router.get(
       }
     }
     return res.json(response) as unknown as void;
-  })
+  }
 );
 
-router.get(
-  '/accountDetails',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
-    const { operations } = getProviders(req);
-    const activeContext = (req.individualContext || req.apiContext) as IndividualContext;
-    try {
-      const gh = activeContext.getGitHubIdentity();
-      if (gh?.id) {
-        const accountFromId = operations.getAccount(gh.id);
-        const accountDetails = await accountFromId.getDetails();
-        res.json(accountDetails);
-      } else {
-        res.status(400);
-        res.end();
-      }
-    } catch (error) {
-      return next(error);
+router.get('/accountDetails', async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  const { operations } = getProviders(req);
+  const activeContext = (req.individualContext || req.apiContext) as IndividualContext;
+  try {
+    const gh = activeContext.getGitHubIdentity();
+    if (gh?.id) {
+      const accountFromId = operations.getAccount(gh.id);
+      const accountDetails = await accountFromId.getDetails();
+      res.json(accountDetails);
+    } else {
+      res.status(400);
+      res.end();
     }
-  })
-);
+  } catch (error) {
+    return next(error);
+  }
+});
 
 router.use('/administration', routeAdministration);
 
@@ -106,39 +107,37 @@ router.get('/repos', routeRepos);
 router.get('/teams', routeTeams);
 router.use('/sample', routeSample);
 router.use('/settings', routeSettings);
+router.use('/features', routeFeatures);
 
-router.use(
-  '/orgs/:orgName',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
-    const { orgName } = req.params;
-    const providers = getProviders(req);
-    const { operations } = providers;
-    // const activeContext = (req.individualContext || req.apiContext) as IndividualContext;
-    // if (!activeContext.link) {
-    //   return next(jsonError('Account is not linked', 400));
-    // }
-    let organization: Organization = null;
-    try {
-      organization = operations.getOrganization(orgName);
-      // CONSIDER: what if they are not currently a member of the org?
-      req.organization = organization;
-      return next();
-    } catch (noOrgError) {
-      if (ErrorHelper.IsNotFound(noOrgError)) {
-        // Could be either the org truly does not exist, OR, it's uncontrolled.
-        if (await isUnmanagedOrganization(providers, orgName)) {
-          res.status(204);
-          res.end();
-          return;
-        }
-        res.status(404);
+router.use('/orgs/:orgName', async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  const orgName = stringParam(req, 'orgName');
+  const providers = getProviders(req);
+  const { operations } = providers;
+  // const activeContext = (req.individualContext || req.apiContext) as IndividualContext;
+  // if (!activeContext.link) {
+  //   return next(jsonError('Account is not linked', 400));
+  // }
+  let organization: Organization = null;
+  try {
+    organization = operations.getOrganization(orgName);
+    // CONSIDER: what if they are not currently a member of the org?
+    req.organization = organization;
+    return next();
+  } catch (noOrgError) {
+    if (ErrorHelper.IsNotFound(noOrgError)) {
+      // Could be either the org truly does not exist, OR, it's uncontrolled.
+      if (await isUnmanagedOrganization(providers, orgName)) {
+        res.status(204);
         res.end();
         return;
       }
-      return next(jsonError(noOrgError, 500));
+      res.status(404);
+      res.end();
+      return;
     }
-  })
-);
+    return next(CreateError.ServerError(noOrgError.message, noOrgError));
+  }
+});
 
 async function isUnmanagedOrganization(providers: IProviders, orgName: string): Promise<boolean> {
   const { operations } = providers;
@@ -156,8 +155,8 @@ async function isUnmanagedOrganization(providers: IProviders, orgName: string): 
 
 router.use('/orgs/:orgName', routeIndividualContextualOrganization);
 
-router.use('*', (req: ReposAppRequest, res: Response, next: NextFunction) => {
-  return next(jsonError('Contextual API or route not found', 404));
+router.use('/*splat', (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  return next(CreateError.NotFound('Contextual API or route not found'));
 });
 
 export default router;

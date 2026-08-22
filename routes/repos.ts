@@ -6,13 +6,12 @@
 import { NextFunction, Response, Router } from 'express';
 const router: Router = Router();
 
-import { ReposAppRequest } from '../interfaces';
-import lowercaser from '../middleware/lowercaser';
+import { ReposAppRequest } from '../interfaces/index.js';
+import lowercaser from '../middleware/lowercaser.js';
 
-import RouteReposPager from './reposPager';
+import RouteReposPager from './reposPager.js';
 
 router.use(function (req: ReposAppRequest, res: Response, next: NextFunction) {
-  req.individualContext.webContext.pushBreadcrumb('Repositories');
   req.reposContext = {
     section: 'repos',
     pivotDirectlyToOtherOrg: '/repos/', // hack

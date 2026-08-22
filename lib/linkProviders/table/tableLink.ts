@@ -3,8 +3,8 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
 
-import { ICorporateLinkExtendedDirectMethods, ICorporateLinkExtended } from '../../../interfaces';
-import { TableLinkProvider } from './tableLinkProvider';
+import { ICorporateLinkExtendedDirectMethods, ICorporateLinkExtended } from '../../../interfaces/index.js';
+import { TableLinkProvider } from './tableLinkProvider.js';
 
 export interface IInternalTableLinkOptions {
   provider: TableLinkProvider;
@@ -62,14 +62,6 @@ export class CorporateTableLink implements ICorporateLinkExtended {
 
   set corporateMailAddress(value: string) {
     _updateColumn(this, this._provider.propertyMapping.corporateMailAddress, value);
-  }
-
-  get corporateAlias() {
-    return this._entity[this._provider.propertyMapping.corporateAlias];
-  }
-
-  set corporateAlias(value: string) {
-    _updateColumn(this, this._provider.propertyMapping.corporateAlias, value);
   }
 
   get corporateUsername(): string {

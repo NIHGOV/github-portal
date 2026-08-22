@@ -5,16 +5,20 @@
 
 import { NextFunction, Response, Router } from 'express';
 
-import { json404 } from '../../middleware/jsonError';
+import { CreateError } from '../../lib/transitional.js';
+
+import type { ReposAppRequest } from '../../interfaces/index.js';
 
 const router: Router = Router();
 
-import LinksRoute from './links';
-import UnlinkRoute from './unlink';
+import LinksRoute from './links.js';
+import UnlinkRoute from './unlink.js';
 
 router.use('/links', LinksRoute);
 router.use('/unlink', UnlinkRoute);
 
-router.use(json404);
+router.use((req: ReposAppRequest, res: Response, next: NextFunction) => {
+  return next(CreateError.NotFound('Endpoint not found'));
+});
 
 export default router;

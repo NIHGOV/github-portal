@@ -1,11 +1,15 @@
 name: NIH GHMP (Prod) - Deploy Cache Builder Container
 
+# Manual-dispatch only. Automatic deploys run as jobs in main_create_acr_image.yml.
+# Use this workflow to redeploy the cache builder without rebuilding the image,
+# or to roll back to a specific image tag.
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows: ['NIH GHMP Container (Prod) - Build & Register']
-    types: [completed]
-    branches: [main]
+    inputs:
+      image_tag:
+        description: 'ACR image tag to deploy (default: latest)'
+        required: false
+        default: 'latest'
 
 permissions:
   id-token: write
@@ -13,7 +17,7 @@ permissions:
 
 jobs:
   deploy:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     steps:
@@ -43,16 +47,20 @@ jobs:
           APP_ID: ${{ secrets.PROD_GITHUB_APP_OPERATIONS_APP_ID }}
           APP_KEY: ${{ secrets.PROD_GITHUB_APP_OPERATIONS_KEY }}
           APP_SLUG: ${{ secrets.PROD_GITHUB_APP_OPERATIONS_SLUG }}
+          ENTRA_CLIENT_ID: ${{ secrets.PROD_AAD_CLIENT_ID }}
+          ENTRA_CLIENT_SECRET: ${{ secrets.PROD_AAD_CLIENT_SECRET }}
+          ENTRA_TENANT_ID: ${{ secrets.PROD_AAD_TENANT_ID }}
           RG: ${{ secrets.PROD_RG }}
         run: |
           ACR_NAME="${REGISTRY_SERVER%%.*}"
+          IMAGE_TAG="${{ github.event.inputs.image_tag || 'latest' }}"
           REGISTRY_USER=$(az acr credential show --name "$ACR_NAME" --query username --output tsv)
           REGISTRY_PASS=$(az acr credential show --name "$ACR_NAME" --query "passwords[0].value" --output tsv)
           az container create \
             --resource-group "$RG" \
             --name nihgithubportalcb \
             --location centralus \
-            --image "$REGISTRY_SERVER/portal:latest" \
+            --image "$REGISTRY_SERVER/portal:${IMAGE_TAG}" \
             --registry-login-server "$REGISTRY_SERVER" \
             --registry-username "$REGISTRY_USER" \
             --registry-password "$REGISTRY_PASS" \
@@ -71,10 +79,16 @@ jobs:
               REPOS_POSTGRES_USER="$POSTGRES_USER" \
               REPOS_POSTGRES_SSL=false \
               GITHUB_ORGANIZATIONS_SOURCE=postgres \
+              GITHUB_SHA="${{ github.sha }}" \
+              GITHUB_RUN_ID="${{ github.run_id }}" \
+              GITHUB_RUN_NUMBER="${{ github.run_number }}" \
+              ENTRA_ID_CLIENT_ID="$ENTRA_CLIENT_ID" \
+              ENTRA_ID_TENANT_ID="$ENTRA_TENANT_ID" \
               GITHUB_APP_OPERATIONS_APP_ID="$APP_ID" \
               GITHUB_APP_OPERATIONS_SLUG="$APP_SLUG" \
             --secure-environment-variables \
               REDIS_KEY="$REDIS_KEY" \
               REPOS_POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+              ENTRA_ID_CLIENT_SECRET="$ENTRA_CLIENT_SECRET" \
               GITHUB_APP_OPERATIONS_KEY="$APP_KEY" \
             --no-wait

@@ -4,24 +4,23 @@
 //
 
 import { NextFunction, Response, Router } from 'express';
-import asyncHandler from 'express-async-handler';
 
-import { IndividualContext } from '../../business/user';
-import { jsonError } from '../../middleware';
-import { ErrorHelper, getProviders } from '../../lib/transitional';
-import { unlinkInteractive } from '../../routes/unlink';
-import { interactiveLinkUser } from '../../routes/link';
-import { ReposAppRequest } from '../../interfaces';
+import { IndividualContext } from '../../business/user/index.js';
+import { CreateError, ErrorHelper, getProviders } from '../../lib/transitional.js';
+import { unlinkInteractive } from '../../routes/unlink.js';
+import { interactiveLinkUser } from '../../routes/link.js';
+import type { ReposAppRequest } from '../../interfaces/index.js';
+import getCompanySpecificDeployment from '../../middleware/companySpecificDeployment.js';
 
 const router: Router = Router();
 
 async function validateLinkOk(req: ReposAppRequest, res: Response, next: NextFunction) {
   const activeContext = (req.individualContext || req.apiContext) as IndividualContext;
+  const { insights } = activeContext;
   const providers = getProviders(req);
-  const insights = providers.insights;
   const config = providers.config;
   let validateAndBlockGuests = false;
-  if (config && config.activeDirectory && config.activeDirectory.blockGuestUserTypes) {
+  if (config && config.activeDirectory && config.activeDirectory.authentication.blockGuestUserTypes) {
     validateAndBlockGuests = true;
   }
   // If the app has not been configured to check whether a user is a guest before linking, continue:
@@ -33,9 +32,9 @@ async function validateLinkOk(req: ReposAppRequest, res: Response, next: NextFun
   const graphProvider = providers.graphProvider;
   // REFACTOR: delegate the decision to the auth provider
   if (!graphProvider || !graphProvider.getUserById) {
-    return next(jsonError('No configured graph provider', 500));
+    return next(CreateError.ServerError('No configured graph provider'));
   }
-  insights.trackEvent({
+  insights?.trackEvent({
     name: 'LinkValidateNotGuestStart',
     properties: {
       aadId: aadId,
@@ -46,9 +45,30 @@ async function validateLinkOk(req: ReposAppRequest, res: Response, next: NextFun
     const userType = details.userType;
     const displayName = details.displayName;
     const userPrincipalName = details.userPrincipalName;
+    const companySpecific = getCompanySpecificDeployment();
+    if (companySpecific?.features?.linking?.confirmLinkingAuthorized) {
+      try {
+        await companySpecific.features.linking.confirmLinkingAuthorized(providers, activeContext);
+      } catch (err) {
+        insights?.trackException({
+          exception: err,
+          properties: {
+            name: 'api.link.company_validation.denied',
+          },
+        });
+        insights?.trackMetric({
+          name: 'api.link.company_validation.denials',
+          value: 1,
+        });
+        return next(
+          CreateError.NotAuthorized(err?.message || 'You are not authorized to link your account.')
+        );
+      }
+    }
+    // If the user is a guest, block the link:
     const block = (userType as string) === 'Guest';
     const blockedRecord = block ? 'BLOCKED' : 'not blocked';
-    insights.trackEvent({
+    insights?.trackEvent({
       name: 'LinkValidateNotGuestGraphSuccess',
       properties: {
         aadId: aadId,
@@ -59,10 +79,9 @@ async function validateLinkOk(req: ReposAppRequest, res: Response, next: NextFun
       },
     });
     if (block) {
-      insights.trackMetric({ name: 'LinksBlockedForGuests', value: 1 });
-      const err = jsonError(
-        `This system is not available to guests. You are currently signed in as ${displayName} ${userPrincipalName}. Please sign out or try a private browser window.`,
-        400
+      insights?.trackMetric({ name: 'LinksBlockedForGuests', value: 1 });
+      const err = CreateError.InvalidParameters(
+        `This system is not available to guests. You are currently signed in as ${displayName} ${userPrincipalName}. Please sign out or try a private browser window.`
       );
       insights?.trackException({ exception: err });
       return next(err);
@@ -70,15 +89,14 @@ async function validateLinkOk(req: ReposAppRequest, res: Response, next: NextFun
     const manager = await providers.graphProvider.getManagerById(aadId);
     if (!manager || !manager.userPrincipalName) {
       return next(
-        jsonError(
-          'You do not have an active manager entry in the directory, so cannot yet use this app to link.',
-          400
+        CreateError.InvalidParameters(
+          'You do not have an active manager entry in the directory, so cannot yet use this app to link.'
         )
       );
     }
     return next();
   } catch (graphError) {
-    insights.trackException({
+    insights?.trackException({
       exception: graphError,
       properties: {
         aadId: aadId,
@@ -86,7 +104,11 @@ async function validateLinkOk(req: ReposAppRequest, res: Response, next: NextFun
       },
     });
     return next(
-      jsonError(graphError.toString() || 'Generic lookup error', ErrorHelper.GetStatus(graphError) || 500)
+      CreateError.CreateStatusCodeError(
+        ErrorHelper.GetStatus(graphError) || 500,
+        graphError.toString() || 'Generic lookup error',
+        graphError
+      )
     );
   }
 }
@@ -94,28 +116,22 @@ async function validateLinkOk(req: ReposAppRequest, res: Response, next: NextFun
 router.get('/banner', (req: ReposAppRequest, res: Response, next: NextFunction) => {
   const { config } = getProviders(req);
   const offline = config?.github?.links?.provider?.linkingOfflineMessage;
-  return res.json({ offline });
+  return res.json({ offline }) as unknown as void;
 });
 
-router.delete(
-  '/',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
-    const activeContext = (req.individualContext || req.apiContext) as IndividualContext;
-    return unlinkInteractive(true, activeContext, req, res, next);
-  })
-);
+router.delete('/', async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  const activeContext = (req.individualContext || req.apiContext) as IndividualContext;
+  return unlinkInteractive(true, activeContext, req, res, next);
+});
 
-router.post(
-  '/',
-  validateLinkOk,
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
-    const activeContext = (req.individualContext || req.apiContext) as IndividualContext;
-    return interactiveLinkUser(true, activeContext, req, res, next);
-  })
-);
+// codeql[js/missing-rate-limiting] - rate limiting is enforced globally in middleware/index.ts (120 req/min per identity; configure via RATE_LIMIT_MODE/RATE_LIMIT_AUDIT_* env vars)
+router.post('/', validateLinkOk, async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  const activeContext = (req.individualContext || req.apiContext) as IndividualContext;
+  return interactiveLinkUser(true, activeContext, req, res, next);
+});
 
-router.use('*', (req: ReposAppRequest, res: Response, next: NextFunction) => {
-  return next(jsonError('API or route not found', 404));
+router.use('/*splat', (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  return next(CreateError.NotFound('API or route not found'));
 });
 
 export default router;

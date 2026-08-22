@@ -3,68 +3,70 @@ name: NIH GHMP (Prod) - Update Database Org Settings
 on:
   workflow_dispatch:
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
-     - uses: actions/checkout@v2
-     - uses: ruby/setup-ruby@v1.127.0
-       with:
-        ruby-version: '3.0' # Not needed with a .ruby-version file
-     
-     - name: update ruby reqs
-       run: |
-        gem install jwt
-     # ruby jwt script has hardcoded reference to GitHub app id - unique in each branch   
-     - name: run jwt generator
-       run: |
-         ruby .github/scripts/jwt.rb >> token 
-         ls -lah       
-       env:
-         PEM: ${{ secrets.PROD_APP_PEM }}
-         APPID: ${{ secrets.PROD_APP_ID }}
-          
-        
-     - name: run gh cli to get app install info
-       run: |
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # v1.310.0
+        with:
+          ruby-version: '3.0' # Not needed with a .ruby-version file
+
+      - name: update ruby reqs
+        run: |
+          gem install jwt
+      # ruby jwt script has hardcoded reference to GitHub app id - unique in each branch
+      - name: run jwt generator
+        run: |
+          ruby .github/scripts/jwt.rb >> token 
+          ls -lah
+        env:
+          PEM: ${{ secrets.PROD_APP_PEM }}
+          APPID: ${{ secrets.PROD_APP_ID }}
+
+      - name: run gh cli to get app install info
+        run: |
           curl \
           -H "Accept: application/vnd.github+json" \
           -H "Authorization: Bearer $(cat token)" \
           -H "X-GitHub-Api-Version: 2022-11-28" \
           https://api.github.com/app/installations?per_page=100 | jq >> app_output.json
           cat ./app_output.json
-      
-     # needs a PAT that can read org and enterprise data 
-     - name: run powershell script to build sql
-       run: | 
+
+      # needs a PAT that can read org and enterprise data
+      - name: run powershell script to build sql
+        run: |
           .github/scripts/Create-PSQLUpdate.ps1
-       shell: pwsh
-          
-       env:
-        PAT: ${{ secrets.ENT_READ_PAT }}
-        
-     - name: output sql
-       run: |
-        ls -lah
-        cat ./app_output.json
-        cat ./update.sql
-        
-     - name: Azure Login 
-       uses: Azure/login@v1.4.6
-       with:
-         creds: '{"clientId":"${{ secrets.AAD_CLIENT_ID }}","clientSecret":"${{ secrets.AAD_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AAD_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AAD_TENANT_ID }}"}'
-         
-     - name: PSQL update
-       uses: azure/postgresql@v1
-       with:
-        connection-string: ${{ secrets.PROD_PSQL_CONN }}
-        server-name: $${{ secrets.PROD_PSQL_SERVER }}
-        plsql-file: ./update.sql
-        
-     - name: Azure CLI Action
-       uses: Azure/cli@v1
-       with:
-        # Needs the azure webapp name and resource group - unique in each branch
-        inlineScript: az webapp restart --name ${{ secrets.PROD_AAS }} --resource-group ${{ secrets.PROD_RG }}  
-        
+        shell: pwsh
+        env:
+          PAT: ${{ secrets.ENT_READ_PAT }}
+
+      - name: output sql
+        run: |
+          ls -lah
+          cat ./app_output.json
+          cat ./update.sql
+
+      - name: Azure Login
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        with:
+          client-id: ${{ secrets.AAD_CLIENT_ID }}
+          tenant-id: ${{ secrets.AAD_TENANT_ID }}
+          subscription-id: ${{ secrets.AAD_SUBSCRIPTION_ID }}
+
+      - name: Install psql client
+        run: sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: PSQL update
+        run: psql "${{ secrets.PROD_PSQL_CONN }}" -f ./update.sql
+
+      - name: Azure CLI Action
+        uses: Azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3.0.0
+        with:
+          # Needs the azure webapp name and resource group - unique in each branch
+          inlineScript: az webapp restart --name ${{ secrets.PROD_AAS }} --resource-group ${{ secrets.PROD_RG }}

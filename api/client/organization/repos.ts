@@ -4,50 +4,54 @@
 //
 
 import { NextFunction, Response, Router } from 'express';
-import asyncHandler from 'express-async-handler';
 
-import { jsonError } from '../../../middleware';
-import { CreateError, getProviders } from '../../../lib/transitional';
-import { Repository } from '../../../business';
+import { CreateError, getProviders } from '../../../lib/transitional.js';
+import { Repository } from '../../../business/index.js';
 
-import JsonPager from '../jsonPager';
-import { ReposAppRequest, IProviders } from '../../../interfaces';
-import { sortRepositoriesByNameCaseInsensitive } from '../../../lib/utils';
-import { apiMiddlewareRepositoriesToRepository } from '../../../middleware/business/repository';
+import JsonPager from '../jsonPager.js';
+import { ReposAppRequest, IProviders, GitHubRepositoryVisibility } from '../../../interfaces/index.js';
+import { sortRepositoriesByNameCaseInsensitive } from '../../../lib/utils.js';
+import { apiMiddlewareRepositoriesToRepository } from '../../../middleware/business/repository.js';
 
-import routeRepo from './repo';
+import routeRepo from './repo.js';
+import getCompanySpecificDeployment from '../../../middleware/companySpecificDeployment.js';
 
 const router: Router = Router();
 
-router.get(
-  '/',
-  asyncHandler(async (req: ReposAppRequest, res: Response, next: NextFunction) => {
-    const { organization } = req;
-    const providers = getProviders(req);
-    const pager = new JsonPager<Repository>(req, res);
-    const searchOptions = {
-      q: (req.query.q || '') as string,
-      type: (req.query.type || '') as string, // CONSIDER: TS: stronger typing
-    };
-    try {
-      const repos = await searchRepos(
+router.get('/', async (req: ReposAppRequest, res: Response, next: NextFunction) => {
+  const { organization } = req;
+  const providers = getProviders(req);
+  const pager = new JsonPager<Repository>(req, res);
+  let searchOptions: ISearchReposOptions = {
+    q: (req.query.q || '') as string,
+    type: (req.query.type || '') as string, // CONSIDER: TS: stronger typing
+  };
+  try {
+    const companySpecificDeployment = getCompanySpecificDeployment();
+    if (companySpecificDeployment?.features?.repositorySearch?.augmentSearchOptions) {
+      searchOptions = await companySpecificDeployment.features.repositorySearch.augmentSearchOptions(
         providers,
-        String(organization.id),
-        RepositorySearchSortOrder.Updated,
+        req,
         searchOptions
       );
-      const slice = pager.slice(repos);
-      return pager.sendJson(
-        slice.map((repo) => {
-          return repo.asJson();
-        })
-      );
-    } catch (repoError) {
-      console.dir(repoError);
-      return next(jsonError(repoError));
     }
-  })
-);
+    const repos = await searchRepos(
+      providers,
+      String(organization.id),
+      RepositorySearchSortOrder.Updated,
+      searchOptions
+    );
+    const slice = pager.slice(repos);
+    return pager.sendJson(
+      slice.map((repo) => {
+        return repo.asJson();
+      })
+    );
+  } catch (repoError) {
+    console.dir(repoError);
+    return next(repoError);
+  }
+});
 
 // --- Search reimplementation ---
 
@@ -55,6 +59,7 @@ export enum RepoListSearchType {
   All = '',
   Public = 'public',
   Private = 'private',
+  Internal = 'internal',
   Sources = 'sources',
   Forks = 'forks',
 }
@@ -65,6 +70,8 @@ export function repoListSearchTypeToDisplayName(v: RepoListSearchType) {
       return 'All';
     case RepoListSearchType.Forks:
       return 'Forks';
+    case RepoListSearchType.Internal:
+      return 'Internal';
     case RepoListSearchType.Private:
       return 'Private';
     case RepoListSearchType.Public:
@@ -82,6 +89,7 @@ export function repoSearchTypeFilterFromStringToEnum(value: string) {
     case RepoListSearchType.All:
     case RepoListSearchType.Public:
     case RepoListSearchType.Private:
+    case RepoListSearchType.Internal:
     case RepoListSearchType.Forks:
     case RepoListSearchType.Sources:
       return value as RepoListSearchType;
@@ -114,11 +122,17 @@ function getFilter(type: RepoListSearchType): RepoFilterFunction {
       }; // ? is this what 'Sources' means on GitHub?
     case RepoListSearchType.Public:
       return (repo) => {
-        return !repo.private;
+        return repo.visibility ? repo.visibility === GitHubRepositoryVisibility.Public : !repo.private;
       };
     case RepoListSearchType.Private:
       return (repo) => {
-        return repo.private;
+        return repo.visibility
+          ? repo.visibility === GitHubRepositoryVisibility.Private
+          : repo.private === true;
+      };
+    case RepoListSearchType.Internal:
+      return (repo) => {
+        return repo.visibility === GitHubRepositoryVisibility.Internal;
       };
     case RepoListSearchType.All:
     default:
@@ -187,12 +201,20 @@ function getSorter(search: RepositorySearchSortOrder): RepoSortFunction {
 }
 
 function repoMatchesPhrase(phrase: string, repo: Repository) {
-  // assumes string is already lowercase
-  const string = ((repo.name || '') + (repo.description || '') + (repo.id || '')).toLowerCase();
+  // function assumes string is already lowercase
+  // allow searching using GitHub repo URLs
+  if (phrase?.startsWith('https://github.com/')) {
+    const parts = phrase.split('/');
+    if (parts.length >= 5) {
+      phrase = parts[3] + '/' + parts[4] + '/';
+    }
+  }
+  const fullName = repo.full_name || repo.organization.name + '/' + repo.name + '/';
+  const string = ((repo.name || '') + (repo.description || '') + fullName + (repo.id || '')).toLowerCase();
   return string.includes(phrase);
 }
 
-interface ISearchReposOptions {
+export interface ISearchReposOptions {
   q?: string;
   type?: string;
   language?: string;
@@ -205,9 +227,11 @@ export async function searchRepos(
   options: ISearchReposOptions
 ) {
   const { queryCache } = providers;
-
   const { q, type } = options;
-
+  const companySpecific = getCompanySpecificDeployment();
+  if (companySpecific?.features?.repositorySearch?.primeSearchData) {
+    await companySpecific.features.repositorySearch.primeSearchData(providers, options);
+  }
   // TODO: aggressive in-memory caching for each org
   let repositories = (
     organizationId
@@ -230,6 +254,14 @@ export async function searchRepos(
     }
   }
 
+  if (companySpecific?.features?.repositorySearch?.searchRepos) {
+    repositories = await companySpecific.features.repositorySearch.searchRepos(
+      providers,
+      options,
+      repositories
+    );
+  }
+
   // Sort
   repositories.sort(getSorter(sort));
 
@@ -238,9 +270,9 @@ export async function searchRepos(
 
 // --- End of search reimplementation ---
 
-router.use('/:repoName', asyncHandler(apiMiddlewareRepositoriesToRepository), routeRepo);
+router.use('/:repoName', apiMiddlewareRepositoriesToRepository, routeRepo);
 
-router.use('*', (req, res: Response, next: NextFunction) => {
+router.use('/*splat', (req, res: Response, next: NextFunction) => {
   return next(CreateError.NotFound('no API or function available within org/repos endpoint'));
 });
 
