@@ -94,9 +94,6 @@ div.navbar.navbar-default(style=reposContext ? 'margin-bottom:0' : undefined)
           li
             a(href=config.urls.explore)
               i.glyphicon.glyphicon-question-sign
-        li
-          a(href='/settings', title='Settings')
-            i.glyphicon.glyphicon-cog
         //- User Account Menu
         if user && user.azure
           li.dropdown
@@ -111,7 +108,7 @@ div.navbar.navbar-default(style=reposContext ? 'margin-bottom:0' : undefined)
                 if user.azure
                   = user.azure.displayName || user.azure.username
               //-span.caret
-            ul.dropdown-menu
+            ul.dropdown-menu(style='white-space:nowrap;min-width:100%;width:auto')
               li
                 if user.azure
                   ul.list-unstyled-dropdown-first
@@ -136,6 +133,9 @@ div.navbar.navbar-default(style=reposContext ? 'margin-bottom:0' : undefined)
               else
                 li
                   a(href='/' + signinPathSegment + '/github') Sign in to GitHub
+              li.divider(role='separator')
+              li
+                a(href='/settings') Settings
               li
                 a(href='/signout') Sign out
               if enableMultipleAccounts && enableMultipleAccounts === true
