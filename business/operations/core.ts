@@ -1322,7 +1322,7 @@ export class Operations {
     installation: IGitHubAppInstallation,
     corporateIdentity: ICorporateIdentity
   ): Promise<OrganizationSetting> {
-    const settings = OrganizationSetting.CreateFromStaticSettings(staticSettings as ConfigGitHubOrganization);
+    const settings = OrganizationSetting.CreateFromStaticSettings(staticSettings);
     if (installation.target_type !== 'Organization') {
       throw new Error(`Unsupported GitHub App target of ${installation.target_type}.`);
     }

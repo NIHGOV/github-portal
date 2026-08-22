@@ -659,6 +659,12 @@ export class Team {
       return teamMembers;
     } catch (error) {
       if (ErrorHelper.IsNotFound(error)) {
+        // Enterprise Team-backed teams (slug prefixed "ent:") are synced read-only from the
+        // enterprise/IdP level; the classic members endpoint 404s for them instead of returning
+        // an empty list, so treat that specific case as "no members available here".
+        if (this.slug && this.slug.startsWith('ent:')) {
+          return [];
+        }
         // If a previously cached slug is no longer good, remove from the leaky store
         memoryIdToSlugStore.delete(Number(this.id));
       }

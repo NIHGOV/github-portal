@@ -48,6 +48,35 @@ applying bumps in tiers (patch → minor → major), running `bun run build`, `b
 
 ---
 
+## Fixed crash adopting an org already known to `operations` (August 2026)
+
+Adopting an org that `Operations.getOrganizationSettingsInstance()` already had in memory (already
+active, or from a legacy static config entry) threw "static keys which are not recognized..."
+`createDynamicSettingsForNewOrganization()` was re-running the already-converted
+`OrganizationSetting` back through `CreateFromStaticSettings()`, which only strips legacy
+config field names, not the entity's own. Fix: `CreateFromStaticSettings()` now detects an
+already-converted input and clones it defensively instead of re-mapping it.
+
+---
+
+## Filtered `NIHGitHubAdmin` out of repository admin cards (August 2026)
+
+Same filter as the org Owners list fix below, applied to `business/repository.ts#getAdmins()`,
+so `NIHGitHubAdmin` no longer shows up as an "Org Admin" card on every repository's detail page.
+
+---
+
+## Fixed 404 crash when viewing an Enterprise Team-backed org team's page (August 2026)
+
+Enterprise Team-backed org teams (slug prefixed `ent:`) 404 on the classic
+`GET /orgs/{org}/teams/{team_slug}/members` endpoint instead of returning an empty list,
+crashing team pages. Fix: `business/team.ts#getMembers()` now returns `[]` for that case
+instead of throwing the error; all other member/maintainer lookups build on top of it.
+
+> > > > > > > origin/staging
+
+---
+
 ## Organization Page Fixes (August 2026)
 
 - `NIHGitHubAdmin` (a service account) is now filtered out of the Owners list in `business/organization.ts#getOwnersCardData`, so it never appears on the org overview or public invitation pages.

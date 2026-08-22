@@ -306,9 +306,6 @@ block content
             br
             | At this time, this program is only open to Microsoft full-time employees and interns.
 
-        if corporateViews && corporateViews.contributions && corporateViews.contributions.fossfundabout
-          include ../corporate/contributions/fossfundabout
-
       else if isSelf && false
         if contributionCount > 0
           p
@@ -359,9 +356,6 @@ block content
         h2 Not linked
         p You have not yet linked a GitHub account, so no contributions information is available.
         p: a.btn.btn-primary(href='/link') Link
-        if corporateViews && corporateViews.contributions && corporateViews.contributions.fossfundabout
-          hr
-          include ../corporate/contributions/fossfundabout
 
       hr
       p: small.
