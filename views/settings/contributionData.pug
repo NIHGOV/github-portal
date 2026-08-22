@@ -32,7 +32,3 @@ block content
             li: input.input-control#optincheck(type='checkbox', name='optIn', value='1', checked=userSettings.contributionShareOptIn === true)
             li: label(for='optincheck') Opt-in to public contribution and avatar sharing
           p: button.btn.btn-primary(name='add') Save your choice
-
-        if corporateViews && corporateViews.contributions && corporateViews.contributions.datasharing
-          hr
-          include ../corporate/contributions/datasharing
