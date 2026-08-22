@@ -86,6 +86,8 @@ instead of throwing the error; all other member/maintainer lookups build on top 
 - `views/footer.pug`: swapped column alignment so the NIH logo is left-aligned and the Version/legal notices/Contact/Contribute/Powered-by messaging is right-aligned; fixed the "Powered by" hyperlink so it ends on the word "source" instead of also wrapping the trailing comma.
 - `views/footer.pug`: the "Powered by ... GitHub API." line sat ~5px (about one character) further right than the Version/Contact/Contribute lines above it, because those are `<li>`s inside Bootstrap's `.list-inline` (which adds `padding-right:5px`) while the Powered-by text wasn't wrapped in any element with matching padding. Wrapped both branches in a `span(style='padding-right:5px')` so all rows align to the same right edge.
 - `views/nav2.pug`: navbar wrapper changed from `.container-fluid` to `.container` so the navbar content aligns with the fixed-width page container instead of spanning the full viewport width.
+- `views/reposToolbar.pug`: same `.container-fluid` → `.container` fix for the Organizations/Repositories/Teams/People subnav, so it lines up with the fixed-width containers above and below it.
+- `views/nav2.pug`: Settings icon changed from `glyphicon-option-vertical` (kebab menu) to `glyphicon-cog` (gear), which better signals "Settings".
 
 ---
 
