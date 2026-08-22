@@ -1136,7 +1136,9 @@ export class Organization {
         });
 
         return acc;
-      }, []);
+      }, [])
+      // NIH: NIHGitHubAdmin is a service account and should not be listed as an org owner.
+      .filter((admin) => admin.login && admin.login.toLowerCase() !== 'nihgithubadmin');
 
     return organizationAdmins;
   }

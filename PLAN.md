@@ -4,6 +4,16 @@ Priority-ordered list of security improvements identified across this repository
 
 ---
 
+## Organization Page Fixes (August 2026)
+
+- `NIHGitHubAdmin` (a service account) is now filtered out of the Owners list in `business/organization.ts#getOwnersCardData`, so it never appears on the org overview or public invitation pages.
+- Removed the hardcoded 5-card limit on the Owners list (`views/nih/mixins.pug#orgAdminCards`); `views/org/index.pug` now renders all organization owners instead of truncating with no way to see the rest.
+- `views/org/index.pug`: moved the "About the Organization" section above "Teams You Maintain" so it's visible without scrolling past team management tables.
+- `views/org/index.pug`: the top `<> Organization` header now links the org name to the org on GitHub, so it's the first org link on the page instead of the "Open on GitHub" link further down.
+- `views/footer.pug`: swapped column alignment so the NIH logo is left-aligned and the Version/legal notices/Contact/Contribute/Powered-by messaging is right-aligned; fixed the "Powered by" hyperlink so it ends on the word "source" instead of also wrapping the trailing comma.
+
+---
+
 ## Azure Region Migration: Central US → East US (August 2026)
 
 Moved the default Azure region for all Terraform-managed and ACI resources from `centralus` to `eastus`.
@@ -558,6 +568,78 @@ SET corporatename = 'New Display Name'
 WHERE thirdpartytype = 'github'
   AND lower(thirdpartyusername) = '<github-login-lowercase>';
 ```
+
+### Bulk ARPA-H User Migration (batch of users)
+
+For a batch of users who migrated NIH → ARPA-H before multitenant support existed, use
+[`scripts/arpaHIdentityMigration.ts`](scripts/arpaHIdentityMigration.ts) instead of hand-editing
+each row. It re-points existing `links` rows (matched by GitHub login, which does not change
+across the tenant migration) to the new ARPA-H `corporateid`/`corporateusername`, and is safe to
+re-run (dry-run by default, skips rows already migrated, never guesses/fuzzy-matches identities).
+
+#### Step 1 — Gather data with Reader access
+
+Reader access to the production resource group is enough to export App Service/Postgres
+_resource_ metadata, but not directory data or secrets. To build the mapping you additionally
+need:
+
+- The list of GitHub logins with an existing link whose `corporateusername` looks like an NIH
+  account that's now stale (candidates for migration) — ask someone with prod DB access to run:
+
+  ```sql
+  SELECT thirdpartyusername, corporateusername, corporateid, corporatename
+  FROM links
+  WHERE thirdpartytype = 'github'
+    AND lower(corporateusername) LIKE '%@nih.gov';
+  ```
+
+- For each candidate, the new ARPA-H home-tenant identity, exported from the ARPA-H tenant
+  (requires Directory Reader in that tenant, separate from the NIH RG Reader role):
+
+  ```bash
+  az login --tenant <arpa-h-tenant-id>
+  az ad user list --query "[].{upn:userPrincipalName, oid:id, mail:mail, displayName:displayName}" -o json
+  ```
+
+Match candidates to ARPA-H accounts **by hand** (e.g. name, known alias, HR migration list) —
+do not auto-match on email local-part alone; a wrong match links one person's GitHub account to
+another person's corporate identity.
+
+#### Step 2 — Build the mapping file
+
+Create a JSON file (do **not** commit it — put it under `secrets/`, which is gitignored) with one
+entry per user:
+
+```json
+[
+  {
+    "githubLogin": "octocat",
+    "newCorporateId": "11111111-2222-3333-4444-555555555555",
+    "newCorporateUsername": "jdoe@arpa-h.gov",
+    "newCorporateDisplayName": "Jane Doe",
+    "newCorporateMailAddress": "jdoe@arpa-h.gov",
+    "notes": "confirmed via HR migration list 2026-08-20"
+  }
+]
+```
+
+#### Step 3 — Dry run, then commit
+
+```bash
+ARPAH_MIGRATION_FILE=secrets/arpah-migration.json node dist/scripts/arpaHIdentityMigration.js
+```
+
+Review the printed before/after diff and the summary counts (`updated` / `already migrated` /
+`not found` / `invalid rows` / `errors`). Every planned change is also appended to
+`secrets/arpah-migration-audit.jsonl` (before/after values, for rollback) regardless of dry-run.
+Once the diff looks correct, re-run with the commit flag against staging first, then production:
+
+```bash
+ARPAH_MIGRATION_FILE=secrets/arpah-migration.json ARPAH_MIGRATION_COMMIT=1 node dist/scripts/arpaHIdentityMigration.js
+```
+
+Then follow Steps 3–4 of the single-user procedure above (confirm `ENTRA_ID_ALLOWED_TENANT_IDS`,
+have each user sign in).
 
 ---
 
