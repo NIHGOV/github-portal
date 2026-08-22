@@ -95,6 +95,10 @@ Before the workflow can run, a storage account for Terraform state must exist:
 
 Replaced hardcoded-secret YAML files with GitHub Actions workflows and `infra/aci/` reference configs.
 
+**Update (Aug 2026):** Deleted `infra/aci/{staging,prod}-firehose.yml` and `infra/aci/{staging,prod}-cachebuilder.yml` — they documented the old static ACR credential + Service Bus connection-string approach, which the active workflows no longer use (managed identity + OIDC `az acr credential show` instead).
+
+**Update (Aug 2026):** Added the `azure-cli` devcontainer feature to `.devcontainer/devcontainer.json` so `az` is available out of the box, matching the `az login`/OIDC workflows referenced throughout this plan.
+
 ### Staging
 
 - [x] Add GitHub Secret `DEV_RG` → `GitHub_OpenSource_Portal_Dev`

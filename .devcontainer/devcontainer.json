@@ -6,7 +6,9 @@
     // gh CLI — required for PR and GitHub operations
     "ghcr.io/devcontainers/features/github-cli:1": {},
     // bun package manager — replaces npm for supply chain safety (SHA-pinned lockfile)
-    "ghcr.io/devcontainers-contrib/features/bun:1": {}
+    "ghcr.io/devcontainers-contrib/features/bun:1": {},
+    // az CLI — required for App Service configuration
+    "ghcr.io/devcontainers/features/azure-cli:1": {}
   },
 
   "postCreateCommand": "bun install --frozen-lockfile",
