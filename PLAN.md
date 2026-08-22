@@ -4,6 +4,15 @@ Priority-ordered list of security improvements identified across this repository
 
 ---
 
+## Fixed 404 crash when viewing an Enterprise Team-backed org team's page (August 2026)
+
+Enterprise Team-backed org teams (slug prefixed `ent:`) 404 on the classic
+`GET /orgs/{org}/teams/{team_slug}/members` endpoint instead of returning an empty list,
+crashing team pages. Fix: `business/team.ts#getMembers()` now returns `[]` for that case
+instead of throwing the error; all other member/maintainer lookups build on top of it.
+
+---
+
 ## Organization Page Fixes (August 2026)
 
 - `NIHGitHubAdmin` (a service account) is now filtered out of the Owners list in `business/organization.ts#getOwnersCardData`, so it never appears on the org overview or public invitation pages.
