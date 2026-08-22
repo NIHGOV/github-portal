@@ -93,7 +93,7 @@ jobs:
           az container create \
             --resource-group "$RG" \
             --name nihgithubportalcb \
-            --location centralus \
+            --location eastus \
             --image "$REGISTRY_SERVER/portal:${{ github.sha }}" \
             --registry-login-server "$REGISTRY_SERVER" \
             --registry-username "$REGISTRY_USER" \
@@ -182,7 +182,7 @@ jobs:
           az container create \
             --resource-group "$RG" \
             --name nihgithubportalfh \
-            --location centralus \
+            --location eastus \
             --image "$REGISTRY_SERVER/portal:${{ github.sha }}" \
             --registry-login-server "$REGISTRY_SERVER" \
             --registry-username "$REGISTRY_USER" \
