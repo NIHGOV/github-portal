@@ -11,7 +11,7 @@ Notes for AI coding agents working on this repository.
 - **Lint** (also enforced by pre-push hook): `bun run lint:md && bun run lint:js && bun run lint:spell`
 - **Prettier** enforced via ESLint. Run `bunx prettier --write <files>` after large edits.
 - **cSpell** allowlist: `.cspell.json`. Add real words that CI flags.
-- **SAML SSO push:** `unset GITHUB_TOKEN && gh auth setup-git` before `git push` to NIHGOV.
+- **SAML SSO push:** `git push` to NIHGOV normally works as-is — don't preemptively `unset GITHUB_TOKEN`. It also holds the token Codespaces uses for GPG-signing commits, so unsetting it breaks signing. Only if a push fails with a SAML SSO 403 should you check `gh auth status` (which token is active) and consider re-authorizing; if signing breaks as a result, reload the VS Code window to restore it — don't substitute `gh auth token`'s value, it's a different credential and Codespaces signing will reject it.
 
 ## Deploy workflows
 
