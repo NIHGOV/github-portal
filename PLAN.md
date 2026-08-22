@@ -4,6 +4,13 @@ Priority-ordered list of security improvements identified across this repository
 
 ---
 
+## Filtered `NIHGitHubAdmin` out of repository admin cards (August 2026)
+
+Same filter as the org Owners list fix below, applied to `business/repository.ts#getAdmins()`,
+so `NIHGitHubAdmin` no longer shows up as an "Org Admin" card on every repository's detail page.
+
+---
+
 ## Fixed 404 crash when viewing an Enterprise Team-backed org team's page (August 2026)
 
 Enterprise Team-backed org teams (slug prefixed `ent:`) 404 on the classic
