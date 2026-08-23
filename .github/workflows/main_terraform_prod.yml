@@ -84,12 +84,26 @@ jobs:
       - name: Terraform Import
         if: ${{ github.event.inputs.action == 'import' }}
         working-directory: infra/terraform/prod
+        env:
+          IMPORT_ADDRESS: ${{ github.event.inputs.import_address }}
+          IMPORT_RESOURCE_ID: ${{ github.event.inputs.import_resource_id }}
         run: |
+          # Masked and validated, then passed as shell variables (never expression-interpolated
+          # into the script body) so a crafted value can't execute as shell code or leak in logs.
+          echo "::add-mask::$IMPORT_RESOURCE_ID"
+          if [[ ! "$IMPORT_ADDRESS" =~ ^[A-Za-z_][A-Za-z0-9_-]*(\.[A-Za-z_][A-Za-z0-9_\[\]\"'-]*)+$ ]]; then
+            echo "::error::import_address does not look like a valid Terraform resource address"
+            exit 1
+          fi
+          if [[ ! "$IMPORT_RESOURCE_ID" =~ ^/subscriptions/[0-9a-fA-F-]+/ ]]; then
+            echo "::error::import_resource_id does not look like a valid Azure resource ID"
+            exit 1
+          fi
           terraform import \
             -var="resource_group_name=${{ secrets.PROD_RG }}" \
             -var="servicebus_namespace_name=${{ vars.PROD_SERVICEBUS_NAMESPACE }}" \
-            "${{ github.event.inputs.import_address }}" \
-            "${{ github.event.inputs.import_resource_id }}"
+            "$IMPORT_ADDRESS" \
+            "$IMPORT_RESOURCE_ID"
 
       - name: Terraform Plan
         working-directory: infra/terraform/prod

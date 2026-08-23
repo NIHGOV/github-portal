@@ -274,7 +274,7 @@ jobs:
                 -e 's/^([[:space:]]*(before|after):).*/\1 [REDACTED]/' \
                 -e 's/^.* toggled (for link|back to original value for) .*/[REDACTED]/' \
                 -e 's/(marked ready) -> .*/\1 [REDACTED]/' \
-                -e 's/\(live:[^)]*\)/(redacted)/g'
+                -e 's/\(live:.*/(redacted)/'
 
           EXIT_CODE=$(az container show --resource-group "$RG" --name "$CONTAINER_NAME" \
             --query "containers[0].instanceView.currentState.exitCode" --output tsv 2>/dev/null || echo "1")

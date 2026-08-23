@@ -4,6 +4,43 @@ Priority-ordered list of security improvements identified across this repository
 
 ---
 
+## Log Analytics wiring, Service Bus webhook fix, and log redaction (August 2026)
+
+- **Fixed a real webhook-delivery gap**: the `nihdevgithubportal`/`nihgithubportalevents` Logic
+  App (the sole GitHub → Service Bus publishing path per `docs/webhooks.md`) was still wired to the
+  pre-migration Service Bus namespace's `events` queue via its `servicebus` API connection —
+  firehose moved to the new `nihdevgithubportalsb`/`nihgithubportalsb` namespace during the June
+  2026 managed-identity migration, but this connection was never repointed. Confirmed via matching
+  `X-Ms-Workflow-Id`/`X-Ms-Workflow-Run-Id` headers from a live GitHub webhook delivery against the
+  Logic App's run history. Dev's orphaned queue had accumulated 58 active + 1198 dead-lettered
+  messages; prod had 620 active. Fixed by adding a send-only
+  `azurerm_servicebus_queue_authorization_rule` on the existing `events` queue and importing the
+  pre-existing `servicebus` connection so Terraform can repoint its connection string, without
+  touching the Logic App's own definition — `infra/terraform/{dev,prod}/main.tf`. Also fixed a
+  `managed_api_id` region mismatch (dev's connection was created in `centralus`, not `eastus`) that
+  was forcing an unwanted destroy/recreate instead of an in-place update.
+- **Wired Log Analytics into every other Azure resource** that wasn't already covered (App Service,
+  PostgreSQL Flexible Server, Redis Cache, Container Registry, and the Terraform-managed Service Bus
+  namespace) via `azurerm_monitor_diagnostic_setting`, referencing the existing resources through
+  data sources rather than importing/managing them — `infra/terraform/{dev,prod}/main.tf`.
+- **Redacted corporate-identity data from the public `tenant_migration.yml` workflow log**:
+  `applyMigration.ts`/`setTargets.ts` and the shared link-provider's column-change logging print
+  full corporate GUIDs, emails, and display names to stdout; only the gather-mode candidates-JSON
+  block was previously redacted, leaving patch-mode runs fully exposed in this repo's world-readable
+  Actions logs. Now scrubs GUIDs, emails, corporate-identity snapshot lines, and drift-comparison
+  details from what's echoed into the job log.
+- Added a `terraform import` action (plus masked/validated `import_address`/`import_resource_id`
+  inputs, passed as env vars rather than interpolated into the script) to both Terraform workflows,
+  so `terraform import` can be run entirely through Actions instead of requiring local/Cloud Shell
+  access.
+- Bumped `hashicorp/setup-terraform` to v4.0.1 (native Node 24, drops the Node 20 deprecation
+  warning).
+- Added a "this repo is public" note to `AGENTS.md` — code, commits, Actions logs, issues, and PRs
+  are all world-readable; flag anything that would leak credentials/PII/infra details before
+  proceeding.
+
+---
+
 ## Fixed missing Log Analytics wiring for `nihgithubportalcb` (August 2026)
 
 Azure Portal's Monitoring > Logs showed the Log Analytics workspace for `nihgithubportalfh` but
