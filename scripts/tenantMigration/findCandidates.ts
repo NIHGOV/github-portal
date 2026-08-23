@@ -120,6 +120,7 @@ async function findCandidates(providers: IProviders): Promise<void> {
 
       if (status === 'pending') {
         outputRows.push({
+          thirdPartyId: pair.link.thirdPartyId,
           thirdPartyUsername: pair.member.login,
           organization: orgName,
           discoveredCorporateId: pair.link.corporateId,

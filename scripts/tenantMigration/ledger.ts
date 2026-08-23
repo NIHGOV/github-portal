@@ -175,7 +175,7 @@ export async function upsertCandidate(
 export async function setTarget(
   pool: PostgresPool,
   batchId: string,
-  thirdPartyUsername: string,
+  thirdPartyId: string,
   target: IMigrationTarget
 ): Promise<number> {
   const result = await PostgresPoolQueryAsync(
@@ -191,7 +191,7 @@ export async function setTarget(
         status = 'ready',
         updatedat = now()
     WHERE batchid = $7
-      AND lower(thirdpartyusername) = lower($8)
+      AND thirdpartyid = $8
       AND status IN ('pending', 'needs-review', 'ready')
   `,
     [
@@ -202,20 +202,22 @@ export async function setTarget(
       target.sourceTenantLabel || null,
       target.targetTenantLabel || null,
       batchId,
-      thirdPartyUsername,
+      thirdPartyId,
     ]
   );
   return result.rowCount as number;
 }
 
-// Resets any "ready" rows in the batch NOT present in keepThirdPartyUsernames back to
-// "needs-review". Called after a setTargets.ts run so a stale target from an earlier
-// submission (since removed, blanked, or replaced by an invalid row) can't still be picked
-// up by a later applyMigration.ts run.
+// Resets any "ready" rows in the batch NOT present in keepThirdPartyIds back to "needs-review".
+// Called after a setTargets.ts run so a stale target from an earlier submission (since removed,
+// blanked, or replaced by an invalid row) can't still be picked up by a later applyMigration.ts
+// run. Keyed by the immutable thirdPartyId, not the mutable thirdPartyUsername: a rename plus
+// GitHub login reuse could otherwise let two distinct identities share one cached username, so a
+// username-keyed match could revoke (or, in setTarget, ready) the wrong row.
 export async function revokeReadyExcept(
   pool: PostgresPool,
   batchId: string,
-  keepThirdPartyUsernames: string[]
+  keepThirdPartyIds: string[]
 ): Promise<number> {
   const result = await PostgresPoolQueryAsync(
     pool,
@@ -225,9 +227,9 @@ export async function revokeReadyExcept(
         updatedat = now()
     WHERE batchid = $1
       AND status = 'ready'
-      AND NOT (lower(thirdpartyusername) = ANY($2))
+      AND NOT (thirdpartyid = ANY($2))
   `,
-    [batchId, keepThirdPartyUsernames.map((username) => username.toLowerCase())]
+    [batchId, keepThirdPartyIds]
   );
   return result.rowCount as number;
 }

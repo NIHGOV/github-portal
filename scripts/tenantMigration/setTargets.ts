@@ -19,6 +19,7 @@
 //                                        avoids writing a secrets file to disk on a shared runner)
 // Both are the same JSON array findCandidates.ts prints, after being edited, with entries shaped like:
 //     {
+//       "thirdPartyId": "1234567",
 //       "thirdPartyUsername": "octocat",
 //       "newCorporateId": "11111111-2222-3333-4444-555555555555",
 //       "newCorporateUsername": "jdoe@target-tenant.example",
@@ -40,6 +41,7 @@ import { revokeReadyExcept, setTarget } from './ledger.js';
 const guidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface ITargetEntry {
+  thirdPartyId: string;
   thirdPartyUsername: string;
   newCorporateId: string;
   newCorporateUsername: string;
@@ -66,7 +68,7 @@ async function setTargets(providers: IProviders): Promise<void> {
   // Rows this submission successfully moved to "ready" -- anything previously "ready" for this
   // batch but *not* in this set (removed, blanked, or replaced by an invalid row this time) gets
   // reverted below so a stale target can't still be picked up by a later applyMigration.ts run.
-  const readyThirdPartyUsernames: string[] = [];
+  const readyThirdPartyIds: string[] = [];
 
   for (const [index, entry] of entries.entries()) {
     const label = `[row ${index + 1}] ${entry?.thirdPartyUsername || '(missing thirdPartyUsername)'}`;
@@ -81,7 +83,10 @@ async function setTargets(providers: IProviders): Promise<void> {
       continue;
     }
 
-    const rowCount = await setTarget(pool, batchId, entry.thirdPartyUsername, {
+    // Keyed by the immutable thirdPartyId, not the mutable thirdPartyUsername: a rename plus
+    // GitHub login reuse could otherwise let two distinct identities share one cached username,
+    // which a username-keyed UPDATE would then ready with the same corporate identity.
+    const rowCount = await setTarget(pool, batchId, entry.thirdPartyId, {
       newCorporateId: entry.newCorporateId,
       newCorporateUsername: entry.newCorporateUsername,
       newCorporateDisplayName: entry.newCorporateDisplayName,
@@ -98,12 +103,12 @@ async function setTargets(providers: IProviders): Promise<void> {
       continue;
     }
 
-    readyThirdPartyUsernames.push(entry.thirdPartyUsername);
+    readyThirdPartyIds.push(entry.thirdPartyId);
     console.log(`${label}: marked ready -> ${entry.newCorporateUsername}`);
     updated++;
   }
 
-  const revoked = await revokeReadyExcept(pool, batchId, readyThirdPartyUsernames);
+  const revoked = await revokeReadyExcept(pool, batchId, readyThirdPartyIds);
 
   console.log('');
   console.log('Summary:');
@@ -152,6 +157,9 @@ function validateEntry(entry: ITargetEntry): string[] {
   }
   if (!entry.thirdPartyUsername) {
     problems.push('missing thirdPartyUsername');
+  }
+  if (!entry.thirdPartyId) {
+    problems.push('missing thirdPartyId');
   }
   if (!entry.newCorporateId) {
     problems.push('missing newCorporateId');
