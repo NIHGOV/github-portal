@@ -2,6 +2,15 @@
 
 Notes for AI coding agents working on this repository.
 
+## Public repo — mind what gets published
+
+This repo (code, commits, Actions run logs, workflow logs, issues, PRs, discussions) is **public**.
+Anything written to a file, printed in a workflow log, or posted to an issue/PR is world-readable.
+Before adding logging, committing data files, or posting anywhere in this repo, check whether it
+would expose anything that shouldn't be public (credentials, internal identifiers, personal data,
+infrastructure details, etc.), and flag it to the user rather than assuming it's fine. If a request
+would cause information to leak into a public surface, say so before proceeding.
+
 ## Dev environment
 
 - **Package manager:** bun only. Never `npm install`. Lockfile: `bun.lock`.

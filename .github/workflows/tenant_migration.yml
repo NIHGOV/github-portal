@@ -265,8 +265,16 @@ jobs:
           done
 
           az container logs --resource-group "$RG" --name "$CONTAINER_NAME" > container.log 2>&1 || true
-          echo "--- container logs (candidate JSON, if any, is redacted here -- see the uploaded artifact) ---"
-          sed '/===TENANT_MIGRATION_CANDIDATES_JSON_BEGIN===/,/===TENANT_MIGRATION_CANDIDATES_JSON_END===/c\[REDACTED -- candidate corporate-identity data omitted from workflow logs]' container.log
+          echo "--- container logs ---"
+          # Removing logs from public view.
+          sed '/===TENANT_MIGRATION_CANDIDATES_JSON_BEGIN===/,/===TENANT_MIGRATION_CANDIDATES_JSON_END===/c\[REDACTED]' container.log \
+            | sed -E \
+                -e 's/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/[REDACTED]/g' \
+                -e 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/[REDACTED]/g' \
+                -e 's/^([[:space:]]*(before|after):).*/\1 [REDACTED]/' \
+                -e 's/^.* toggled (for link|back to original value for) .*/[REDACTED]/' \
+                -e 's/(marked ready) -> .*/\1 [REDACTED]/' \
+                -e 's/\(live:[^)]*\)/(redacted)/g'
 
           EXIT_CODE=$(az container show --resource-group "$RG" --name "$CONTAINER_NAME" \
             --query "containers[0].instanceView.currentState.exitCode" --output tsv 2>/dev/null || echo "1")
