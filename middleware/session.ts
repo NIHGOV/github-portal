@@ -50,6 +50,12 @@ export default async function ConnectSession(
     }
     const redisPrefix = config.session.redis.prefix ? `${config.session.redis.prefix}.session` : 'session';
     const redisLegacy = sessionRedisClient.duplicate();
+    // duplicate() returns a distinct client/socket from sessionRedisClient, so it needs its own
+    // error listener too -- without one, a transient socket error here becomes an unhandled
+    // exception and crashes the process, same as the client connectRedis() protects.
+    redisLegacy.on('error', (err) => {
+      dbg(`session Redis client error: ${err?.message || err}`);
+    });
     await redisLegacy.connect();
     const redisOptions = {
       client: redisLegacy,
