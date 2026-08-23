@@ -145,8 +145,14 @@ function validateEntry(entry: ITargetEntry): string[] {
   }
   if (!entry.newCorporateUsername) {
     problems.push('missing newCorporateUsername');
-  } else if (!entry.newCorporateUsername.includes('@')) {
-    problems.push(`newCorporateUsername does not look like a UPN: ${entry.newCorporateUsername}`);
+  } else {
+    // Require a nonempty, whitespace-free local part and domain -- `entry.includes('@')` alone
+    // accepted obviously-invalid values like "@" or "user@" that would then be committed as the
+    // account's corporate username.
+    const [local, domain, ...rest] = entry.newCorporateUsername.split('@');
+    if (rest.length > 0 || !local || !domain || /\s/.test(entry.newCorporateUsername)) {
+      problems.push(`newCorporateUsername does not look like a valid UPN: ${entry.newCorporateUsername}`);
+    }
   }
   return problems;
 }

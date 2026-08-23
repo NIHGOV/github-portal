@@ -52,9 +52,9 @@ on:
         type: boolean
         default: false
       image_tag:
-        description: 'ACR image tag to run (default: latest)'
+        description: "ACR image tag to run (default: this commit's SHA-tagged image; avoid the mutable `latest` tag, which may not match a successfully-built image for scripts/** changes)"
         required: false
-        default: 'latest'
+        default: ''
 
 permissions:
   id-token: write
@@ -68,6 +68,12 @@ jobs:
     # deployment jobs whenever this dispatch targets prod, so patching production links can't
     # bypass that approval gate.
     environment: ${{ inputs.environment == 'prod' && 'Production' || 'Development' }}
+    # Serializes dispatches per environment: the steps below share one fixed ACI container name
+    # per environment, so two concurrent runs would otherwise race on deleting/replacing each
+    # other's container. Queue (don't cancel) so an in-progress patch can't be interrupted.
+    concurrency:
+      group: tenant-migration-${{ inputs.environment }}
+      cancel-in-progress: false
 
     steps:
       - name: Validate inputs
@@ -96,7 +102,7 @@ jobs:
           esac
 
       - name: Azure Login
-        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3.0.1
         with:
           client-id: ${{ inputs.environment == 'prod' && secrets.PROD_AAD_CLIENT_ID || secrets.AAD_CLIENT_ID }}
           tenant-id: ${{ inputs.environment == 'prod' && secrets.PROD_AAD_TENANT_ID || secrets.AAD_TENANT_ID }}
@@ -153,7 +159,10 @@ jobs:
           fi
 
           ACR_NAME="${REGISTRY_SERVER%%.*}"
-          IMAGE_TAG="$IMAGE_TAG_INPUT"
+          # Default to this workflow run's own commit SHA (an immutable tag pushed by the ACR build
+          # job for that commit) rather than the mutable "latest" tag, which can silently point at
+          # a build that predates a scripts/**-only change.
+          IMAGE_TAG="${IMAGE_TAG_INPUT:-${{ github.sha }}}"
           REGISTRY_USER=$(az acr credential show --name "$ACR_NAME" --query username --output tsv)
           REGISTRY_PASS=$(az acr credential show --name "$ACR_NAME" --query "passwords[0].value" --output tsv)
 
@@ -175,7 +184,10 @@ jobs:
               fi
               # findCandidates.js prints the developer-facing JSON to stdout between marker lines;
               # captured from container logs in the next step (see JSON_BEGIN_MARKER in the script).
-              COMMAND_LINE="node /usr/src/repos/dist/scripts/tenantMigration/findCandidates.js"
+              # Note: the image's Dockerfile copies dist/'s *contents* to /usr/src/repos (no nested
+              # dist/ directory in the running container), so compiled scripts live directly under
+              # /usr/src/repos/scripts/...
+              COMMAND_LINE="node /usr/src/repos/scripts/tenantMigration/findCandidates.js"
               ;;
             patch)
               SECURE_TENANT_VARS+=("TENANT_MIGRATION_TARGETS_JSON_BASE64=$CANDIDATES_JSON_BASE64_INPUT")
@@ -184,7 +196,7 @@ jobs:
               fi
               # setTargets.js reads TENANT_MIGRATION_TARGETS_JSON_BASE64 itself (no shell
               # interpolation of the secret needed); applyMigration.js then does the actual patch.
-              COMMAND_LINE="sh -c \"node /usr/src/repos/dist/scripts/tenantMigration/setTargets.js && node /usr/src/repos/dist/scripts/tenantMigration/applyMigration.js\""
+              COMMAND_LINE="sh -c \"node /usr/src/repos/scripts/tenantMigration/setTargets.js && node /usr/src/repos/scripts/tenantMigration/applyMigration.js\""
               ;;
           esac
 

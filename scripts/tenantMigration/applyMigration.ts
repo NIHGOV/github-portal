@@ -19,9 +19,42 @@
 
 import job from '../../job.js';
 import { ICorporateLink, IProviders } from '../../interfaces/index.js';
-import { listByStatus, markApplied, markConflict, markFailed } from './ledger.js';
+import { ITenantMigrationLedgerRow, listByStatus, markApplied, markConflict, markFailed } from './ledger.js';
 
 job.run(applyMigration, { name: 'Tenant migration: apply' });
+
+// Compares a live link against everything discovery recorded (not just corporateId): if the
+// username, display name, or mail address drifted while the ID stayed stable, applying would
+// silently overwrite those newer live values with the stale `new*` targets set at gather/patch
+// time. Returns a human-readable description of the mismatch(es), or null if nothing drifted.
+function findDrift(live: ICorporateLink, row: ITenantMigrationLedgerRow): string | null {
+  const mismatches: string[] = [];
+  if (row.discoveredCorporateId && live.corporateId !== row.discoveredCorporateId) {
+    mismatches.push(`corporateId (live: ${live.corporateId}, discovered: ${row.discoveredCorporateId})`);
+  }
+  if (row.discoveredCorporateUsername && live.corporateUsername !== row.discoveredCorporateUsername) {
+    mismatches.push(
+      `corporateUsername (live: ${live.corporateUsername}, discovered: ${row.discoveredCorporateUsername})`
+    );
+  }
+  if (
+    row.discoveredCorporateDisplayName &&
+    live.corporateDisplayName !== row.discoveredCorporateDisplayName
+  ) {
+    mismatches.push(
+      `corporateDisplayName (live: ${live.corporateDisplayName}, discovered: ${row.discoveredCorporateDisplayName})`
+    );
+  }
+  if (
+    row.discoveredCorporateMailAddress &&
+    live.corporateMailAddress !== row.discoveredCorporateMailAddress
+  ) {
+    mismatches.push(
+      `corporateMailAddress (live: ${live.corporateMailAddress}, discovered: ${row.discoveredCorporateMailAddress})`
+    );
+  }
+  return mismatches.length ? mismatches.join('; ') : null;
+}
 
 async function applyMigration(providers: IProviders): Promise<void> {
   const batchId = requireEnv('TENANT_MIGRATION_BATCH_ID');
@@ -59,8 +92,27 @@ async function applyMigration(providers: IProviders): Promise<void> {
     }
 
     // Guard against drift: someone/something changed this link since discovery.
-    if (row.discoveredCorporateId && link.corporateId !== row.discoveredCorporateId) {
-      const notes = `live corporateId (${link.corporateId}) no longer matches discovered corporateId (${row.discoveredCorporateId})`;
+    const initialDrift = findDrift(link, row);
+    if (initialDrift) {
+      const notes = `live link no longer matches what was discovered: ${initialDrift}`;
+      console.error(`${label}: CONFLICT - ${notes}`);
+      if (commit) {
+        await markConflict(pool, row.id, notes);
+      }
+      conflicts++;
+      continue;
+    }
+
+    // Guard against corrupting the links table's one-corporate-identity-per-link invariant
+    // (relied on by e.g. business/operations/core.ts's getLinkWithOverrides): the target identity
+    // must not already be attached to a *different* GitHub account. `corporateid` is only
+    // non-uniquely indexed (data/pg.sql), so nothing else enforces this.
+    const existingLinksForTarget = await linkProvider.queryByCorporateId(row.newCorporateId);
+    const conflictingLink = existingLinksForTarget.find(
+      (existing) => existing.thirdPartyId !== row.thirdPartyId
+    );
+    if (conflictingLink) {
+      const notes = `newCorporateId (${row.newCorporateId}) is already linked to a different GitHub account (thirdPartyId ${conflictingLink.thirdPartyId})`;
       console.error(`${label}: CONFLICT - ${notes}`);
       if (commit) {
         await markConflict(pool, row.id, notes);
@@ -101,8 +153,9 @@ async function applyMigration(providers: IProviders): Promise<void> {
         // don't expose a true compare-and-swap update, so it can't fully close) the window in
         // which a concurrent relink/update could otherwise be silently overwritten.
         const liveLink = await linkProvider.getByThirdPartyId(row.thirdPartyId);
-        if (row.discoveredCorporateId && liveLink.corporateId !== row.discoveredCorporateId) {
-          const notes = `live corporateId (${liveLink.corporateId}) changed just before the update was applied`;
+        const preWriteDrift = findDrift(liveLink, row);
+        if (preWriteDrift) {
+          const notes = `live link changed just before the update was applied: ${preWriteDrift}`;
           console.error(`${label}: CONFLICT - ${notes}`);
           await markConflict(pool, row.id, notes);
           conflicts++;

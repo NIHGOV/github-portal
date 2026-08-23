@@ -16,6 +16,7 @@ on:
       - 'lib/**'
       - 'middleware/**'
       - 'routes/**'
+      - 'scripts/**'
       - 'typings/**'
       - 'index.ts'
       - 'job.ts'
