@@ -265,8 +265,8 @@ jobs:
           done
 
           az container logs --resource-group "$RG" --name "$CONTAINER_NAME" > container.log 2>&1 || true
-          echo "--- container logs ---"
-          cat container.log
+          echo "--- container logs (candidate JSON, if any, is redacted here -- see the uploaded artifact) ---"
+          sed '/===TENANT_MIGRATION_CANDIDATES_JSON_BEGIN===/,/===TENANT_MIGRATION_CANDIDATES_JSON_END===/c\[REDACTED -- candidate corporate-identity data omitted from workflow logs]' container.log
 
           EXIT_CODE=$(az container show --resource-group "$RG" --name "$CONTAINER_NAME" \
             --query "containers[0].instanceView.currentState.exitCode" --output tsv 2>/dev/null || echo "1")
@@ -288,8 +288,10 @@ jobs:
           fi
           sed -n '/===TENANT_MIGRATION_CANDIDATES_JSON_BEGIN===/,/===TENANT_MIGRATION_CANDIDATES_JSON_END===/p' container.log \
             | sed '1d;$d' > "candidates-${BATCH_ID_INPUT}.json"
-          echo "--- candidates file ---"
-          cat "candidates-${BATCH_ID_INPUT}.json"
+          # Intentionally not cat'd here: this file carries corporate-identity PII, which must not
+          # be echoed into the GitHub Actions log (visible to any repository reader); download the
+          # uploaded artifact instead.
+          echo "Wrote $(wc -l < "candidates-${BATCH_ID_INPUT}.json") line(s) to candidates-${BATCH_ID_INPUT}.json"
 
       - name: Upload candidates artifact (gather mode)
         if: inputs.mode == 'gather'

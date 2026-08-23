@@ -87,7 +87,11 @@ async function setTargets(providers: IProviders): Promise<void> {
     // GitHub login reuse could otherwise let two distinct identities share one cached username,
     // which a username-keyed UPDATE would then ready with the same corporate identity.
     const rowCount = await setTarget(pool, batchId, entry.thirdPartyId, {
-      newCorporateId: entry.newCorporateId,
+      // Normalized to lowercase: the postgres link provider does an exact (not case-insensitive)
+      // corporateid comparison, so an uppercase Entra OID here would fail to match the user's
+      // actual (lowercase) OID at lookup time, and would let a case-only variant slip past the
+      // duplicate-target conflict checks in applyMigration.ts.
+      newCorporateId: entry.newCorporateId.toLowerCase(),
       newCorporateUsername: entry.newCorporateUsername,
       newCorporateDisplayName: entry.newCorporateDisplayName,
       newCorporateMailAddress: entry.newCorporateMailAddress,

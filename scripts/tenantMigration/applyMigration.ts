@@ -233,6 +233,11 @@ async function applyMigration(providers: IProviders): Promise<void> {
     console.log('');
     console.log('Re-run with TENANT_MIGRATION_COMMIT=1 to apply these changes.');
   }
+  if (conflicts > 0 || failed > 0) {
+    // Otherwise this process exits 0 on a partially-migrated batch, and the workflow (which only
+    // checks the container's exit code) reports the run green even though rows still need review.
+    throw new Error(`${conflicts} conflict(s) and ${failed} failure(s) -- see errors above.`);
+  }
 }
 
 function requireEnv(name: string): string {

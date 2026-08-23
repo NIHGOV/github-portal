@@ -189,10 +189,11 @@ export async function setTarget(
         sourcetenantlabel = $5,
         targettenantlabel = $6,
         status = 'ready',
+        lasterror = NULL,
         updatedat = now()
     WHERE batchid = $7
       AND thirdpartyid = $8
-      AND status IN ('pending', 'needs-review', 'ready')
+      AND status IN ('pending', 'needs-review', 'ready', 'failed')
   `,
     [
       target.newCorporateId,
