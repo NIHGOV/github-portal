@@ -24,11 +24,11 @@ mixin repositoryAdminCards(admins, maxCards = 5)
 
 //- Renders organization owner card
 //- admins: user objects with login, avatar_url, primaryName
-//- maxCards: Maximum number of cards to render
-mixin orgAdminCards(organizationAdmins, maxCards = 5)
+//- maxCards: Maximum number of cards to render; omit to render all admins
+mixin orgAdminCards(organizationAdmins, maxCards)
   ul.list-unstyled
     - var admins = organizationAdmins
-    - var cardsToShow = Math.min(admins.length, maxCards)
+    - var cardsToShow = maxCards ? Math.min(admins.length, maxCards) : admins.length
     - for (var i = 0; i < cardsToShow; i++)
       - var admin = admins[i]
       li(style='vertical-align:top;width:370px')

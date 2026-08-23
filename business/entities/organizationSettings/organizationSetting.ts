@@ -170,7 +170,26 @@ export class OrganizationSetting implements IOrganizationSettingProperties {
     return settings;
   }
 
-  static CreateFromStaticSettings(staticSettings: ConfigGitHubOrganization): OrganizationSetting {
+  static CreateFromStaticSettings(
+    staticSettings: ConfigGitHubOrganization | OrganizationSetting
+  ): OrganizationSetting {
+    if (staticSettings instanceof OrganizationSetting) {
+      // Already a converted dynamic settings entity (e.g. sourced from the database, or
+      // already processed via this same method at startup for a static config entry).
+      // Clone defensively instead of re-running the legacy static-config field mapping
+      // below, which would throw: none of this entity's own field names match the
+      // legacy config schema it expects to strip out.
+      const clone = new OrganizationSetting();
+      clone.#ownerToken = staticSettings.#ownerToken;
+      Object.assign(clone, staticSettings);
+      clone.installations = [...staticSettings.installations];
+      clone.features = [...staticSettings.features];
+      clone.properties = { ...staticSettings.properties };
+      clone.specialTeams = [...staticSettings.specialTeams];
+      clone.templates = [...staticSettings.templates];
+      clone.legalEntities = [...staticSettings.legalEntities];
+      return clone;
+    }
     const clone = { ...staticSettings };
     const settings = new OrganizationSetting();
     if (clone.ownerToken) {

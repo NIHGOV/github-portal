@@ -15,4 +15,5 @@ export type ConfigUrls = {
   repos: string;
   feedbackUrl: string;
   githubInsights: string;
+  githubEnterprise: string;
 };

@@ -1964,7 +1964,10 @@ export class Repository {
      */
 
     const operations = this._operations as Operations;
-    const owners = await this._organization.getOwners();
+    // NIH: NIHGitHubAdmin is a service account and should not be listed as a repo admin.
+    const owners = (await this._organization.getOwners()).filter(
+      (o) => o.login && o.login.toLowerCase() !== 'nihgithubadmin'
+    );
     const ownersSet = new Set<string>(owners.map((o) => o.login.toLowerCase()));
     const actualCollaborators = await this.getCollaborators({
       affiliation: GitHubCollaboratorAffiliationQuery.Direct,

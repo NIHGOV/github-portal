@@ -14,8 +14,7 @@ import getCompanySpecificDeployment from '../../middleware/companySpecificDeploy
 import RouteApp from './app.js';
 import RouteApps from './apps.js';
 
-import json2csvModule from 'json-2-csv';
-const { json2csvAsync } = json2csvModule;
+import { json2csv } from 'json-2-csv';
 import _ from 'lodash';
 
 router.use('/*splat', async function (req: ReposAppRequest, res: Response, next: NextFunction) {
@@ -129,8 +128,8 @@ router.get('/users-report', async (req: ReposAppRequest, res, next) => {
     // Sort the users object by user login and convert the values back into an array
     const cleanedObjects: object[] = _.sortBy(Object.values(users), 'UserLogin');
 
-    // Use the json2csvAsync library to convert the cleaned array of user objects into a CSV payload
-    const payload = await json2csvAsync(cleanedObjects, { keys: header.split(','), emptyFieldValue: '' });
+    // Use the json2csv library to convert the cleaned array of user objects into a CSV payload
+    const payload = json2csv(cleanedObjects, { keys: header.split(','), emptyFieldValue: '' });
 
     // Set up response headers to return a CSV file
     res.header('Content-Type', 'text/csv');

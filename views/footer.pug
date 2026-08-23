@@ -76,44 +76,43 @@ footer
           h5(class='pull-right')
             a(href='#top', title=headSha) Back to top
 
-    if config && config.continuousDeployment
-      .row.small
-        .col-sm-6.col-md-6.col-lg-6
-          ul.list-inline(style='margin-top: 8px')
-            if config.continuousDeployment.version
-              li= 'Version ' + config.continuousDeployment.version
-            //- if config.continuousDeployment.commitId
-              li= config.continuousDeployment.commitId
-            if config.continuousDeployment.release
-              li= 'Release ' + config.continuousDeployment.release
-
-    if config && config.corporate && config.corporate.trainingResources && config.corporate.trainingResources['legal-notices']
-      - let notices = config.corporate.trainingResources['legal-notices']
-      .row.small
-        .col-sm-6.col-md-6.col-lg-6
-          ul.list-unstyled(style='margin-top: 8px')
-            each noticeEntry in notices
-              li: strong: a(href=noticeEntry.link)= noticeEntry.title
-
     .row.small
       .col-sm-6.col-md-6.col-lg-6
-        .clearfix
+        a#microsoftFooterLogo(href=(config && config.brand ? config.brand.companyLink : 'about:blank'), title=(config && config.brand ? config.brand.companyName : ''))
+          img(src='/img/logo.png', alt=(config && config.brand ? config.brand.companyName : ''), style='max-height:61px')
+
+      .col-sm-6.col-md-6.col-lg-6
+        .text-right
+          if config && config.continuousDeployment
+            ul.list-inline(style='margin-top: 8px; margin-bottom: 0')
+              if config.continuousDeployment.version
+                li= 'Version ' + config.continuousDeployment.version
+              //- if config.continuousDeployment.commitId
+                li= config.continuousDeployment.commitId
+              if config.continuousDeployment.release
+                li= 'Release ' + config.continuousDeployment.release
+
+          if config && config.corporate && config.corporate.trainingResources && config.corporate.trainingResources['legal-notices']
+            - let notices = config.corporate.trainingResources['legal-notices']
+            ul.list-unstyled(style='margin-top: 8px; margin-bottom: 0')
+              each noticeEntry in notices
+                li: strong: a(href=noticeEntry.link)= noticeEntry.title
+
           if config && config.brand && config.brand.supportMail
             ul.list-inline(style='margin-bottom: 0px')
               li: a(href='mailto:' + config.brand.supportMail) Contact site administrator
               li: a(href='https://github.com/NIHGOV/github-portal', target='_new') Contribute to this site on GitHub
-        if serverName && correlationId
-          | Powered by&nbsp;
-          a(href='https://github.nih.gov/about/credits' target="_blank") great open source,&nbsp;
-          span(title=correlationId + ' ' + serverName) Microsoft Azure,&nbsp;
-          | and the GitHub API
-        else
-          | Powered by <a href='https://github.nih.gov/about/credits' target="_blank">great open source</a>, Microsoft Azure, and the GitHub API
-
-      .col-sm-6.col-md-6.col-lg-6
-        .pull-right.text-right
-          a#microsoftFooterLogo(href=(config && config.brand ? config.brand.companyLink : 'about:blank'), title=(config && config.brand ? config.brand.companyName : ''))
-            img(src='/img/logo.png', alt=(config && config.brand ? config.brand.companyName : ''), style='max-height:23px')
-          | &nbsp;
+          if serverName && correlationId
+            span(style='padding-right:5px')
+              | Powered by&nbsp;
+              a(href='https://github.nih.gov/about/credits' target="_blank") great open source
+              | ,&nbsp;
+              span(title=correlationId + ' ' + serverName) Microsoft Azure,&nbsp;
+              | and the GitHub API.
+          else
+            span(style='padding-right:5px')
+              | Powered by 
+              a(href='https://github.nih.gov/about/credits' target="_blank") great open source
+              | , Microsoft Azure, and the GitHub API.
     .row
        div(style='margin-bottom: 30px')

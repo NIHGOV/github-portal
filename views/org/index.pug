@@ -17,7 +17,7 @@ block content
   div.container
 
     h1
-      span.capitalize= organization.name + ' '
+      a.capitalize(href='https://github.com/' + organization.name, target='_new')= organization.name + ' '
       small Organization
 
     div.container
@@ -61,98 +61,6 @@ block content
       if accountInfo.isSudoer
         h2 SUDO
         p Your account has sudoer rights for this organization. You have additional capabilities enabled to help ensure the health of the organization, its teams and repos. Please use care.
-
-      if accountInfo.organizationOverview.teams.maintainer && accountInfo.organizationOverview.teams.maintainer.length
-        if accountInfo.pendingApprovals && accountInfo.pendingApprovals.length && accountInfo.pendingApprovals.length > 0
-          h2 Pending Approvals
-          p
-            a.btn.btn-default(href='/settings/approvals/') See all pending #{organization.name} approvals (#{accountInfo.pendingApprovals.length})
-        if accountInfo.organizationOverview.teams.maintainer
-          h2.capitalize #{organization.name} Teams You Maintain
-          script(type='text/javascript').
-            function initializeManageFilter() {
-              var inputManageFilter = $('#manage-filter');
-              if (inputManageFilter) {
-                inputManageFilter.keyup(function () {;
-                  $.uiTableFilter($('table#manage-table'), this.value, ['Title', 'Organization', 'GitHub Name']);
-                });
-              }
-            }
-          div.container
-            table.table#manage-table
-              thead
-                tr
-                  th(colspan='1')
-                    form#manage-filter-form
-                      input.form-control#manage-filter(name='filter', placeholder='Filter teams I manage', type='text')
-                  th
-                    p
-                      i.glyphicon.glyphicon-search
-                tr
-                  th GitHub Name
-                  // th Organization
-                  th.thirtypercent Manage
-              tbody
-                each team in accountInfo.organizationOverview.teams.maintainer
-                  tr
-                    td
-                      a.btn.btn-sm.btn-muted(href=organization.baseUrl + 'teams/' + team.slug + '/')= team.name
-                    // td= team.organization.name
-                    td.thirtypercent
-                      p
-                        a.btn.btn-sm.btn-default(href=organization.baseUrl + 'teams/' + team.slug + '/') Manage Team
-
-      if accountInfo && accountInfo.membershipStatus === 'active' && accountInfo.isMembershipPublic !== true
-        h1 Go public with your support of the #{organization.name} organization
-        p Your profile on GitHub currently does not list your participation in the #{organization.name} organization. By making your association public, others in the community will see you listed on the page for #{organization.name} and your personal GitHub profile page will show the logo, too.
-        p
-          a.btn.btn-default.btn-sm(href=organization.baseUrl + 'membership') Learn more
-
-      h2 Team Memberships
-
-      if accountInfo.teamsMaintainedHash
-        p Here are teams that you are a member of but do not maintain.
-
-      if accountInfo.organizationOverview.teams.member && accountInfo.organizationOverview.teams.member.length
-        script(type='text/javascript').
-          function initializeMembershipFilter() {
-            var inputMembershipFilter = $('#membership-filter');
-            if (inputMembershipFilter) {
-              inputMembershipFilter.keyup(function () {;
-                $.uiTableFilter($('table#membership-table'), this.value, ['Team']);
-              });
-            }
-          }
-        table.table#membership-table
-          thead
-            tr
-              th(colspan='1')
-                form#membership-filter-form
-                  input.form-control#membership-filter(name='filter', placeholder='Filter my teams', type='text')
-                th
-                  p
-                    i.glyphicon.glyphicon-search
-            tr
-              th Team
-              th.thirtypercent View
-          tbody
-            - var everyoneTeamId = organization.invitationTeam ? organization.invitationTeam.id : -1
-            each team in accountInfo.organizationOverview.teams.member
-              if team.id && accountInfo.teamsMaintainedHash && accountInfo.teamsMaintainedHash[team.id] !== undefined
-                // Skipping this team since they are already maintaining it
-              else
-                tr
-                  td
-                    a.capitalize.btn.btn-sm.btn-muted(href='/' + team.organization.name + '/teams/' + team.slug, target='_new')= team.name
-                  td.thirtypercent
-                    p
-                      a.btn.btn-default.btn-sm(href='/' + team.organization.name + '/teams/' + team.slug, target='_new')
-                        | Open on GitHub
-      else
-        //-p You are not currently a member of any GitHub teams that grant you permission to specific repositories. You may be pre-approved to join teams.
-        p You are not currently a member of any GitHub teams for #{organization.name}. <em>This view is cached.</em>
-      p
-        a.btn.btn-default(href=organization.baseUrl + 'teams')= (accountInfo.organizationOverview.teams.member && accountInfo.organizationOverview.teams.member.length) ? 'Join another team' : 'Join a team'
 
       if accountInfo.orgUser
         hr
@@ -262,7 +170,99 @@ block content
                     small Public
                 hr
                 h3 Owners
-                +orgAdminCards(accountInfo.organizationAdmins, 5)
+                +orgAdminCards(accountInfo.organizationAdmins)
+
+      if accountInfo.organizationOverview.teams.maintainer && accountInfo.organizationOverview.teams.maintainer.length
+        if accountInfo.pendingApprovals && accountInfo.pendingApprovals.length && accountInfo.pendingApprovals.length > 0
+          h2 Pending Approvals
+          p
+            a.btn.btn-default(href='/settings/approvals/') See all pending #{organization.name} approvals (#{accountInfo.pendingApprovals.length})
+        if accountInfo.organizationOverview.teams.maintainer
+          h2.capitalize #{organization.name} Teams You Maintain
+          script(type='text/javascript').
+            function initializeManageFilter() {
+              var inputManageFilter = $('#manage-filter');
+              if (inputManageFilter) {
+                inputManageFilter.keyup(function () {;
+                  $.uiTableFilter($('table#manage-table'), this.value, ['Title', 'Organization', 'GitHub Name']);
+                });
+              }
+            }
+          div.container
+            table.table#manage-table
+              thead
+                tr
+                  th(colspan='1')
+                    form#manage-filter-form
+                      input.form-control#manage-filter(name='filter', placeholder='Filter teams I manage', type='text')
+                  th
+                    p
+                      i.glyphicon.glyphicon-search
+                tr
+                  th GitHub Name
+                  // th Organization
+                  th.thirtypercent Manage
+              tbody
+                each team in accountInfo.organizationOverview.teams.maintainer
+                  tr
+                    td
+                      a.btn.btn-sm.btn-muted(href=organization.baseUrl + 'teams/' + team.slug + '/')= team.name
+                    // td= team.organization.name
+                    td.thirtypercent
+                      p
+                        a.btn.btn-sm.btn-default(href=organization.baseUrl + 'teams/' + team.slug + '/') Manage Team
+
+      if accountInfo && accountInfo.membershipStatus === 'active' && accountInfo.isMembershipPublic !== true
+        h1 Go public with your support of the #{organization.name} organization
+        p Your profile on GitHub currently does not list your participation in the #{organization.name} organization. By making your association public, others in the community will see you listed on the page for #{organization.name} and your personal GitHub profile page will show the logo, too.
+        p
+          a.btn.btn-default.btn-sm(href=organization.baseUrl + 'membership') Learn more
+
+      h2 Team Memberships
+
+      if accountInfo.teamsMaintainedHash
+        p Here are teams that you are a member of but do not maintain.
+
+      if accountInfo.organizationOverview.teams.member && accountInfo.organizationOverview.teams.member.length
+        script(type='text/javascript').
+          function initializeMembershipFilter() {
+            var inputMembershipFilter = $('#membership-filter');
+            if (inputMembershipFilter) {
+              inputMembershipFilter.keyup(function () {;
+                $.uiTableFilter($('table#membership-table'), this.value, ['Team']);
+              });
+            }
+          }
+        table.table#membership-table
+          thead
+            tr
+              th(colspan='1')
+                form#membership-filter-form
+                  input.form-control#membership-filter(name='filter', placeholder='Filter my teams', type='text')
+                th
+                  p
+                    i.glyphicon.glyphicon-search
+            tr
+              th Team
+              th.thirtypercent View
+          tbody
+            - var everyoneTeamId = organization.invitationTeam ? organization.invitationTeam.id : -1
+            each team in accountInfo.organizationOverview.teams.member
+              if team.id && accountInfo.teamsMaintainedHash && accountInfo.teamsMaintainedHash[team.id] !== undefined
+                // Skipping this team since they are already maintaining it
+              else
+                tr
+                  td
+                    a.capitalize.btn.btn-sm.btn-muted(href='/' + team.organization.name + '/teams/' + team.slug, target='_new')= team.name
+                  td.thirtypercent
+                    p
+                      a.btn.btn-default.btn-sm(href='/' + team.organization.name + '/teams/' + team.slug, target='_new')
+                        | Open on GitHub
+      else
+        //-p You are not currently a member of any GitHub teams that grant you permission to specific repositories. You may be pre-approved to join teams.
+        p You are not currently a member of any GitHub teams for #{organization.name}. <em>This view is cached.</em>
+      p
+        a.btn.btn-default(href=organization.baseUrl + 'teams')= (accountInfo.organizationOverview.teams.member && accountInfo.organizationOverview.teams.member.length) ? 'Join another team' : 'Join a team'
 
       hr
       p

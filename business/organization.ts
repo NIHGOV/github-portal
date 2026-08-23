@@ -1136,7 +1136,9 @@ export class Organization {
         });
 
         return acc;
-      }, []);
+      }, [])
+      // NIH: NIHGitHubAdmin is a service account and should not be listed as an org owner.
+      .filter((admin) => admin.login && admin.login.toLowerCase() !== 'nihgithubadmin');
 
     return organizationAdmins;
   }
@@ -1489,12 +1491,15 @@ export class Organization {
     const linksArray = await operations.getLinks();
     const links = new Map<string, ICorporateLink>();
     for (const link of linksArray) {
-      links.set(link.thirdPartyUsername.toLowerCase(), link);
+      // Keyed by the immutable GitHub user ID, not the mutable login: a link's cached
+      // thirdPartyUsername can go stale after a GitHub rename, which would otherwise pair that
+      // member with no link at all (or the wrong one, if the old login was reused).
+      links.set(link.thirdPartyId, link);
     }
     return members.map((member) => {
       return {
         member,
-        link: links.get(member.login.toLowerCase()),
+        link: links.get(String(member.id)),
       };
     });
   }

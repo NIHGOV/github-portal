@@ -16,6 +16,7 @@ on:
       - 'lib/**'
       - 'middleware/**'
       - 'routes/**'
+      - 'scripts/**'
       - 'typings/**'
       - 'index.ts'
       - 'job.ts'
@@ -32,9 +33,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Azure Login
-        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3.0.1
         with:
           client-id: ${{ secrets.PROD_AAD_CLIENT_ID }}
           tenant-id: ${{ secrets.PROD_AAD_TENANT_ID }}
@@ -57,7 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Azure Login
-        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3.0.1
         with:
           client-id: ${{ secrets.PROD_AAD_CLIENT_ID }}
           tenant-id: ${{ secrets.PROD_AAD_TENANT_ID }}
@@ -87,6 +88,18 @@ jobs:
           ENTRA_TENANT_ID: ${{ secrets.PROD_AAD_TENANT_ID }}
           RG: ${{ secrets.PROD_RG }}
         run: |
+          LA_WORKSPACE_ID=$(az monitor log-analytics workspace show \
+            --resource-group "$RG" \
+            --workspace-name nihgithubportal-logs \
+            --query customerId --output tsv 2>/dev/null || echo "")
+          LA_WORKSPACE_KEY=$(az monitor log-analytics workspace get-shared-keys \
+            --resource-group "$RG" \
+            --workspace-name nihgithubportal-logs \
+            --query primarySharedKey --output tsv 2>/dev/null || echo "")
+          LA_ARGS=()
+          if [ -n "$LA_WORKSPACE_ID" ]; then
+            LA_ARGS=(--log-analytics-workspace "$LA_WORKSPACE_ID" --log-analytics-workspace-key "$LA_WORKSPACE_KEY")
+          fi
           ACR_NAME="${REGISTRY_SERVER%%.*}"
           REGISTRY_USER=$(az acr credential show --name "$ACR_NAME" --query username --output tsv)
           REGISTRY_PASS=$(az acr credential show --name "$ACR_NAME" --query "passwords[0].value" --output tsv)
@@ -125,6 +138,7 @@ jobs:
               REPOS_POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
               ENTRA_ID_CLIENT_SECRET="$ENTRA_CLIENT_SECRET" \
               GITHUB_APP_OPERATIONS_KEY="$APP_KEY" \
+            "${LA_ARGS[@]}" \
             --no-wait
 
   deploy-fh:
@@ -132,7 +146,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Azure Login
-        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3.0.1
         with:
           client-id: ${{ secrets.PROD_AAD_CLIENT_ID }}
           tenant-id: ${{ secrets.PROD_AAD_TENANT_ID }}

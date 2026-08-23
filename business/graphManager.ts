@@ -176,7 +176,7 @@ export class GraphManager {
   getReposWithTeams(options?: IPagedCrossOrganizationCacheOptions): Promise<any> {
     options = options || {};
     if (!options.maxAgeSeconds) {
-      options.maxAgeSeconds = 60 * 20 /* 20m per-org collabs list OK */;
+      options.maxAgeSeconds = 60 * 20; /* 20m per-org collabs list OK */
     }
     options.individualMaxAgeSeconds = 12 * 60 * 60; // Half day
     if (options.backgroundRefresh === undefined) {

@@ -194,8 +194,7 @@ export class GitHubAppTokens {
   ) {
     let key: string;
     let createJwt:
-      | undefined
-      | ((clientIdOrAppId: string | number) => Promise<{ jwt: string; expiresAt: Date }>);
+      undefined | ((clientIdOrAppId: string | number) => Promise<{ jwt: string; expiresAt: Date }>);
     if (mode === 'privateKey') {
       this.#privateKey = privateKey;
       key = privateKey;

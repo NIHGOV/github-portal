@@ -1,0 +1,313 @@
+name: Corporate Identity Tenant Migration
+
+# Manual-dispatch only. Runs scripts/tenantMigration/* (see PLAN.md > "Corporate Identity Tenant
+# Migration Ledger") as a one-shot ACI container, using the already-built portal image so no build
+# step is needed here. Not tied to any specific tenant pair -- criteria, orgs, and identities are
+# all inputs.
+#
+# Two modes:
+#   gather -- scans GitHub org membership + the `links` table for candidates matching your
+#             criteria, and uploads a JSON artifact you download, fill in with the new tenant's
+#             identity per person, and feed back into...
+#   patch  -- takes your edited JSON (base64), records the target identities in the ledger, then
+#             applies them to `links` (dry run unless commit=true).
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Which environment to run against'
+        type: choice
+        options:
+          - dev
+          - prod
+        default: dev
+      mode:
+        description: 'gather: find candidates + produce a downloadable JSON file. patch: apply an edited JSON file.'
+        type: choice
+        options:
+          - gather
+          - patch
+        required: true
+      batch_id:
+        description: 'Batch ID (must match between the gather run and the patch run of one migration effort)'
+        required: true
+      github_orgs:
+        description: '[gather] Comma-separated GitHub org names to scan'
+        required: false
+      upn_contains:
+        description: '[gather] Substring match (case-insensitive) against stored corporate UPN/email'
+        required: false
+      display_name_contains:
+        description: '[gather] Substring match (case-insensitive) against stored corporate display name'
+        required: false
+      exclude_upn_contains:
+        description: '[gather] Substring match (case-insensitive) marking a member as already migrated (excluded)'
+        required: false
+      candidates_json_base64:
+        description: '[patch] Base64-encoded, edited candidates JSON (the file downloaded from a gather run)'
+        required: false
+      commit:
+        description: '[patch] Actually write changes to `links` (unchecked = dry run)'
+        type: boolean
+        default: false
+      image_tag:
+        description: "ACR image tag to run (default: latest). Verified to exist in the selected environment's ACR before the container is created."
+        required: false
+        default: 'latest'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  run-migration:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    # Binds to the same required-reviewer-gated 'Production' environment used by the real
+    # deployment jobs whenever this dispatch targets prod, so patching production links can't
+    # bypass that approval gate.
+    environment: ${{ inputs.environment == 'prod' && 'Production' || 'Development' }}
+    # Serializes dispatches per environment: the steps below share one fixed ACI container name
+    # per environment, so two concurrent runs would otherwise race on deleting/replacing each
+    # other's container. Queue (don't cancel) so an in-progress patch can't be interrupted.
+    concurrency:
+      group: tenant-migration-${{ inputs.environment }}
+      cancel-in-progress: false
+
+    steps:
+      - name: Validate inputs
+        env:
+          MODE: ${{ inputs.mode }}
+          GITHUB_ORGS_INPUT: ${{ inputs.github_orgs }}
+          CANDIDATES_JSON_BASE64_INPUT: ${{ inputs.candidates_json_base64 }}
+        run: |
+          case "$MODE" in
+            gather)
+              if [ -z "$GITHUB_ORGS_INPUT" ]; then
+                echo "::error::gather mode requires github_orgs"
+                exit 1
+              fi
+              ;;
+            patch)
+              if [ -z "$CANDIDATES_JSON_BASE64_INPUT" ]; then
+                echo "::error::patch mode requires candidates_json_base64"
+                exit 1
+              fi
+              ;;
+            *)
+              echo "::error::Unknown mode $MODE"
+              exit 1
+              ;;
+          esac
+
+      - name: Azure Login
+        uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3.0.1
+        with:
+          client-id: ${{ inputs.environment == 'prod' && secrets.PROD_AAD_CLIENT_ID || secrets.AAD_CLIENT_ID }}
+          tenant-id: ${{ inputs.environment == 'prod' && secrets.PROD_AAD_TENANT_ID || secrets.AAD_TENANT_ID }}
+          subscription-id: ${{ inputs.environment == 'prod' && secrets.PROD_AAD_SUBSCRIPTION_ID || secrets.AAD_SUBSCRIPTION_ID }}
+
+      - name: Delete existing container group
+        env:
+          RG: ${{ inputs.environment == 'prod' && secrets.PROD_RG || secrets.DEV_RG }}
+          CONTAINER_NAME: ${{ inputs.environment == 'prod' && 'nihgithubportaltm' || 'nihdevgithubportaltm' }}
+        run: |
+          az container delete --resource-group "$RG" --name "$CONTAINER_NAME" --yes 2>/dev/null || true
+
+      - name: Run migration container
+        env:
+          REGISTRY_SERVER: ${{ inputs.environment == 'prod' && secrets.PROD_REGISTRY_SERVER || secrets.DEV_REGISTRY_SERVER }}
+          REDIS_TLS_HOST: ${{ inputs.environment == 'prod' && secrets.PROD_REDIS_TLS_HOST || secrets.DEV_REDIS_TLS_HOST }}
+          REDIS_KEY: ${{ inputs.environment == 'prod' && secrets.PROD_REDIS_KEY || secrets.DEV_REDIS_KEY }}
+          POSTGRES_HOST: ${{ inputs.environment == 'prod' && secrets.PROD_POSTGRES_HOST || secrets.DEV_POSTGRES_HOST }}
+          POSTGRES_DB: ${{ inputs.environment == 'prod' && secrets.PROD_POSTGRES_DB || secrets.DEV_POSTGRES_DB }}
+          POSTGRES_USER: ${{ inputs.environment == 'prod' && secrets.PROD_POSTGRES_USER || secrets.DEV_POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ inputs.environment == 'prod' && secrets.PROD_POSTGRES_PASSWORD || secrets.DEV_POSTGRES_PASSWORD }}
+          APP_ID: ${{ inputs.environment == 'prod' && secrets.PROD_GITHUB_APP_OPERATIONS_APP_ID || secrets.DEV_GITHUB_APP_OPERATIONS_APP_ID }}
+          APP_KEY: ${{ inputs.environment == 'prod' && secrets.PROD_GITHUB_APP_OPERATIONS_KEY || secrets.DEV_GITHUB_APP_OPERATIONS_KEY }}
+          APP_SLUG: ${{ inputs.environment == 'prod' && secrets.PROD_GITHUB_APP_OPERATIONS_SLUG || secrets.DEV_GITHUB_APP_OPERATIONS_SLUG }}
+          ENTRA_CLIENT_ID: ${{ inputs.environment == 'prod' && secrets.PROD_AAD_CLIENT_ID || secrets.AAD_CLIENT_ID }}
+          ENTRA_CLIENT_SECRET: ${{ inputs.environment == 'prod' && secrets.PROD_AAD_CLIENT_SECRET || secrets.AAD_CLIENT_SECRET }}
+          ENTRA_TENANT_ID: ${{ inputs.environment == 'prod' && secrets.PROD_AAD_TENANT_ID || secrets.AAD_TENANT_ID }}
+          RG: ${{ inputs.environment == 'prod' && secrets.PROD_RG || secrets.DEV_RG }}
+          CONTAINER_NAME: ${{ inputs.environment == 'prod' && 'nihgithubportaltm' || 'nihdevgithubportaltm' }}
+          LOG_ANALYTICS_WORKSPACE: ${{ inputs.environment == 'prod' && 'nihgithubportal-logs' || 'nihdevgithubportal-logs' }}
+          # Free-form inputs are passed as env vars (never interpolated with ${{ }} into the script
+          # body below) so a value containing e.g. $(...) or backticks can't execute as shell code.
+          MODE: ${{ inputs.mode }}
+          IMAGE_TAG_INPUT: ${{ inputs.image_tag }}
+          BATCH_ID_INPUT: ${{ inputs.batch_id }}
+          GITHUB_ORGS_INPUT: ${{ inputs.github_orgs }}
+          UPN_CONTAINS_INPUT: ${{ inputs.upn_contains }}
+          DISPLAY_NAME_CONTAINS_INPUT: ${{ inputs.display_name_contains }}
+          EXCLUDE_UPN_CONTAINS_INPUT: ${{ inputs.exclude_upn_contains }}
+          CANDIDATES_JSON_BASE64_INPUT: ${{ inputs.candidates_json_base64 }}
+          COMMIT_INPUT: ${{ inputs.commit }}
+        run: |
+          LA_WORKSPACE_ID=$(az monitor log-analytics workspace show \
+            --resource-group "$RG" \
+            --workspace-name "$LOG_ANALYTICS_WORKSPACE" \
+            --query customerId --output tsv 2>/dev/null || echo "")
+          LA_WORKSPACE_KEY=$(az monitor log-analytics workspace get-shared-keys \
+            --resource-group "$RG" \
+            --workspace-name "$LOG_ANALYTICS_WORKSPACE" \
+            --query primarySharedKey --output tsv 2>/dev/null || echo "")
+          LA_ARGS=()
+          if [ -n "$LA_WORKSPACE_ID" ]; then
+            LA_ARGS=(--log-analytics-workspace "$LA_WORKSPACE_ID" --log-analytics-workspace-key "$LA_WORKSPACE_KEY")
+          fi
+
+          ACR_NAME="${REGISTRY_SERVER%%.*}"
+          IMAGE_TAG="$IMAGE_TAG_INPUT"
+          REGISTRY_USER=$(az acr credential show --name "$ACR_NAME" --query username --output tsv)
+          REGISTRY_PASS=$(az acr credential show --name "$ACR_NAME" --query "passwords[0].value" --output tsv)
+
+          # Fail fast with a clear error (and a list of what IS available) instead of guessing a tag
+          # and letting ACI produce an opaque image-pull failure later. This also protects against
+          # the fact that this workflow can be dispatched from any ref/branch: the resolved tag must
+          # actually exist in *this* environment's own registry (which the environment input alone
+          # selects), regardless of which commit the dispatch happened to run from.
+          if ! az acr repository show --name "$ACR_NAME" --image "portal:${IMAGE_TAG}" --output none 2>/dev/null; then
+            echo "::error::portal:${IMAGE_TAG} was not found in ${ACR_NAME}. Recent available tags:"
+            az acr repository show-tags --name "$ACR_NAME" --repository portal --orderby time_desc --top 10 --output tsv
+            exit 1
+          fi
+
+          # Stage-specific env vars, built as arrays so empty/unused ones are simply omitted.
+          PLAIN_TENANT_VARS=("TENANT_MIGRATION_BATCH_ID=$BATCH_ID_INPUT")
+          SECURE_TENANT_VARS=()
+
+          case "$MODE" in
+            gather)
+              PLAIN_TENANT_VARS+=("TENANT_MIGRATION_GITHUB_ORGS=$GITHUB_ORGS_INPUT")
+              if [ -n "$UPN_CONTAINS_INPUT" ]; then
+                PLAIN_TENANT_VARS+=("TENANT_MIGRATION_UPN_CONTAINS=$UPN_CONTAINS_INPUT")
+              fi
+              if [ -n "$DISPLAY_NAME_CONTAINS_INPUT" ]; then
+                PLAIN_TENANT_VARS+=("TENANT_MIGRATION_DISPLAY_NAME_CONTAINS=$DISPLAY_NAME_CONTAINS_INPUT")
+              fi
+              if [ -n "$EXCLUDE_UPN_CONTAINS_INPUT" ]; then
+                PLAIN_TENANT_VARS+=("TENANT_MIGRATION_EXCLUDE_UPN_CONTAINS=$EXCLUDE_UPN_CONTAINS_INPUT")
+              fi
+              # findCandidates.js prints the developer-facing JSON to stdout between marker lines;
+              # captured from container logs in the next step (see JSON_BEGIN_MARKER in the script).
+              # Note: the image's Dockerfile copies dist/'s *contents* to /usr/src/repos (no nested
+              # dist/ directory in the running container), so compiled scripts live directly under
+              # /usr/src/repos/scripts/...
+              COMMAND_LINE="node /usr/src/repos/scripts/tenantMigration/findCandidates.js"
+              ;;
+            patch)
+              SECURE_TENANT_VARS+=("TENANT_MIGRATION_TARGETS_JSON_BASE64=$CANDIDATES_JSON_BASE64_INPUT")
+              if [ "$COMMIT_INPUT" = "true" ]; then
+                PLAIN_TENANT_VARS+=("TENANT_MIGRATION_COMMIT=1")
+              fi
+              # setTargets.js reads TENANT_MIGRATION_TARGETS_JSON_BASE64 itself (no shell
+              # interpolation of the secret needed); applyMigration.js then does the actual patch.
+              COMMAND_LINE="sh -c \"node /usr/src/repos/scripts/tenantMigration/setTargets.js && node /usr/src/repos/scripts/tenantMigration/applyMigration.js\""
+              ;;
+          esac
+
+          az container create \
+            --resource-group "$RG" \
+            --name "$CONTAINER_NAME" \
+            --location eastus \
+            --image "$REGISTRY_SERVER/portal:${IMAGE_TAG}" \
+            --registry-login-server "$REGISTRY_SERVER" \
+            --registry-username "$REGISTRY_USER" \
+            --registry-password "$REGISTRY_PASS" \
+            --command-line "$COMMAND_LINE" \
+            --restart-policy Never \
+            --os-type Linux \
+            --cpu 1 \
+            --memory 1.5 \
+            --ip-address Public \
+            --ports 443 \
+            --environment-variables \
+              REDIS_TLS_HOST="$REDIS_TLS_HOST" \
+              REDIS_PORT=6380 \
+              REPOS_POSTGRES_DATABASE="$POSTGRES_DB" \
+              REPOS_POSTGRES_HOST="$POSTGRES_HOST" \
+              REPOS_POSTGRES_USER="$POSTGRES_USER" \
+              REPOS_POSTGRES_SSL=false \
+              REPOS_LINKS_PROVIDER_NAME=postgres \
+              GITHUB_ORGANIZATIONS_SOURCE=postgres \
+              GITHUB_SHA="${{ github.sha }}" \
+              GITHUB_RUN_ID="${{ github.run_id }}" \
+              GITHUB_RUN_NUMBER="${{ github.run_number }}" \
+              ENTRA_ID_CLIENT_ID="$ENTRA_CLIENT_ID" \
+              ENTRA_ID_TENANT_ID="$ENTRA_TENANT_ID" \
+              GITHUB_APP_OPERATIONS_APP_ID="$APP_ID" \
+              GITHUB_APP_OPERATIONS_SLUG="$APP_SLUG" \
+              "${PLAIN_TENANT_VARS[@]}" \
+            --secure-environment-variables \
+              REDIS_KEY="$REDIS_KEY" \
+              REPOS_POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+              ENTRA_ID_CLIENT_SECRET="$ENTRA_CLIENT_SECRET" \
+              GITHUB_APP_OPERATIONS_KEY="$APP_KEY" \
+              "${SECURE_TENANT_VARS[@]}" \
+            "${LA_ARGS[@]}"
+
+      - name: Wait for completion and capture logs
+        env:
+          RG: ${{ inputs.environment == 'prod' && secrets.PROD_RG || secrets.DEV_RG }}
+          CONTAINER_NAME: ${{ inputs.environment == 'prod' && 'nihgithubportaltm' || 'nihdevgithubportaltm' }}
+        run: |
+          echo "Waiting for container to finish..."
+          STATE=""
+          for i in $(seq 1 60); do
+            STATE=$(az container show --resource-group "$RG" --name "$CONTAINER_NAME" \
+              --query "containers[0].instanceView.currentState.state" --output tsv 2>/dev/null || echo "")
+            if [ "$STATE" = "Terminated" ]; then
+              break
+            fi
+            sleep 10
+          done
+
+          az container logs --resource-group "$RG" --name "$CONTAINER_NAME" > container.log 2>&1 || true
+          echo "--- container logs (candidate JSON, if any, is redacted here -- see the uploaded artifact) ---"
+          sed '/===TENANT_MIGRATION_CANDIDATES_JSON_BEGIN===/,/===TENANT_MIGRATION_CANDIDATES_JSON_END===/c\[REDACTED -- candidate corporate-identity data omitted from workflow logs]' container.log
+
+          EXIT_CODE=$(az container show --resource-group "$RG" --name "$CONTAINER_NAME" \
+            --query "containers[0].instanceView.currentState.exitCode" --output tsv 2>/dev/null || echo "1")
+
+          az container delete --resource-group "$RG" --name "$CONTAINER_NAME" --yes 2>/dev/null || true
+
+          echo "container_state=$STATE" >> "$GITHUB_OUTPUT"
+          echo "container_exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+        id: run
+
+      - name: Extract candidates JSON (gather mode)
+        if: inputs.mode == 'gather'
+        env:
+          BATCH_ID_INPUT: ${{ inputs.batch_id }}
+        run: |
+          if ! grep -q '===TENANT_MIGRATION_CANDIDATES_JSON_BEGIN===' container.log; then
+            echo "::error::Could not find the candidates JSON marker in the container logs -- see logs above"
+            exit 1
+          fi
+          sed -n '/===TENANT_MIGRATION_CANDIDATES_JSON_BEGIN===/,/===TENANT_MIGRATION_CANDIDATES_JSON_END===/p' container.log \
+            | sed '1d;$d' > "candidates-${BATCH_ID_INPUT}.json"
+          # Intentionally not cat'd here: this file carries corporate-identity PII, which must not
+          # be echoed into the GitHub Actions log (visible to any repository reader); download the
+          # uploaded artifact instead.
+          echo "Wrote $(wc -l < "candidates-${BATCH_ID_INPUT}.json") line(s) to candidates-${BATCH_ID_INPUT}.json"
+
+      - name: Upload candidates artifact (gather mode)
+        if: inputs.mode == 'gather'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tenant-migration-candidates-${{ inputs.batch_id }}
+          path: candidates-${{ inputs.batch_id }}.json
+          retention-days: 14
+
+      - name: Check outcome
+        run: |
+          if [ "${{ steps.run.outputs.container_state }}" != "Terminated" ]; then
+            echo "::error::Container did not terminate within the wait window"
+            exit 1
+          fi
+          if [ "${{ steps.run.outputs.container_exit_code }}" != "0" ]; then
+            echo "::error::Migration ${{ inputs.mode }} exited with code ${{ steps.run.outputs.container_exit_code }}"
+            exit 1
+          fi

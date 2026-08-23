@@ -54,7 +54,7 @@ mixin userAzure
       a.btn.btn-sm.btn-primary(href='/' + (signinPathSegment || 'signin')) Sign In
 
 div.navbar.navbar-default(style=reposContext ? 'margin-bottom:0' : undefined)
-  div.container-fluid
+  div.container
     //- glyphicon-menu-hamburger
     // Brand and toggle get grouped for better mobile display
     div.navbar-header
@@ -78,9 +78,7 @@ div.navbar.navbar-default(style=reposContext ? 'margin-bottom:0' : undefined)
           if config.urls.release
             li(class={ active: (reposContext && reposContext.releaseTab) || site === 'release' }): a(href=config.urls.release) Release
         li(class={ active: (reposContext && !reposContext.releaseTab) && site === 'github' })
-          a(
-            style=((reposContext && !reposContext.releaseTab) && site === 'github' && ossLink && reposContext) ? 'color:#fff;background-color:#20558a' : undefined,
-            href='/') Enterprise
+          a(href='/') Enterprise
       ul.nav.navbar-nav.navbar-right
         if sudoMode
           li
@@ -94,48 +92,37 @@ div.navbar.navbar-default(style=reposContext ? 'margin-bottom:0' : undefined)
           li
             a(href=config.urls.explore)
               i.glyphicon.glyphicon-question-sign
-        li
-          a(href='/settings', title='Settings')
-            i.glyphicon.glyphicon-option-vertical
         //- User Account Menu
         if user && user.azure
           li.dropdown
             a.dropdown-toggle(href='#', data-toggle='dropdown', role='button', aria-haspopup='true', aria-expanded='false')
-              if hideGitHubAccount === true
-                //- skip
-                if user.azure
-                  = user.azure.displayName || user.azure.username
-              else if user && user.github && user.github.avatarUrl
-                img.img-circle(alt=user.github.displayName, src=user.github.avatarUrl + '&s=80', style='width:34px;height:34px;margin-bottom:-10px;margin-top:-10px', data-user=user.github.id)
-              else
-                if user.azure
-                  = user.azure.displayName || user.azure.username
+              if hideGitHubAccount !== true && user && user.github && user.github.avatarUrl
+                img.img-circle(alt=user.github.displayName, src=user.github.avatarUrl + '&s=80', style='width:34px;height:34px;margin-bottom:-10px;margin-top:-10px;margin-right:12px', data-user=user.github.id)
+              if user.azure
+                span= user.azure.displayName || user.azure.username
               //-span.caret
-            ul.dropdown-menu
+            ul.dropdown-menu(style='white-space:nowrap;min-width:100%;width:auto')
               li
-                if user.azure
-                  ul.list-unstyled-dropdown-first
-                    h3= user.azure.displayName || user.azure.username
                 ul.list-unstyled-dropdown-first
-                  h4 #{config && config.brand.companyName ? config.brand.companyName : 'Corporate'}
-                  if user.azure && user.azure.username !== user.azure.displayName
+                  h4 Entra ID
+                  p #{config && config.brand.companyName ? config.brand.companyName : 'Corporate'}
+                  if user.azure
                     p= user.azure.username
               if user && user.github && user.github.username
+                li.divider(role='separator')
                 li
                   ul.list-unstyled-dropdown-first
                     h4 GitHub
-                    ul.list-unstyled-dropdown-first
-                    p= user.github.username
-                    ul.list-inline
-                      li
-                        a.btn.btn-sm.btn-muted.button(href='https://github.com/settings/profile', target='_new')
-                          | Open on GitHub
-                      li
-                        a.btn.btn-sm.btn-muted.button(href='/link/remove') Unlink
-
+                    p
+                      a(href=config && config.urls && config.urls.githubEnterprise, target='_new')= config && config.brand.companyName ? config.brand.companyName : 'Corporate'
+                    p
+                      a(href='https://github.com/' + user.github.username, target='_new')= user.github.username
               else
                 li
                   a(href='/' + signinPathSegment + '/github') Sign in to GitHub
+              li.divider(role='separator')
+              li
+                a(href='/settings') Settings
               li
                 a(href='/signout') Sign out
               if enableMultipleAccounts && enableMultipleAccounts === true

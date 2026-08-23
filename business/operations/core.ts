@@ -891,7 +891,7 @@ export class Operations {
     const links = await this.getLinks(options);
     const reduced = links.filter((link) => {
       // was 'ghid' in the prior implementation before link interfaces
-      return link && link.thirdPartyId == id /* allow string comparisons */;
+      return link && link.thirdPartyId == id; /* allow string comparisons */
     });
     if (reduced.length > 1) {
       throw new Error(`Multiple links were present for the same GitHub user ${id}`);
@@ -1322,7 +1322,7 @@ export class Operations {
     installation: IGitHubAppInstallation,
     corporateIdentity: ICorporateIdentity
   ): Promise<OrganizationSetting> {
-    const settings = OrganizationSetting.CreateFromStaticSettings(staticSettings as ConfigGitHubOrganization);
+    const settings = OrganizationSetting.CreateFromStaticSettings(staticSettings);
     if (installation.target_type !== 'Organization') {
       throw new Error(`Unsupported GitHub App target of ${installation.target_type}.`);
     }
@@ -1332,7 +1332,19 @@ export class Operations {
       appId: installation.app_id,
       installationId: installation.id,
     };
-    settings.installations.push(thisInstallation);
+    // Re-adopting an org whose settings already had an installation entry for this same app
+    // (e.g. the app was uninstalled and reinstalled) must replace that stale entry rather than
+    // append another: tokenManager picks the *first* installations[] entry matching an appId, so
+    // leaving the old one in place would keep authenticating with the now-deleted installation.
+    const existingIndex = settings.installations.findIndex((i) => i.appId === thisInstallation.appId);
+    if (existingIndex >= 0) {
+      if (settings.installations[existingIndex].appPurposeId) {
+        thisInstallation.appPurposeId = settings.installations[existingIndex].appPurposeId;
+      }
+      settings.installations[existingIndex] = thisInstallation;
+    } else {
+      settings.installations.push(thisInstallation);
+    }
     settings.updated = new Date();
     settings.setupDate = new Date();
     settings.setupByCorporateDisplayName = corporateIdentity.displayName;

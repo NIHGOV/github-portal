@@ -185,11 +185,13 @@ router.get('/', async function (req: ReposAppRequest, res: Response, next: NextF
 
 async function showLinkPage(req: ReposAppRequest, res) {
   const individualContext = req.individualContext as IndividualContext;
+  // Nudge users who haven't set a GitHub display name, since it helps identify them once linked
+  const missingGitHubDisplayName = !individualContext.getGitHubIdentity()?.displayName;
   function render(options) {
     individualContext.webContext.render({
       view: 'link',
       title: 'Link GitHub with corporate identity',
-      optionalObject: options || {},
+      optionalObject: Object.assign({ missingGitHubDisplayName }, options || {}),
     });
   }
   const { config, graphProvider } = getProviders(req);

@@ -4,6 +4,120 @@ Priority-ordered list of security improvements identified across this repository
 
 ---
 
+## Fixed missing Log Analytics wiring for `nihgithubportalcb` (August 2026)
+
+Azure Portal's Monitoring > Logs showed the Log Analytics workspace for `nihgithubportalfh` but
+not `nihgithubportalcb`. Not a Terraform difference — Terraform doesn't manage the container
+groups at all (they're created imperatively via `az container create` in GitHub Actions); it only
+provisions the shared Log Analytics workspace, Service Bus namespace/queue, and the
+`nihgithubportal-firehose` identity. The gap was in `.github/workflows/main_create_acr_image.yml`
+(the workflow that auto-deploys on every push to `main`): its `deploy-fh` job looked up
+`LA_WORKSPACE_ID`/`LA_WORKSPACE_KEY` and passed `--log-analytics-workspace`/
+`--log-analytics-workspace-key` to `az container create`, but `deploy-cb` never did, so the cache
+builder container was created without a diagnostics sink. A prior fix for this same gap only
+landed in the manual-dispatch `main_nihgithubportalcb.yml`, not the auto-deploy workflow. Added
+the same `LA_WORKSPACE_ID`/`LA_WORKSPACE_KEY`/`LA_ARGS` wiring to `deploy-cb` to match `deploy-fh`.
+
+---
+
+## Fixed Redis crash-loop in `nihgithubportalfh` container (August 2026)
+
+Log analysis of the `nihgithubportalfh` container instance (webhooks processor) showed a
+crash-loop: roughly every 10–20 minutes, the process died with `SocketClosedUnexpectedlyError:
+Socket closed unexpectedly` thrown as an unhandled `'error'` event, and Azure Container Instances
+restarted it. Root cause: `middleware/redis.ts`'s shared `connectRedis()` (used by both the cache
+and session Redis clients) never attached an `error` listener to the client, so any transient
+socket error (idle disconnects, Azure Cache for Redis connection recycling) became an uncaught
+exception that killed the whole process. Fix: attach an `.on('error', ...)` listener that logs the
+error via `debug` instead of letting it crash the process.
+
+---
+
+## Dependency Updates (August 2026)
+
+Worked through every open Dependabot PR plus the full `bun outdated` list at the repo root,
+applying bumps in tiers (patch → minor → major), running `bun run build`, `bun run lint`, and
+`bun run test` after each tier/package, and committing only on green.
+
+- **Patch-level** (13 prod + 7 dev packages): `@azure/identity`, `@azure/keyvault-keys`,
+  `@azure/keyvault-secrets`, `@octokit/auth-oauth-app`, `@octokit/auth-oauth-user`,
+  `@octokit/graphql`, `@octokit/plugin-retry`, `@octokit/request`, `@octokit/request-error`,
+  `dotenv`, `form-data`, `jose`, `toad-cache`, `@types/express-serve-static-core`,
+  `@types/lodash`, `@types/luxon`, `cspell`, `eslint-plugin-prettier`, `eslint-plugin-security`,
+  `vitest`. Added a `package.json` `overrides` entry pinning
+  `@types/express-serve-static-core` to a single resolved version tree-wide — `@types/express`'s
+  own `^5.0.0` dependency was resolving a stale nested copy, producing a `TS2742`
+  non-portable-type build error.
+- **Minor-level** (16 prod + 10 dev packages): `@azure/cosmos`, `@azure/msal-node`,
+  `@azure/storage-blob`, `@azure/storage-queue`, `@octokit/auth-app`, `@primer/octicons`,
+  `applicationinsights`, `axios`, `body-parser`, `express-session`, `highlight.js`, `hyparquet`,
+  `liquidjs`, `morgan`, `pg`, `semver`, `@types/express-session`, `@types/multer`, `@types/pg`,
+  `@types/semver`, `@typescript-eslint/eslint-plugin`, `@typescript-eslint/parser`, `eslint`,
+  `globals`, `markdownlint-cli2`, `prettier`. The `prettier` bump changed formatting expectations
+  for 3 pre-existing files (`business/graphManager.ts`, `business/operations/core.ts`,
+  `lib/github/appTokens.ts`); reformatted with `prettier --write` to clear new
+  `eslint-plugin-prettier` errors.
+- **Major-level**, one at a time with usage review before each: `@octokit/types` (16→17, no
+  direct usage), `jwks-rsa` (3→4), `basic-auth` (2→3, no direct usage), `redis` + `connect-redis`
+  (5→6 / 9→10, bumped together since connect-redis is a session-store adapter for the redis
+  client), `js-yaml` (4→5, no direct usage, kept only for the security-floor `overrides` entry),
+  `nodemailer` (8→9), `json-2-csv` (3→5, `json2csvAsync` renamed to `json2csv` in
+  `routes/administration/index.ts`), `eslint-plugin-n` (17→18), `lint-staged` (16→17), `cspell`
+  (10.0→10.1).
+- **Reverted / held back:**
+  - `typescript` 5.9.3 → 7.0.2: incompatible with the installed `@typescript-eslint` (`<6.1.0`
+    peer range) and produced 40+ new compiler errors under its stricter inference. Staying on
+    5.9.3.
+  - `@types/node` 24.12.0 → 26.2.0: build/lint/test all passed, but reverted to stay aligned
+    with the Node 24.x runtime pin in this file's sibling `AGENTS.md` — newer `@types/node` would
+    type-check against Node APIs not present in the pinned 24.x runtime.
+- `bun outdated` at the repo root is clean except for the two held-back packages above.
+- Merged the open Dependabot GitHub Actions PRs (not covered by `bun outdated`, which only tracks
+  npm/bun packages) separately from the dependency-bump commits.
+
+---
+
+## Fixed crash adopting an org already known to `operations` (August 2026)
+
+Adopting an org that `Operations.getOrganizationSettingsInstance()` already had in memory (already
+active, or from a legacy static config entry) threw "static keys which are not recognized..."
+`createDynamicSettingsForNewOrganization()` was re-running the already-converted
+`OrganizationSetting` back through `CreateFromStaticSettings()`, which only strips legacy
+config field names, not the entity's own. Fix: `CreateFromStaticSettings()` now detects an
+already-converted input and clones it defensively instead of re-mapping it.
+
+---
+
+## Filtered `NIHGitHubAdmin` out of repository admin cards (August 2026)
+
+Same filter as the org Owners list fix below, applied to `business/repository.ts#getAdmins()`,
+so `NIHGitHubAdmin` no longer shows up as an "Org Admin" card on every repository's detail page.
+
+---
+
+## Fixed 404 crash when viewing an Enterprise Team-backed org team's page (August 2026)
+
+Enterprise Team-backed org teams (slug prefixed `ent:`) 404 on the classic
+`GET /orgs/{org}/teams/{team_slug}/members` endpoint instead of returning an empty list,
+crashing team pages. Fix: `business/team.ts#getMembers()` now returns `[]` for that case
+instead of throwing the error; all other member/maintainer lookups build on top of it.
+
+---
+
+## Organization Page Fixes (August 2026)
+
+- `NIHGitHubAdmin` (a service account) is now filtered out of the Owners list in `business/organization.ts#getOwnersCardData`, so it never appears on the org overview or public invitation pages.
+- Removed the hardcoded 5-card limit on the Owners list (`views/nih/mixins.pug#orgAdminCards`); `views/org/index.pug` now renders all organization owners instead of truncating with no way to see the rest.
+- `views/org/index.pug`: moved the "About the Organization" section above "Teams You Maintain" so it's visible without scrolling past team management tables.
+- `views/org/index.pug`: the top `<> Organization` header now links the org name to the org on GitHub, so it's the first org link on the page instead of the "Open on GitHub" link further down.
+- `views/footer.pug`: swapped column alignment so the NIH logo is left-aligned and the Version/legal notices/Contact/Contribute/Powered-by messaging is right-aligned; fixed the "Powered by" hyperlink so it ends on the word "source" instead of also wrapping the trailing comma.
+- `views/footer.pug`: the "Powered by ... GitHub API." line sat ~5px (about one character) further right than the Version/Contact/Contribute lines above it, because those are `<li>`s inside Bootstrap's `.list-inline` (which adds `padding-right:5px`) while the Powered-by text wasn't wrapped in any element with matching padding. Wrapped both branches in a `span(style='padding-right:5px')` so all rows align to the same right edge.
+- `views/nav2.pug`: navbar wrapper changed from `.container-fluid` to `.container` so the navbar content aligns with the fixed-width page container instead of spanning the full viewport width.
+- `views/reposToolbar.pug`: same `.container-fluid` → `.container` fix for the Organizations/Repositories/Teams/People subnav, so it lines up with the fixed-width containers above and below it.
+- `views/nav2.pug`: Settings icon changed from `glyphicon-option-vertical` (kebab menu) to `glyphicon-cog` (gear), which better signals "Settings".
+
+---
+
 ## Azure Region Migration: Central US → East US (August 2026)
 
 Moved the default Azure region for all Terraform-managed and ACI resources from `centralus` to `eastus`.
@@ -570,6 +684,87 @@ SET corporatename = 'New Display Name'
 WHERE thirdpartytype = 'github'
   AND lower(thirdpartyusername) = '<github-login-lowercase>';
 ```
+
+### Corporate Identity Tenant Migration Ledger (generic — not tied to one tenant pair)
+
+For a batch of users who moved from one Entra tenant to another (NIH → ARPA-H was the first case,
+but this is intentionally generic since it can happen again with any other tenant pair), use the
+toolkit under [`scripts/tenantMigration/`](scripts/tenantMigration) instead of hand-editing rows or
+relying on local files. State lives in a Postgres ledger table (`identitytenantmigrations`,
+self-created by the scripts on first run via `ensureSchema()` — no manual DB migration needed).
+Run it via the [`tenant_migration.yml`](.github/workflows/tenant_migration.yml) workflow (manual
+dispatch, OIDC, runs as a one-shot ACI container using the already-built portal image) — not by
+SSHing into an App Service.
+
+Each row in the ledger tracks one GitHub identity through the whole process — discovered ("before")
+corporate identity, intended ("target") corporate identity, and what was actually applied
+("after") — via a `status` column: `pending` → `needs-review` → `ready` → `applied` (or `conflict`/
+`failed`). Nothing is ever deleted from the ledger, so it doubles as an audit trail and makes every
+mode safely re-runnable.
+
+The workflow has two modes:
+
+#### `gather` — find candidates and produce a file to edit
+
+Scans one or more GitHub orgs' members and flags candidates by simple substring criteria against
+each linked member's _currently stored_ corporate identity — UPN/email contains, display name
+contains, or org membership alone if no other criteria are given:
+
+```bash
+gh workflow run tenant_migration.yml \
+  -f environment=dev \
+  -f mode=gather \
+  -f batch_id=<source-tenant>-to-<target-tenant>-2026-08 \
+  -f github_orgs=<org1,org2> \
+  -f upn_contains=<source-tenant-domain> \
+  -f exclude_upn_contains=<target-tenant-domain>
+```
+
+This writes every match to the ledger table (never to `links`), and also uploads a **downloadable
+artifact** on the workflow run named `tenant-migration-candidates-<batch-id>` — a JSON file with
+one entry per candidate, pre-filled with their discovered identity and blank `new*` fields:
+
+```bash
+gh run download <run-id> -n tenant-migration-candidates-<batch-id>
+```
+
+Edit that file: for each person you want to migrate, fill in `newCorporateId` (their OID in the
+target tenant — get this from `az ad user show --id user@target-tenant.example --query id -o tsv`
+after `az login --tenant <target-tenant-id>`), `newCorporateUsername`, and optionally
+`newCorporateDisplayName`/`newCorporateMailAddress`. **Never auto-match on email local-part
+alone** — hand-verify each pairing (name, known alias, HR migration list); a wrong match links one
+person's GitHub account to someone else's corporate identity. Leave a row's `newCorporateId` blank
+to skip migrating that person.
+
+You can also inspect the raw ledger directly instead of/alongside the downloaded file:
+
+```sql
+SELECT thirdpartyusername, discoveredcorporateusername, status
+FROM identitytenantmigrations
+WHERE batchid = '<batch-id>';
+```
+
+#### `patch` — apply the edited file
+
+```bash
+gh workflow run tenant_migration.yml \
+  -f environment=dev \
+  -f mode=patch \
+  -f batch_id=<batch-id> \
+  -f candidates_json_base64="$(base64 -w0 candidates-<batch-id>.json)"
+```
+
+This first records your edited target identities in the ledger (moving edited rows to `ready`,
+skipping any row you left blank), then applies them to `links` — dry run by default; review the
+printed before/after diff in the workflow run's logs, then re-run with `-f commit=true`
+(`environment=dev` first, then `environment=prod`). For each `ready` row, it re-fetches the live
+`links` row and checks it still matches what was discovered during `gather`; if something changed
+in between (e.g. someone re-linked, or another operator already touched it), the row is marked
+`conflict` instead of being blindly overwritten. Successful updates are marked `applied` with both
+the before and after snapshot recorded on the ledger row.
+
+Then follow Steps 3–4 of the single-user procedure above (confirm `ENTRA_ID_ALLOWED_TENANT_IDS`,
+have each user sign in).
 
 ---
 
