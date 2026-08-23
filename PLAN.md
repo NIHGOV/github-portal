@@ -4,6 +4,22 @@ Priority-ordered list of security improvements identified across this repository
 
 ---
 
+## Fixed missing Log Analytics wiring for `nihgithubportalcb` (August 2026)
+
+Azure Portal's Monitoring > Logs showed the Log Analytics workspace for `nihgithubportalfh` but
+not `nihgithubportalcb`. Not a Terraform difference — Terraform doesn't manage the container
+groups at all (they're created imperatively via `az container create` in GitHub Actions); it only
+provisions the shared Log Analytics workspace, Service Bus namespace/queue, and the
+`nihgithubportal-firehose` identity. The gap was in `.github/workflows/main_create_acr_image.yml`
+(the workflow that auto-deploys on every push to `main`): its `deploy-fh` job looked up
+`LA_WORKSPACE_ID`/`LA_WORKSPACE_KEY` and passed `--log-analytics-workspace`/
+`--log-analytics-workspace-key` to `az container create`, but `deploy-cb` never did, so the cache
+builder container was created without a diagnostics sink. A prior fix for this same gap only
+landed in the manual-dispatch `main_nihgithubportalcb.yml`, not the auto-deploy workflow. Added
+the same `LA_WORKSPACE_ID`/`LA_WORKSPACE_KEY`/`LA_ARGS` wiring to `deploy-cb` to match `deploy-fh`.
+
+---
+
 ## Fixed Redis crash-loop in `nihgithubportalfh` container (August 2026)
 
 Log analysis of the `nihgithubportalfh` container instance (webhooks processor) showed a
