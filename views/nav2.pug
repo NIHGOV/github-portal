@@ -97,7 +97,7 @@ div.navbar.navbar-default(style=reposContext ? 'margin-bottom:0' : undefined)
           li.dropdown
             a.dropdown-toggle(href='#', data-toggle='dropdown', role='button', aria-haspopup='true', aria-expanded='false')
               if hideGitHubAccount !== true && user && user.github && user.github.avatarUrl
-                img.img-circle(alt=user.github.displayName, src=user.github.avatarUrl + '&s=80', style='width:34px;height:34px;margin-bottom:-10px;margin-top:-10px;margin-right:6px', data-user=user.github.id)
+                img.img-circle(alt=user.github.displayName, src=user.github.avatarUrl + '&s=80', style='width:34px;height:34px;margin-bottom:-10px;margin-top:-10px;margin-right:12px', data-user=user.github.id)
               if user.azure
                 span= user.azure.displayName || user.azure.username
               //-span.caret
