@@ -52,3 +52,12 @@ variable "container_registry_name" {
   type        = string
   default     = "nihdevgithubportal"
 }
+
+# The existing 'servicebus' Logic App connection was created in centralus, unlike the newer
+# resources above (var.location/eastus) -- managed_api_id is ForceNew, so this must match the
+# connection's actual region or Terraform will destroy and recreate it instead of updating in place.
+variable "servicebus_managed_api_location" {
+  description = "Region of the existing 'servicebus' managed API connection"
+  type        = string
+  default     = "centralus"
+}

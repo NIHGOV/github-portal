@@ -52,3 +52,10 @@ variable "container_registry_name" {
   type        = string
   default     = "nihgithubportal"
 }
+
+# managed_api_id is ForceNew -- this must match the existing 'servicebus' connection's actual region.
+variable "servicebus_managed_api_location" {
+  description = "Region of the existing 'servicebus' managed API connection"
+  type        = string
+  default     = "eastus"
+}

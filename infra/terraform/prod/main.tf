@@ -26,18 +26,18 @@ resource "azurerm_servicebus_queue_authorization_rule" "events_send" {
 
 data "azurerm_managed_api" "servicebus" {
   name     = "servicebus"
-  location = var.location
+  location = var.servicebus_managed_api_location
 }
 
 # Pre-existing Logic App connection (nihgithubportalevents' webhook-publishing workflow already
 # references $connections['servicebus']) -- must be `terraform import`ed before first apply, since
 # it already exists. Only the connection string changes here, to point at the queue above instead
-# of the old pre-migration namespace; the Logic App's own definition is untouched.
+# of the old pre-migration namespace; the Logic App's own definition is untouched. display_name is
+# intentionally omitted so the existing value is left as-is rather than renamed.
 resource "azurerm_api_connection" "servicebus" {
   name                = "servicebus"
   resource_group_name = var.resource_group_name
   managed_api_id      = data.azurerm_managed_api.servicebus.id
-  display_name        = "servicebus"
 
   parameter_values = {
     connectionString = azurerm_servicebus_queue_authorization_rule.events_send.primary_connection_string
