@@ -14,6 +14,13 @@ block content
 
     div.row
       div.col-md-8.col-lg-8
+        if missingGitHubDisplayName
+          div.alert.alert-warning
+            | Your GitHub account doesn't have a name set. Please add your name on
+            = ' '
+            a(href='https://github.com/settings/profile', target='_new') your GitHub profile
+            = ' '
+            | so others can identify you after linking.
         form(method='post')
           if graphUser && graphUser.mail
             input(type='hidden', name='sam', value=graphUser.mail)
