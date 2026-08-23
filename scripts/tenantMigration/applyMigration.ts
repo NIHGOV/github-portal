@@ -197,11 +197,23 @@ async function applyMigration(providers: IProviders): Promise<void> {
         continue;
       }
 
+      let updateResult: boolean | void;
       try {
-        await linkProvider.updateLink(link);
+        // ILinkProvider#updateLink() is typed Promise<void>, but the Postgres implementation
+        // actually returns a boolean (whether the UPDATE affected a row); other providers throw
+        // instead of returning false on failure, so only an explicit `false` here is treated as a
+        // failed write -- a link deleted concurrently between the pre-write lookup and this call.
+        updateResult = (await linkProvider.updateLink(link)) as unknown as boolean | void;
       } catch (updateError) {
         console.error(`${label}: FAILED - ${updateError?.message || updateError}`);
         await markFailed(pool, row.id, updateError?.message || String(updateError));
+        failed++;
+        continue;
+      }
+      if (updateResult === false) {
+        const message = 'links table update affected zero rows (link may have been deleted concurrently)';
+        console.error(`${label}: FAILED - ${message}`);
+        await markFailed(pool, row.id, message);
         failed++;
         continue;
       }
