@@ -29,6 +29,10 @@ export async function connectRedis(
   }
   debug(`connecting to ${purpose} Redis ${redisConfig.host || redisConfig.tls}`);
   const redisClient: RedisClientType = createClient(redisOptions);
+  // without this listener, socket errors (e.g. idle disconnects) become unhandled exceptions and crash the process
+  redisClient.on('error', (err) => {
+    debug(`${purpose} Redis client error: ${err?.message || err}`);
+  });
   await redisClient.connect();
 
   return redisClient;

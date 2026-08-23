@@ -4,6 +4,19 @@ Priority-ordered list of security improvements identified across this repository
 
 ---
 
+## Fixed Redis crash-loop in `nihgithubportalfh` container (August 2026)
+
+Log analysis of the `nihgithubportalfh` container instance (webhooks processor) showed a
+crash-loop: roughly every 10–20 minutes, the process died with `SocketClosedUnexpectedlyError:
+Socket closed unexpectedly` thrown as an unhandled `'error'` event, and Azure Container Instances
+restarted it. Root cause: `middleware/redis.ts`'s shared `connectRedis()` (used by both the cache
+and session Redis clients) never attached an `error` listener to the client, so any transient
+socket error (idle disconnects, Azure Cache for Redis connection recycling) became an uncaught
+exception that killed the whole process. Fix: attach an `.on('error', ...)` listener that logs the
+error via `debug` instead of letting it crash the process.
+
+---
+
 ## Dependency Updates (August 2026)
 
 Worked through every open Dependabot PR plus the full `bun outdated` list at the repo root,
