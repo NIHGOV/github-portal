@@ -26,3 +26,29 @@ variable "servicebus_namespace_name" {
   type        = string
   default     = "nihgithubportalsb"
 }
+
+# The following reference resources that already exist and are managed outside Terraform (App
+# Service, Postgres, Redis, ACR) -- only their diagnostic settings are managed here.
+variable "app_service_name" {
+  description = "Name of the existing App Service to wire up to Log Analytics"
+  type        = string
+  default     = "nihgithubportal"
+}
+
+variable "postgresql_flexible_server_name" {
+  description = "Name of the existing PostgreSQL Flexible Server to wire up to Log Analytics"
+  type        = string
+  default     = "nihgithubportaldb"
+}
+
+variable "redis_name" {
+  description = "Name of the existing Azure Cache for Redis instance to wire up to Log Analytics"
+  type        = string
+  default     = "nihgithubportal"
+}
+
+variable "container_registry_name" {
+  description = "Name of the existing Azure Container Registry to wire up to Log Analytics"
+  type        = string
+  default     = "nihgithubportal"
+}

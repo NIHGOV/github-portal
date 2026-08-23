@@ -16,6 +16,13 @@ on:
         options:
           - plan
           - apply
+          - import
+      import_address:
+        description: '[import only] Terraform resource address, e.g. azurerm_api_connection.servicebus'
+        required: false
+      import_resource_id:
+        description: '[import only] Full Azure resource ID to import into the address above'
+        required: false
 
 permissions:
   id-token: write
@@ -73,6 +80,16 @@ jobs:
             -backend-config="container_name=${{ vars.PROD_TF_STORAGE_CONTAINER }}" \
             -backend-config="key=prod/terraform.tfstate" \
             -backend-config="use_azuread_auth=true"
+
+      - name: Terraform Import
+        if: ${{ github.event.inputs.action == 'import' }}
+        working-directory: infra/terraform/prod
+        run: |
+          terraform import \
+            -var="resource_group_name=${{ secrets.PROD_RG }}" \
+            -var="servicebus_namespace_name=${{ vars.PROD_SERVICEBUS_NAMESPACE }}" \
+            "${{ github.event.inputs.import_address }}" \
+            "${{ github.event.inputs.import_resource_id }}"
 
       - name: Terraform Plan
         working-directory: infra/terraform/prod
