@@ -35,7 +35,7 @@ import { readFileSync } from 'fs';
 
 import job from '../../job.js';
 import { IProviders } from '../../interfaces/index.js';
-import { setTarget } from './ledger.js';
+import { revokeReadyExcept, setTarget } from './ledger.js';
 
 const guidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -63,6 +63,10 @@ async function setTargets(providers: IProviders): Promise<void> {
   let notFound = 0;
   let invalid = 0;
   let skippedBlank = 0;
+  // Rows this submission successfully moved to "ready" -- anything previously "ready" for this
+  // batch but *not* in this set (removed, blanked, or replaced by an invalid row this time) gets
+  // reverted below so a stale target can't still be picked up by a later applyMigration.ts run.
+  const readyThirdPartyUsernames: string[] = [];
 
   for (const [index, entry] of entries.entries()) {
     const label = `[row ${index + 1}] ${entry?.thirdPartyUsername || '(missing thirdPartyUsername)'}`;
@@ -88,15 +92,18 @@ async function setTargets(providers: IProviders): Promise<void> {
 
     if (rowCount === 0) {
       console.error(
-        `${label}: no matching "pending"/"needs-review" ledger row in batch ${batchId} (already set, wrong batch, or typo?)`
+        `${label}: no matching "pending"/"needs-review"/"ready" ledger row in batch ${batchId} (already applied, wrong batch, or typo?)`
       );
       notFound++;
       continue;
     }
 
+    readyThirdPartyUsernames.push(entry.thirdPartyUsername);
     console.log(`${label}: marked ready -> ${entry.newCorporateUsername}`);
     updated++;
   }
+
+  const revoked = await revokeReadyExcept(pool, batchId, readyThirdPartyUsernames);
 
   console.log('');
   console.log('Summary:');
@@ -104,11 +111,19 @@ async function setTargets(providers: IProviders): Promise<void> {
   console.log(`  not found:     ${notFound}`);
   console.log(`  invalid:       ${invalid}`);
   console.log(`  skipped blank: ${skippedBlank} (no new* fields filled in -- not migrating these)`);
+  console.log(
+    `  revoked:       ${revoked} (previously "ready" but absent/invalid this run -- reset to "needs-review")`
+  );
   if (updated > 0) {
     console.log('');
     console.log(
       `Next: run applyMigration.ts with TENANT_MIGRATION_BATCH_ID=${batchId} (dry run by default).`
     );
+  }
+  if (invalid > 0) {
+    // Stop the chained "setTargets.js && applyMigration.js" workflow command from proceeding to
+    // apply on a submission that contained rows we couldn't validate.
+    throw new Error(`${invalid} row(s) failed validation -- see errors above. Not proceeding to apply.`);
   }
 }
 

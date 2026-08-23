@@ -52,9 +52,9 @@ on:
         type: boolean
         default: false
       image_tag:
-        description: "ACR image tag to run (default: this commit's SHA-tagged image; avoid the mutable `latest` tag, which may not match a successfully-built image for scripts/** changes)"
+        description: "ACR image tag to run (default: latest). Verified to exist in the selected environment's ACR before the container is created."
         required: false
-        default: ''
+        default: 'latest'
 
 permissions:
   id-token: write
@@ -159,12 +159,20 @@ jobs:
           fi
 
           ACR_NAME="${REGISTRY_SERVER%%.*}"
-          # Default to this workflow run's own commit SHA (an immutable tag pushed by the ACR build
-          # job for that commit) rather than the mutable "latest" tag, which can silently point at
-          # a build that predates a scripts/**-only change.
-          IMAGE_TAG="${IMAGE_TAG_INPUT:-${{ github.sha }}}"
+          IMAGE_TAG="$IMAGE_TAG_INPUT"
           REGISTRY_USER=$(az acr credential show --name "$ACR_NAME" --query username --output tsv)
           REGISTRY_PASS=$(az acr credential show --name "$ACR_NAME" --query "passwords[0].value" --output tsv)
+
+          # Fail fast with a clear error (and a list of what IS available) instead of guessing a tag
+          # and letting ACI produce an opaque image-pull failure later. This also protects against
+          # the fact that this workflow can be dispatched from any ref/branch: the resolved tag must
+          # actually exist in *this* environment's own registry (which the environment input alone
+          # selects), regardless of which commit the dispatch happened to run from.
+          if ! az acr repository show --name "$ACR_NAME" --image "portal:${IMAGE_TAG}" --output none 2>/dev/null; then
+            echo "::error::portal:${IMAGE_TAG} was not found in ${ACR_NAME}. Recent available tags:"
+            az acr repository show-tags --name "$ACR_NAME" --repository portal --orderby time_desc --top 10 --output tsv
+            exit 1
+          fi
 
           # Stage-specific env vars, built as arrays so empty/unused ones are simply omitted.
           PLAIN_TENANT_VARS=("TENANT_MIGRATION_BATCH_ID=$BATCH_ID_INPUT")

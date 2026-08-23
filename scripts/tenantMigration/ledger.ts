@@ -208,6 +208,30 @@ export async function setTarget(
   return result.rowCount as number;
 }
 
+// Resets any "ready" rows in the batch NOT present in keepThirdPartyUsernames back to
+// "needs-review". Called after a setTargets.ts run so a stale target from an earlier
+// submission (since removed, blanked, or replaced by an invalid row) can't still be picked
+// up by a later applyMigration.ts run.
+export async function revokeReadyExcept(
+  pool: PostgresPool,
+  batchId: string,
+  keepThirdPartyUsernames: string[]
+): Promise<number> {
+  const result = await PostgresPoolQueryAsync(
+    pool,
+    `
+    UPDATE ${TABLE_NAME}
+    SET status = 'needs-review',
+        updatedat = now()
+    WHERE batchid = $1
+      AND status = 'ready'
+      AND NOT (lower(thirdpartyusername) = ANY($2))
+  `,
+    [batchId, keepThirdPartyUsernames.map((username) => username.toLowerCase())]
+  );
+  return result.rowCount as number;
+}
+
 export async function listByStatus(
   pool: PostgresPool,
   batchId: string,

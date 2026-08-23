@@ -26,31 +26,31 @@ job.run(applyMigration, { name: 'Tenant migration: apply' });
 // Compares a live link against everything discovery recorded (not just corporateId): if the
 // username, display name, or mail address drifted while the ID stayed stable, applying would
 // silently overwrite those newer live values with the stale `new*` targets set at gather/patch
-// time. Returns a human-readable description of the mismatch(es), or null if nothing drifted.
+// time. Every field is compared unconditionally (empty/missing normalized to ''), not just when
+// the discovered value happened to be non-empty -- otherwise a field that was blank at gather
+// time but has since been populated live would be treated as unchanged and overwritten. Returns
+// a human-readable description of the mismatch(es), or null if nothing drifted.
 function findDrift(live: ICorporateLink, row: ITenantMigrationLedgerRow): string | null {
+  const normalize = (value: string | null | undefined): string => value ?? '';
   const mismatches: string[] = [];
-  if (row.discoveredCorporateId && live.corporateId !== row.discoveredCorporateId) {
-    mismatches.push(`corporateId (live: ${live.corporateId}, discovered: ${row.discoveredCorporateId})`);
-  }
-  if (row.discoveredCorporateUsername && live.corporateUsername !== row.discoveredCorporateUsername) {
+  if (normalize(live.corporateId) !== normalize(row.discoveredCorporateId)) {
     mismatches.push(
-      `corporateUsername (live: ${live.corporateUsername}, discovered: ${row.discoveredCorporateUsername})`
+      `corporateId (live: ${normalize(live.corporateId)}, discovered: ${normalize(row.discoveredCorporateId)})`
     );
   }
-  if (
-    row.discoveredCorporateDisplayName &&
-    live.corporateDisplayName !== row.discoveredCorporateDisplayName
-  ) {
+  if (normalize(live.corporateUsername) !== normalize(row.discoveredCorporateUsername)) {
     mismatches.push(
-      `corporateDisplayName (live: ${live.corporateDisplayName}, discovered: ${row.discoveredCorporateDisplayName})`
+      `corporateUsername (live: ${normalize(live.corporateUsername)}, discovered: ${normalize(row.discoveredCorporateUsername)})`
     );
   }
-  if (
-    row.discoveredCorporateMailAddress &&
-    live.corporateMailAddress !== row.discoveredCorporateMailAddress
-  ) {
+  if (normalize(live.corporateDisplayName) !== normalize(row.discoveredCorporateDisplayName)) {
     mismatches.push(
-      `corporateMailAddress (live: ${live.corporateMailAddress}, discovered: ${row.discoveredCorporateMailAddress})`
+      `corporateDisplayName (live: ${normalize(live.corporateDisplayName)}, discovered: ${normalize(row.discoveredCorporateDisplayName)})`
+    );
+  }
+  if (normalize(live.corporateMailAddress) !== normalize(row.discoveredCorporateMailAddress)) {
+    mismatches.push(
+      `corporateMailAddress (live: ${normalize(live.corporateMailAddress)}, discovered: ${normalize(row.discoveredCorporateMailAddress)})`
     );
   }
   return mismatches.length ? mismatches.join('; ') : null;
