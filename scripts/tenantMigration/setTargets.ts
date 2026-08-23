@@ -72,6 +72,11 @@ async function setTargets(providers: IProviders): Promise<void> {
 
   for (const [index, entry] of entries.entries()) {
     const label = `[row ${index + 1}] ${entry?.thirdPartyUsername || '(missing thirdPartyUsername)'}`;
+    if (!isEntryObject(entry)) {
+      console.error(`${label}: SKIPPED invalid row - row is not an object`);
+      invalid++;
+      continue;
+    }
     if (isBlankEntry(entry)) {
       skippedBlank++;
       continue;
@@ -134,6 +139,14 @@ async function setTargets(providers: IProviders): Promise<void> {
     // apply on a submission that contained rows we couldn't validate.
     throw new Error(`${invalid} row(s) failed validation -- see errors above. Not proceeding to apply.`);
   }
+  if (notFound > 0) {
+    // Same reasoning: a row with no matching ledger entry usually means a stale candidates file
+    // or a wrong batch_id -- letting the chained apply step run anyway could report a "successful"
+    // patch that actually migrated only a subset (or nobody at all).
+    throw new Error(
+      `${notFound} row(s) had no matching ledger entry -- see errors above. Not proceeding to apply.`
+    );
+  }
 }
 
 function readTargetsJson(): string {
@@ -150,15 +163,24 @@ function readTargetsJson(): string {
   );
 }
 
+function isEntryObject(entry: unknown): entry is ITargetEntry {
+  return typeof entry === 'object' && entry !== null && !Array.isArray(entry);
+}
+
 function isBlankEntry(entry: ITargetEntry): boolean {
-  return !entry?.newCorporateId && !entry?.newCorporateUsername;
+  // Every new* field must be empty for this to count as a deliberate opt-out -- a row with some
+  // new* fields filled in and others left blank is an incomplete edit, not an opt-out, and must
+  // fail validation below instead of being silently skipped.
+  return (
+    !entry.newCorporateId &&
+    !entry.newCorporateUsername &&
+    !entry.newCorporateDisplayName &&
+    !entry.newCorporateMailAddress
+  );
 }
 
 function validateEntry(entry: ITargetEntry): string[] {
   const problems: string[] = [];
-  if (!entry || typeof entry !== 'object') {
-    return ['row is not an object'];
-  }
   if (!entry.thirdPartyUsername) {
     problems.push('missing thirdPartyUsername');
   }
