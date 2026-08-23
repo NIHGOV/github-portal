@@ -68,12 +68,40 @@ async function applyMigration(providers: IProviders): Promise<void> {
   console.log(`Found ${readyRows.length} "ready" row(s) to apply`);
   console.log(commit ? 'MODE: COMMIT (links table will be written)' : 'MODE: DRY RUN (no writes)');
 
+  // Reject ambiguous batches upfront: if two ready rows target the same newCorporateId, either
+  // one could be the erroneous mapping. Checking only the live `links` table per-row (below)
+  // misses this, since neither row has been written yet -- in dry run both would report "WOULD
+  // UPDATE", and in commit mode the first would be applied before the second was ever inspected.
+  const thirdPartyIdsByTarget = new Map<string, Set<string>>();
+  for (const row of readyRows) {
+    if (!row.newCorporateId) {
+      continue;
+    }
+    const ids = thirdPartyIdsByTarget.get(row.newCorporateId) || new Set<string>();
+    ids.add(row.thirdPartyId);
+    thirdPartyIdsByTarget.set(row.newCorporateId, ids);
+  }
+  const ambiguousTargetCorporateIds = new Set(
+    [...thirdPartyIdsByTarget.entries()].filter(([, ids]) => ids.size > 1).map(([id]) => id)
+  );
+
   let applied = 0;
   let conflicts = 0;
   let failed = 0;
 
   for (const row of readyRows) {
     const label = `[${row.thirdPartyUsername}]`;
+
+    if (ambiguousTargetCorporateIds.has(row.newCorporateId)) {
+      const notes = `newCorporateId (${row.newCorporateId}) is targeted by more than one row in this batch's ready set -- ambiguous, review the candidates file`;
+      console.error(`${label}: CONFLICT - ${notes}`);
+      if (commit) {
+        await markConflict(pool, row.id, notes);
+      }
+      conflicts++;
+      continue;
+    }
+
     let link: ICorporateLink;
     try {
       // Look up by the immutable thirdPartyId, not the mutable username: a GitHub login can be
@@ -161,11 +189,34 @@ async function applyMigration(providers: IProviders): Promise<void> {
           conflicts++;
           continue;
         }
+      } catch (lookupError) {
+        const message = lookupError?.message || String(lookupError);
+        console.error(`${label}: FAILED - ${message}`);
+        await markFailed(pool, row.id, message);
+        failed++;
+        continue;
+      }
+
+      try {
         await linkProvider.updateLink(link);
-        await markApplied(pool, row.id, beforeSnapshot, afterSnapshot);
       } catch (updateError) {
         console.error(`${label}: FAILED - ${updateError?.message || updateError}`);
         await markFailed(pool, row.id, updateError?.message || String(updateError));
+        failed++;
+        continue;
+      }
+
+      // The links table write above already succeeded, so from here on a failure must NOT be
+      // recorded with markFailed(): that would falsely claim the identity was never migrated when
+      // it was. Leaving the row "ready" instead means a later applyMigration run's drift check will
+      // see live values that no longer match what was discovered and surface it as a CONFLICT for
+      // manual reconciliation, rather than silently recording the wrong status or blindly retrying it.
+      try {
+        await markApplied(pool, row.id, beforeSnapshot, afterSnapshot);
+      } catch (ledgerError) {
+        console.error(
+          `${label}: LIVE LINK WAS UPDATED BUT THE LEDGER WRITE FAILED - ${ledgerError?.message || ledgerError}. Row ${row.id} left as "ready" for reconciliation on the next run.`
+        );
         failed++;
         continue;
       }
