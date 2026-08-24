@@ -9,16 +9,16 @@ Priority-ordered list of security improvements identified across this repository
 - **Root cause of all 11 open Dependabot PRs failing CI**: `.github/dependabot.yml` used
   `package-ecosystem: npm` for `/` and `/default-assets-package`, but the project migrated to
   `bun.lock` (frozen-lockfile enforced in `Dockerfile`) months ago. Dependabot kept regenerating/
-  editing npm-format `package-lock.json` files that the Docker build never reads, so `bun install
---frozen-lockfile` failed every time with "lockfile had changes, but lockfile is frozen" —
-  unrelated to whatever dependency was actually being bumped.
+  editing npm-format `package-lock.json` files that the Docker build never reads, so
+  `bun install --frozen-lockfile` failed every time with "lockfile had changes, but lockfile is
+  frozen" — unrelated to whatever dependency was actually being bumped.
 - Switched both entries in `.github/dependabot.yml` from `package-ecosystem: npm` to
   `package-ecosystem: bun` (GitHub Dependabot has supported `bun.lock` natively since Bun 1.1.39) so
   future PRs update `bun.lock` directly and stay in sync with `package.json`.
 - Removed the stale, still-tracked `default-assets-package/package-lock.json` (root's equivalent
   file was already deleted in the original bun migration; this one was left behind). Verified
-  `default-assets-package/bun.lock` is currently in sync with `package.json` via `bun install
---frozen-lockfile --dry-run` before removing it.
+  `default-assets-package/bun.lock` is currently in sync with `package.json` via
+  `bun install --frozen-lockfile --dry-run` before removing it.
 - Confirmed `default-assets-package` is not dead code before considering removal — it's the active
   fallback static-assets package (`middleware/staticSiteAssets.ts`) serving favicon/CSS/JS unless
   `static-site-assets-package-name` is overridden in `package.json`, which it isn't.
@@ -965,7 +965,7 @@ Dependabot covers `/` and `/default-assets-package` for bun, but the `frontend/`
       interval: daily
     open-pull-requests-limit: 10
     commit-message:
-      prefix: 'npm - frontend'
+      prefix: 'bun - frontend'
   ```
 
 ---
