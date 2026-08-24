@@ -4,6 +4,30 @@ Priority-ordered list of security improvements identified across this repository
 
 ---
 
+## Fix Dependabot/bun lockfile mismatch blocking all open dependency PRs (August 2026)
+
+- **Root cause of all 11 open Dependabot PRs failing CI**: `.github/dependabot.yml` used
+  `package-ecosystem: npm` for `/` and `/default-assets-package`, but the project migrated to
+  `bun.lock` (frozen-lockfile enforced in `Dockerfile`) months ago. Dependabot kept regenerating/
+  editing npm-format `package-lock.json` files that the Docker build never reads, so
+  `bun install --frozen-lockfile` failed every time with "lockfile had changes, but lockfile is
+  frozen" — unrelated to whatever dependency was actually being bumped.
+- Switched both entries in `.github/dependabot.yml` from `package-ecosystem: npm` to
+  `package-ecosystem: bun` (GitHub Dependabot has supported `bun.lock` natively since Bun 1.1.39) so
+  future PRs update `bun.lock` directly and stay in sync with `package.json`.
+- Removed the stale, still-tracked `default-assets-package/package-lock.json` (root's equivalent
+  file was already deleted in the original bun migration; this one was left behind). Verified
+  `default-assets-package/bun.lock` is currently in sync with `package.json` via
+  `bun install --frozen-lockfile --dry-run` before removing it.
+- Confirmed `default-assets-package` is not dead code before considering removal — it's the active
+  fallback static-assets package (`middleware/staticSiteAssets.ts`) serving favicon/CSS/JS unless
+  `static-site-assets-package-name` is overridden in `package.json`, which it isn't.
+- The 11 already-open Dependabot PRs (#1073–#1173) were opened under the old npm ecosystem config
+  and still lack a matching `bun.lock` update; they need to be closed so Dependabot recreates them
+  correctly under the new `bun` ecosystem, or manually patched with a regenerated `bun.lock` per PR.
+
+---
+
 ## Log Analytics wiring, Service Bus webhook fix, and log redaction (August 2026)
 
 - **Fixed a real webhook-delivery gap**: the `nihdevgithubportal`/`nihgithubportalevents` Logic
@@ -280,10 +304,10 @@ Before the workflow can run, a storage account for Terraform state must exist:
 
 ### Prod bootstrap (one-time, before Terraform prod apply)
 
-- [ ] Create/confirm Terraform state storage account for prod (e.g. `nihgithubportaltf`) in `GitHub_OpenSource_Portal`
-- [ ] Create blob container (e.g. `tfstate`) in it
-- [ ] Grant service principal **Storage Blob Data Contributor** on the prod state storage account
-- [ ] Add GitHub Secret `PROD_TF_STORAGE_ACCOUNT` → prod storage account name (also listed in ACI Production above)
+- [x] Create/confirm Terraform state storage account for prod (e.g. `nihgithubportaltf`) in `GitHub_OpenSource_Portal`
+- [x] Create blob container (e.g. `tfstate`) in it
+- [x] Grant service principal **Storage Blob Data Contributor** on the prod state storage account
+- [x] Add GitHub Secret `PROD_TF_STORAGE_ACCOUNT` → prod storage account name (also listed in ACI Production above)
 
 ---
 
@@ -317,31 +341,31 @@ Replaced hardcoded-secret YAML files with GitHub Actions workflows and `infra/ac
 - [x] Run `staging_nihdevgithubportalcb.yml` manually — ✅ cache builder runs, saves repo permissions to DB
 - [x] Restart `nihdevgithubportal` App Service — ✅ ARPA-H org description appears on homepage
 
-### Production
+### Production ✅ Complete (August 2026)
 
-- [ ] Add GitHub Secret `PROD_RG` → `GitHub_OpenSource_Portal`
-- [ ] Add GitHub Secrets `PROD_AAD_CLIENT_ID`, `PROD_AAD_CLIENT_SECRET`, `PROD_AAD_SUBSCRIPTION_ID`, `PROD_AAD_TENANT_ID` (may match existing `AAD_*` values)
-- [ ] Add GitHub Secret `PROD_REGISTRY_SERVER` → prod ACR hostname (e.g. `nihgithubportal.azurecr.io`)
-- [ ] Add GitHub Secret `PROD_REDIS_TLS_HOST`
-- [ ] Add GitHub Secret `PROD_REDIS_KEY`
-- [ ] Add GitHub Secret `PROD_POSTGRES_HOST`
-- [ ] Add GitHub Secret `PROD_POSTGRES_DB`
-- [ ] Add GitHub Secret `PROD_POSTGRES_USER`
-- [ ] Add GitHub Secret `PROD_POSTGRES_PASSWORD`
-- [ ] Add GitHub Secret `PROD_WEBHOOK_SHARED_SECRET` → webhook HMAC secret from the prod GitHub App settings (needed by firehose; learned from staging)
-- [ ] ~~`PROD_SERVICEBUS_CONNECTIONSTRING`~~ — never needed; went straight to managed identity
-- [ ] Add GitHub Variable `PROD_SERVICEBUS_NAMESPACE` → prod Service Bus namespace name
-- [ ] Add GitHub Variable `PROD_TF_STORAGE_CONTAINER` → `tfstate` (or equivalent)
-- [ ] Add GitHub Secret `PROD_TF_STORAGE_ACCOUNT` → prod Terraform state storage account name (also required for Terraform prod bootstrap below)
-- [ ] Add GitHub Secret `PROD_GITHUB_APP_OPERATIONS_APP_ID`
-- [ ] Add GitHub Secret `PROD_GITHUB_APP_OPERATIONS_KEY`
-- [ ] Add GitHub Secret `PROD_GITHUB_APP_OPERATIONS_SLUG`
-- [ ] Apply `WEBSITE_RUN_FROM_PACKAGE=1`, Entra env vars, and all required App Service settings to `nihgithubportal` (see High Priority §0)
-- [ ] Run Terraform prod workflow (`main_terraform_prod.yml`, action: apply) — provisions `nihgithubportal-firehose` managed identity, Service Bus namespace, queue, and role assignment
-- [ ] Run `main_nihgithubportalfh.yml` manually — verify firehose starts
-- [ ] Run `main_nihgithubportalcb.yml` manually — verify cache builder runs
-- [ ] Run `main_nihgithubportal.yml` — deploy app to `nihgithubportal` App Service
-- [ ] Verify `nihgithubportal` App Service starts and portal is accessible
+- [x] Add GitHub Secret `PROD_RG` → `GitHub_OpenSource_Portal`
+- [x] Add GitHub Secrets `PROD_AAD_CLIENT_ID`, `PROD_AAD_CLIENT_SECRET`, `PROD_AAD_SUBSCRIPTION_ID`, `PROD_AAD_TENANT_ID` (may match existing `AAD_*` values)
+- [x] Add GitHub Secret `PROD_REGISTRY_SERVER` → prod ACR hostname (e.g. `nihgithubportal.azurecr.io`)
+- [x] Add GitHub Secret `PROD_REDIS_TLS_HOST`
+- [x] Add GitHub Secret `PROD_REDIS_KEY`
+- [x] Add GitHub Secret `PROD_POSTGRES_HOST`
+- [x] Add GitHub Secret `PROD_POSTGRES_DB`
+- [x] Add GitHub Secret `PROD_POSTGRES_USER`
+- [x] Add GitHub Secret `PROD_POSTGRES_PASSWORD`
+- [x] Add GitHub Secret `PROD_WEBHOOK_SHARED_SECRET` → webhook HMAC secret from the prod GitHub App settings (needed by firehose; learned from staging)
+- [x] ~~`PROD_SERVICEBUS_CONNECTIONSTRING`~~ — never needed; went straight to managed identity
+- [x] Add GitHub Variable `PROD_SERVICEBUS_NAMESPACE` → prod Service Bus namespace name
+- [x] Add GitHub Variable `PROD_TF_STORAGE_CONTAINER` → `tfstate` (or equivalent)
+- [x] Add GitHub Secret `PROD_TF_STORAGE_ACCOUNT` → prod Terraform state storage account name (also required for Terraform prod bootstrap below)
+- [x] Add GitHub Secret `PROD_GITHUB_APP_OPERATIONS_APP_ID`
+- [x] Add GitHub Secret `PROD_GITHUB_APP_OPERATIONS_KEY`
+- [x] Add GitHub Secret `PROD_GITHUB_APP_OPERATIONS_SLUG`
+- [x] Apply `WEBSITE_RUN_FROM_PACKAGE=1`, Entra env vars, and all required App Service settings to `nihgithubportal` (see High Priority §0)
+- [x] Run Terraform prod workflow (`main_terraform_prod.yml`, action: apply) — provisions `nihgithubportal-firehose` managed identity, Service Bus namespace, queue, and role assignment
+- [x] Run `main_nihgithubportalfh.yml` manually — ✅ firehose deployed and verified (2026-08-22)
+- [x] Run `main_nihgithubportalcb.yml` manually — ✅ cache builder deployed and verified (2026-08-22)
+- [x] Run `main_nihgithubportal.yml` — ✅ deployed to `nihgithubportal` App Service (PR #1171 merge, 2026-08-24: "Successfully deployed web package to App Service.")
+- [x] Verify `nihgithubportal` App Service starts and portal is accessible — confirmed via successful deploy + no startup failures across repeated runs
 
 ---
 
@@ -368,16 +392,16 @@ No credential to rotate or leak; ACI picks up the identity at runtime.
 - [x] Firehose container deployed and verified
 - [x] Cache builder deployed and verified
 
-### Production (after staging → main merge — tracked in #1128)
+### Production (after staging → main merge — tracked in #1128) ✅ Complete
 
-- [ ] `PROD_SERVICEBUS_NAMESPACE` variable set in GitHub → prod namespace name
-- [ ] `PROD_TF_STORAGE_CONTAINER` variable set in GitHub → `tfstate`
-- [ ] Terraform prod apply run
-- [ ] `nihgithubportalsb` Service Bus namespace created (Terraform)
-- [ ] `nihgithubportal-firehose` managed identity created (Terraform)
-- [ ] `Azure Service Bus Data Receiver` role assignment created (Terraform)
-- [ ] Firehose container deployed and verified
-- [ ] Cache builder deployed and verified
+- [x] `PROD_SERVICEBUS_NAMESPACE` variable set in GitHub → prod namespace name
+- [x] `PROD_TF_STORAGE_CONTAINER` variable set in GitHub → `tfstate`
+- [x] Terraform prod apply run
+- [x] `nihgithubportalsb` Service Bus namespace created (Terraform)
+- [x] `nihgithubportal-firehose` managed identity created (Terraform)
+- [x] `Azure Service Bus Data Receiver` role assignment created (Terraform)
+- [x] Firehose container deployed and verified
+- [x] Cache builder deployed and verified
 
 ---
 
@@ -929,19 +953,19 @@ The Docker build in CI creates an image but never scans it. Both the Azure Linux
 
 **File:** `.github/dependabot.yml`
 
-Dependabot covers `/` and `/default-assets-package` for npm, but the `frontend/` directory has its own `package.json` (referenced in `Dockerfile` as `WORKDIR /build/frontend`) and is not covered.
+Dependabot covers `/` and `/default-assets-package` for bun, but the `frontend/` directory has its own `package.json` (referenced in `Dockerfile` as `WORKDIR /build/frontend`) and is not covered.
 
-- [ ] Add a third npm entry to `dependabot.yml`:
+- [ ] Add a third entry to `dependabot.yml` (check whether `frontend/` uses its own lockfile format — `bun` if it has a `bun.lock`, otherwise `npm`):
 
   ```yaml
-  - package-ecosystem: npm
+  - package-ecosystem: bun
     directory: /frontend
     target-branch: staging
     schedule:
       interval: daily
     open-pull-requests-limit: 10
     commit-message:
-      prefix: 'npm - frontend'
+      prefix: 'bun - frontend'
   ```
 
 ---
@@ -1023,7 +1047,7 @@ Dependabot and `npm audit` are reactive (known CVEs). [Socket.dev](https://socke
 - HSTS with preload and `includeSubDomains` via `middleware/hsts.ts`
 - `eslint-plugin-security` integrated in `eslint.config.mjs`
 - OIDC-based Azure auth in `container.yml` (no static Azure credentials)
-- Dependabot covering npm (`/`, `/default-assets-package`), GitHub Actions, and Docker
+- Dependabot covering bun (`/`, `/default-assets-package`), GitHub Actions, and Docker
 - CodeQL scanning on push and weekly (`codeql-analysis.yml`)
 - API token validation via Entra in `middleware/api/authentication/`
 - Session production guards (rejects `memory`/`file` providers in production)

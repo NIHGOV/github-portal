@@ -1,21 +1,21 @@
 version: 2
 updates:
-  - package-ecosystem: npm
+  - package-ecosystem: bun
     directory: /
     target-branch: staging
     schedule:
       interval: daily
     open-pull-requests-limit: 10
     commit-message:
-      prefix: 'npm - back-end'
-  - package-ecosystem: npm
+      prefix: 'bun - back-end'
+  - package-ecosystem: bun
     directory: /default-assets-package
     target-branch: staging
     schedule:
       interval: daily
     open-pull-requests-limit: 10
     commit-message:
-      prefix: 'npm - front-end'
+      prefix: 'bun - front-end'
   - package-ecosystem: github-actions
     target-branch: staging
     directory: /
