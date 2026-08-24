@@ -310,13 +310,23 @@ export default class QueryCache {
       }
     }
     if (repositoryCache) {
+      const cachedDetails = repositoryCache.repositoryDetails;
       const update =
         !repositoryCache.organizationId ||
-        !repositoryCache.repositoryDetails ||
-        !repositoryCache.repositoryDetails.updated_at ||
-        repositoryCache.repositoryDetails.updated_at !== repositoryDetails.updated_at ||
-        repositoryCache.repositoryDetails.pushed_at !== repositoryDetails.pushed_at;
+        !cachedDetails ||
+        !cachedDetails.updated_at ||
+        cachedDetails.updated_at !== repositoryDetails.updated_at ||
+        cachedDetails.pushed_at !== repositoryDetails.pushed_at;
       if (update) {
+        // out-of-order delivery (concurrent firehose threads, or a slow refresh job racing a
+        // webhook) must never move the Recent-sort timestamp backwards
+        if (
+          cachedDetails?.pushed_at &&
+          clonedDetails['pushed_at'] &&
+          new Date(clonedDetails['pushed_at']).getTime() < new Date(cachedDetails.pushed_at).getTime()
+        ) {
+          clonedDetails['pushed_at'] = cachedDetails.pushed_at;
+        }
         repositoryCache.cacheUpdated = new Date();
         repositoryCache.organizationId = organizationId;
         repositoryCache.repositoryName = repositoryDetails.name;

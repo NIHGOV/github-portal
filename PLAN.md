@@ -28,6 +28,15 @@ Priority-ordered list of security improvements identified across this repository
   `queryCache.addOrUpdateRepository`'s update predicate only compared `updated_at`, so a push with a new
   `pushed_at` but unchanged `updated_at` was a silent no-op that defeated the whole point of this change;
   added a `pushed_at` comparison to the update predicate in `business/queryCache.ts`.
+- **Second round of PR review follow-ups**: concurrent firehose threads (and the periodic
+  `refreshQueryCache` job racing a webhook) could deliver an older push payload after a newer one, and
+  the `pushed_at` inequality check would happily overwrite the cache with the older timestamp, moving
+  Recent sort backwards. Added a monotonic guard in `addOrUpdateRepository` that preserves the cached
+  `pushed_at` whenever an incoming payload's `pushed_at` is older. Separately, the dependency bump of
+  `c3` to `0.7.20` (pulling in `d3@5.16.0`) broke `default-assets-package`'s Grunt build: d3 5 moved its
+  minified bundle from the package root to `dist/d3.min.js`, but `Gruntfile.js`'s `copy:d3` task still
+  pointed at the old root path. Fixed the `cwd` and verified with a clean
+  `bun install --frozen-lockfile && bun run build`.
 
 ---
 
