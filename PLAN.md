@@ -18,17 +18,36 @@ Priority-ordered list of security improvements identified across this repository
   pre-existing `servicebus` connection so Terraform can repoint its connection string, without
   touching the Logic App's own definition — `infra/terraform/{dev,prod}/main.tf`. Also fixed a
   `managed_api_id` region mismatch (dev's connection was created in `centralus`, not `eastus`) that
-  was forcing an unwanted destroy/recreate instead of an in-place update.
+  was forcing an unwanted destroy/recreate instead of an in-place update. Since Azure never returns
+  the secure `connectionString` on refresh, added `lifecycle { ignore_changes = [parameter_values] }`
+  on dev (already repointed and verified via a clean `plan`) once confirmed; prod's is deferred to a
+  follow-up commit until after its own first repoint apply, so the initial value actually gets set.
 - **Wired Log Analytics into every other Azure resource** that wasn't already covered (App Service,
   PostgreSQL Flexible Server, Redis Cache, Container Registry, and the Terraform-managed Service Bus
   namespace) via `azurerm_monitor_diagnostic_setting`, referencing the existing resources through
   data sources rather than importing/managing them — `infra/terraform/{dev,prod}/main.tf`.
-- **Redacted corporate-identity data from the public `tenant_migration.yml` workflow log**:
-  `applyMigration.ts`/`setTargets.ts` and the shared link-provider's column-change logging print
-  full corporate GUIDs, emails, and display names to stdout; only the gather-mode candidates-JSON
-  block was previously redacted, leaving patch-mode runs fully exposed in this repo's world-readable
-  Actions logs. Now scrubs GUIDs, emails, corporate-identity snapshot lines, and drift-comparison
-  details from what's echoed into the job log.
+- **Stopped echoing the tenant-migration container's raw log to the public `tenant_migration.yml`
+  job log entirely.** An initial per-line `sed` redaction pass (scrubbing GUIDs, emails,
+  corporate-identity snapshot lines, drift-comparison details, and validation-error messages) turned
+  out to be fundamentally unsound: free-form corporate-identity values can contain literal newlines,
+  which defeats any line-oriented pattern. `container.log` is still written to disk for the
+  candidate-extraction step; nothing from the container's stdout is printed publicly anymore.
+- Made the tenant-migration container's Log Analytics workspace lookup **fail fast** instead of
+  silently launching with no diagnostics sink on failure — since the raw log is no longer echoed
+  anywhere, Log Analytics was the only remaining place a failed run's output could be inspected, so
+  a silent lookup failure meant a patch-mode failure left nothing recoverable but an exit code.
+- Fixed a real Bash syntax bug in the `import_address` validation regex (an unescaped apostrophe
+  inside an unquoted `=~` pattern opened an unterminated single-quoted string), which broke every
+  `terraform import` dispatch before it could run; verified the fix locally against both a valid
+  address and an injection attempt.
+- Fixed a misleading `environment: name: 'Production'` label on `staging_nihdevgithubportal.yml`
+  (the dev app deploy workflow) — copy-pasted from the real prod deploy workflow without renaming,
+  even though it deploys `nihdevgithubportal`. Renamed to `'Development'`; required an accompanying
+  Entra ID federated-credential update since this workflow's OIDC trust is bound to the GitHub
+  environment name, not just the branch ref (a real functional dependency, not just cosmetic).
+- Fixed both app deploy workflows' `environment.url` pointing at the raw
+  `azurewebsites.net` hostname (`azure/webapps-deploy`'s output) instead of the actual public custom
+  domain (`dev.portal.github.nih.gov` / `portal.github.nih.gov`).
 - Added a `terraform import` action (plus masked/validated `import_address`/`import_resource_id`
   inputs, passed as env vars rather than interpolated into the script) to both Terraform workflows,
   so `terraform import` can be run entirely through Actions instead of requiring local/Cloud Shell
@@ -38,6 +57,13 @@ Priority-ordered list of security improvements identified across this repository
 - Added a "this repo is public" note to `AGENTS.md` — code, commits, Actions logs, issues, and PRs
   are all world-readable; flag anything that would leak credentials/PII/infra details before
   proceeding.
+- Separately: Azure Portal's federated-credential UI started defaulting to "immutable" (org-ID/
+  repo-ID-based) OIDC subjects that GitHub Actions doesn't send by default, breaking Azure login for
+  any credential created through the Portal's default template in the last ~week
+  ([Azure/login#617](https://github.com/Azure/login/issues/617)). Fixed by enabling "Use immutable
+  subject claim" under this repo's Settings → Actions → OIDC and updating the affected federated
+  credentials to match; verified across all four distinct (app, subject) pairings used across the
+  repo's workflows (dev/prod × ref-based/environment-based).
 
 ---
 
