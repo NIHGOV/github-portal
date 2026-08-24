@@ -29,7 +29,9 @@ const RUNNING_AS_ONGOING_DEPLOYMENT = true;
 const HARD_ABORT_MS = 1000 * 60 * 5; // 5 minutes
 const EVENTS_TO_COMPLETELY_IGNORE = ['installation', 'ping', 'star', 'watch'];
 const USER_ACTIONS_TO_HANDLE = ['transferred', 'created'];
-const EVENTS_TO_ALWAYS_HANDLE = ['repository_advisory'];
+// push events have no `action` and are almost always sent by a User sender, so without this
+// they'd be dropped by the generic user-sender filter below and never refresh queryCache pushed_at
+const EVENTS_TO_ALWAYS_HANDLE = ['repository_advisory', 'push'];
 const RECENT_EVENT_METRIC_INTERVAL_MS = 1000 * 60 * 5; // 5 minutes
 const INSIGHTS_PREFIX = 'events';
 

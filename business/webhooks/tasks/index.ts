@@ -8,6 +8,7 @@ import AutomaticTeamsWebhookProcessor from './automaticTeams.js';
 import MembershipWebhookProcessor from './membership.js';
 import MemberWebhookProcessor from './member.js';
 import OrganizationWebhookProcessor from './organization.js';
+import PushWebhookProcessor from './push.js';
 import RepositoryWebhookProcessor from './repository.js';
 import TeamWebhookProcessor from './team.js';
 
@@ -19,6 +20,7 @@ const tasks: WebhookProcessor[] = [
   new MemberWebhookProcessor(),
   new MembershipWebhookProcessor(),
   new OrganizationWebhookProcessor(),
+  new PushWebhookProcessor(),
   new RepositoryWebhookProcessor(),
   new TeamWebhookProcessor(),
 ];

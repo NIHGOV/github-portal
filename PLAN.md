@@ -4,6 +4,25 @@ Priority-ordered list of security improvements identified across this repository
 
 ---
 
+## Firehose now refreshes `/repos` "Recent" sort in real time (August 2026)
+
+- **Root cause**: the `/repos` "Recent" sort (`sortByPushed` in `business/repoSearch.ts`) sorts on the
+  `pushed_at` field cached by `queryCache`, which was only ever refreshed by the slow, staggered
+  `jobs/refreshQueryCache.ts` batch job (up to 48 hours per full pass) or by the `repository` webhook
+  event (created/edited/renamed/archived/etc). There was no handler for the GitHub `push` event at all,
+  so a real push never updated the cache until the next batch pass touched that org — explaining
+  inconsistent "N hours ago" staleness across repos.
+- Added `business/webhooks/tasks/push.ts`, a new webhook task that calls
+  `queryCache.addOrUpdateRepository` with the push event's repository payload, and registered it in
+  `business/webhooks/tasks/index.ts`.
+- Discovered a second, more fundamental gap in `jobs/firehose.ts`: push events have no `action` field
+  and are almost always sent with `sender.type === 'User'`, so they were being silently dropped by the
+  generic "ignore non-created/transferred user-sender events" filter before ever reaching the task
+  list. Added `'push'` to `EVENTS_TO_ALWAYS_HANDLE` so push events bypass that filter.
+- Also documented in `AGENTS.md` to use `bunx` instead of `npx` for one-off package execution.
+
+---
+
 ## Fix Dependabot/bun lockfile mismatch blocking all open dependency PRs (August 2026)
 
 - **Root cause of all 11 open Dependabot PRs failing CI**: `.github/dependabot.yml` used

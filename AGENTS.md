@@ -14,6 +14,7 @@ would cause information to leak into a public surface, say so before proceeding.
 ## Dev environment
 
 - **Package manager:** bun only. Never `npm install`. Lockfile: `bun.lock`.
+- Use `bunx` for one-off package execution (e.g. `bunx tsc`). Never `npx`.
 - **Before committing:** Update `PLAN.md` with a summary of any fix or change made in that commit.
 - **Node:** 24.x. Do not downgrade.
 - **Tests:** `bun run test` (vitest). Not `bun test` (that's Bun's native runner — incompatible). Not `npm test`.
