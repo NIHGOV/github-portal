@@ -6,7 +6,7 @@
       "name": "@ospo/site-assets",
       "dependencies": {
         "blockui": "^1.0.0",
-        "components-font-awesome": "^4.2.0",
+        "components-font-awesome": "^5.9.0",
         "typeahead": "^0.2.2",
         "typeahead.js": "^0.11.1",
       },
@@ -72,7 +72,7 @@
 
     "colors": ["colors@1.1.2", "", {}, "sha1-FopHAXVran9RoSzgyXv6KMCE7WM="],
 
-    "components-font-awesome": ["components-font-awesome@4.2.0", "", {}, "sha1-5oFLz5xn7FhRVJIAD0HFA/Ff0kM="],
+    "components-font-awesome": ["components-font-awesome@5.9.0", "", {}, "sha512-AjY5WwmKripvroQ1oYpCC4eK8efavSKUGN/ATgwcbyz/kRmojslH8l6Mrlxq071bdzBrZvCxi+RKgU5ao3bU+A=="],
 
     "concat-map": ["concat-map@0.0.1", "", {}, "sha1-2Klr13/Wjfd5OnMDajug1UBdR3s="],
 
