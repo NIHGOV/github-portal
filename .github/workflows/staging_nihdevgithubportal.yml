@@ -126,7 +126,7 @@ jobs:
       id-token: write
       contents: read
     environment:
-      name: 'Production'
+      name: 'Development'
       url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
 
     steps:
