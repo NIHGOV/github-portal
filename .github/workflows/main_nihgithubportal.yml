@@ -127,7 +127,9 @@ jobs:
       contents: read
     environment:
       name: 'Production'
-      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
+      # azure/webapps-deploy's output is the raw *.azurewebsites.net hostname, not the custom
+      # domain (fronted by nihgithubportal-afd) that's actually public-facing.
+      url: 'https://portal.github.nih.gov'
 
     steps:
       - name: Download artifact from build job

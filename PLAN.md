@@ -4,6 +4,69 @@ Priority-ordered list of security improvements identified across this repository
 
 ---
 
+## Log Analytics wiring, Service Bus webhook fix, and log redaction (August 2026)
+
+- **Fixed a real webhook-delivery gap**: the `nihdevgithubportal`/`nihgithubportalevents` Logic
+  App (the sole GitHub → Service Bus publishing path per `docs/webhooks.md`) was still wired to the
+  pre-migration Service Bus namespace's `events` queue via its `servicebus` API connection —
+  firehose moved to the new `nihdevgithubportalsb`/`nihgithubportalsb` namespace during the June
+  2026 managed-identity migration, but this connection was never repointed. Confirmed via matching
+  `X-Ms-Workflow-Id`/`X-Ms-Workflow-Run-Id` headers from a live GitHub webhook delivery against the
+  Logic App's run history. Dev's orphaned queue had accumulated 58 active + 1198 dead-lettered
+  messages; prod had 620 active. Fixed by adding a send-only
+  `azurerm_servicebus_queue_authorization_rule` on the existing `events` queue and importing the
+  pre-existing `servicebus` connection so Terraform can repoint its connection string, without
+  touching the Logic App's own definition — `infra/terraform/{dev,prod}/main.tf`. Also fixed a
+  `managed_api_id` region mismatch (dev's connection was created in `centralus`, not `eastus`) that
+  was forcing an unwanted destroy/recreate instead of an in-place update. Since Azure never returns
+  the secure `connectionString` on refresh, added `lifecycle { ignore_changes = [parameter_values] }`
+  on dev (already repointed and verified via a clean `plan`) once confirmed; prod's is deferred to a
+  follow-up commit until after its own first repoint apply, so the initial value actually gets set.
+- **Wired Log Analytics into every other Azure resource** that wasn't already covered (App Service,
+  PostgreSQL Flexible Server, Redis Cache, Container Registry, and the Terraform-managed Service Bus
+  namespace) via `azurerm_monitor_diagnostic_setting`, referencing the existing resources through
+  data sources rather than importing/managing them — `infra/terraform/{dev,prod}/main.tf`.
+- **Stopped echoing the tenant-migration container's raw log to the public `tenant_migration.yml`
+  job log entirely.** An initial per-line `sed` redaction pass (scrubbing GUIDs, emails,
+  corporate-identity snapshot lines, drift-comparison details, and validation-error messages) turned
+  out to be fundamentally unsound: free-form corporate-identity values can contain literal newlines,
+  which defeats any line-oriented pattern. `container.log` is still written to disk for the
+  candidate-extraction step; nothing from the container's stdout is printed publicly anymore.
+- Made the tenant-migration container's Log Analytics workspace lookup **fail fast** instead of
+  silently launching with no diagnostics sink on failure — since the raw log is no longer echoed
+  anywhere, Log Analytics was the only remaining place a failed run's output could be inspected, so
+  a silent lookup failure meant a patch-mode failure left nothing recoverable but an exit code.
+- Fixed a real Bash syntax bug in the `import_address` validation regex (an unescaped apostrophe
+  inside an unquoted `=~` pattern opened an unterminated single-quoted string), which broke every
+  `terraform import` dispatch before it could run; verified the fix locally against both a valid
+  address and an injection attempt.
+- Fixed a misleading `environment: name: 'Production'` label on `staging_nihdevgithubportal.yml`
+  (the dev app deploy workflow) — copy-pasted from the real prod deploy workflow without renaming,
+  even though it deploys `nihdevgithubportal`. Renamed to `'Development'`; required an accompanying
+  Entra ID federated-credential update since this workflow's OIDC trust is bound to the GitHub
+  environment name, not just the branch ref (a real functional dependency, not just cosmetic).
+- Fixed both app deploy workflows' `environment.url` pointing at the raw
+  `azurewebsites.net` hostname (`azure/webapps-deploy`'s output) instead of the actual public custom
+  domain (`dev.portal.github.nih.gov` / `portal.github.nih.gov`).
+- Added a `terraform import` action (plus masked/validated `import_address`/`import_resource_id`
+  inputs, passed as env vars rather than interpolated into the script) to both Terraform workflows,
+  so `terraform import` can be run entirely through Actions instead of requiring local/Cloud Shell
+  access.
+- Bumped `hashicorp/setup-terraform` to v4.0.1 (native Node 24, drops the Node 20 deprecation
+  warning).
+- Added a "this repo is public" note to `AGENTS.md` — code, commits, Actions logs, issues, and PRs
+  are all world-readable; flag anything that would leak credentials/PII/infra details before
+  proceeding.
+- Separately: Azure Portal's federated-credential UI started defaulting to "immutable" (org-ID/
+  repo-ID-based) OIDC subjects that GitHub Actions doesn't send by default, breaking Azure login for
+  any credential created through the Portal's default template in the last ~week
+  ([Azure/login#617](https://github.com/Azure/login/issues/617)). Fixed by enabling "Use immutable
+  subject claim" under this repo's Settings → Actions → OIDC and updating the affected federated
+  credentials to match; verified across all four distinct (app, subject) pairings used across the
+  repo's workflows (dev/prod × ref-based/environment-based).
+
+---
+
 ## Fixed missing Log Analytics wiring for `nihgithubportalcb` (August 2026)
 
 Azure Portal's Monitoring > Logs showed the Log Analytics workspace for `nihgithubportalfh` but
@@ -720,13 +783,21 @@ gh workflow run tenant_migration.yml \
   -f exclude_upn_contains=<target-tenant-domain>
 ```
 
-This writes every match to the ledger table (never to `links`), and also uploads a **downloadable
-artifact** on the workflow run named `tenant-migration-candidates-<batch-id>` — a JSON file with
-one entry per candidate, pre-filled with their discovered identity and blank `new*` fields:
+This writes every match to the ledger table (never to `links`), and also uploads a **downloadable,
+encrypted artifact** on the workflow run named `tenant-migration-candidates-<batch-id>` -- an
+AES-256-CBC-encrypted JSON file (`candidates-<batch-id>.json.enc`), one entry per candidate,
+pre-filled with their discovered identity and blank `new*` fields. Encrypted because on this
+public repo, artifact downloads only require repo read access -- any signed-in GitHub user, not
+just this org:
 
 ```bash
 gh run download <run-id> -n tenant-migration-candidates-<batch-id>
+openssl enc -d -aes-256-cbc -pbkdf2 -pass env:TENANT_MIGRATION_ARTIFACT_PASSPHRASE \
+  -in candidates-<batch-id>.json.enc -out candidates-<batch-id>.json
 ```
+
+(`TENANT_MIGRATION_ARTIFACT_PASSPHRASE` is the same repo secret the workflow encrypts with --
+get it from whoever manages this repo's secrets, not from the workflow run itself.)
 
 Edit that file: for each person you want to migrate, fill in `newCorporateId` (their OID in the
 target tenant — get this from `az ad user show --id user@target-tenant.example --query id -o tsv`
@@ -755,8 +826,9 @@ gh workflow run tenant_migration.yml \
 ```
 
 This first records your edited target identities in the ledger (moving edited rows to `ready`,
-skipping any row you left blank), then applies them to `links` — dry run by default; review the
-printed before/after diff in the workflow run's logs, then re-run with `-f commit=true`
+skipping any row you left blank), then applies them to `links` — dry run by default; the
+container's own output (the before/after diff) is not echoed to this public workflow log --
+check Log Analytics for the run's `GITHUB_RUN_ID` instead -- then re-run with `-f commit=true`
 (`environment=dev` first, then `environment=prod`). For each `ready` row, it re-fetches the live
 `links` row and checks it still matches what was discovered during `gather`; if something changed
 in between (e.g. someone re-linked, or another operator already touched it), the row is marked

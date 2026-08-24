@@ -16,6 +16,13 @@ on:
         options:
           - plan
           - apply
+          - import
+      import_address:
+        description: '[import only] Terraform resource address, e.g. azurerm_api_connection.servicebus'
+        required: false
+      import_resource_id:
+        description: '[import only] Full Azure resource ID to import into the address above'
+        required: false
 
 permissions:
   id-token: write
@@ -62,7 +69,7 @@ jobs:
             2>/dev/null || echo "Container already exists"
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
 
       - name: Terraform Init
         working-directory: infra/terraform/prod
@@ -73,6 +80,31 @@ jobs:
             -backend-config="container_name=${{ vars.PROD_TF_STORAGE_CONTAINER }}" \
             -backend-config="key=prod/terraform.tfstate" \
             -backend-config="use_azuread_auth=true"
+
+      - name: Terraform Import
+        if: ${{ github.event.inputs.action == 'import' }}
+        working-directory: infra/terraform/prod
+        env:
+          IMPORT_ADDRESS: ${{ github.event.inputs.import_address }}
+          IMPORT_RESOURCE_ID: ${{ github.event.inputs.import_resource_id }}
+        run: |
+          # Validated as complete, single-line data BEFORE emitting any workflow command --
+          # add-mask on an unvalidated value would let an embedded newline inject a second Actions
+          # command and leave part of the value unmasked, since add-mask only covers up to that break.
+          if [[ ! "$IMPORT_ADDRESS" =~ ^[A-Za-z_][A-Za-z0-9_-]*(\.[A-Za-z_][A-Za-z0-9_-]*)+$ ]]; then
+            echo "::error::import_address does not look like a valid Terraform resource address"
+            exit 1
+          fi
+          if [[ ! "$IMPORT_RESOURCE_ID" =~ ^/subscriptions/[0-9a-fA-F-]+/resourceGroups/[A-Za-z0-9._-]+/providers/[A-Za-z0-9.]+(/[A-Za-z0-9._-]+)+$ ]]; then
+            echo "::error::import_resource_id does not look like a valid Azure resource ID"
+            exit 1
+          fi
+          echo "::add-mask::$IMPORT_RESOURCE_ID"
+          terraform import \
+            -var="resource_group_name=${{ secrets.PROD_RG }}" \
+            -var="servicebus_namespace_name=${{ vars.PROD_SERVICEBUS_NAMESPACE }}" \
+            "$IMPORT_ADDRESS" \
+            "$IMPORT_RESOURCE_ID"
 
       - name: Terraform Plan
         working-directory: infra/terraform/prod
