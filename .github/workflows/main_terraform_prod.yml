@@ -91,7 +91,7 @@ jobs:
           # Masked and validated, then passed as shell variables (never expression-interpolated
           # into the script body) so a crafted value can't execute as shell code or leak in logs.
           echo "::add-mask::$IMPORT_RESOURCE_ID"
-          if [[ ! "$IMPORT_ADDRESS" =~ ^[A-Za-z_][A-Za-z0-9_-]*(\.[A-Za-z_][A-Za-z0-9_\[\]\"'-]*)+$ ]]; then
+          if [[ ! "$IMPORT_ADDRESS" =~ ^[A-Za-z_][A-Za-z0-9_-]*(\.[A-Za-z_][A-Za-z0-9_-]*)+$ ]]; then
             echo "::error::import_address does not look like a valid Terraform resource address"
             exit 1
           fi
