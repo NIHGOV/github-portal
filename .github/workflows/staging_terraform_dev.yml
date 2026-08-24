@@ -91,17 +91,18 @@ jobs:
           IMPORT_ADDRESS: ${{ github.event.inputs.import_address }}
           IMPORT_RESOURCE_ID: ${{ github.event.inputs.import_resource_id }}
         run: |
-          # Masked and validated, then passed as shell variables (never expression-interpolated
-          # into the script body) so a crafted value can't execute as shell code or leak in logs.
-          echo "::add-mask::$IMPORT_RESOURCE_ID"
+          # Validated as complete, single-line data BEFORE emitting any workflow command --
+          # add-mask on an unvalidated value would let an embedded newline inject a second Actions
+          # command and leave part of the value unmasked, since add-mask only covers up to that break.
           if [[ ! "$IMPORT_ADDRESS" =~ ^[A-Za-z_][A-Za-z0-9_-]*(\.[A-Za-z_][A-Za-z0-9_-]*)+$ ]]; then
             echo "::error::import_address does not look like a valid Terraform resource address"
             exit 1
           fi
-          if [[ ! "$IMPORT_RESOURCE_ID" =~ ^/subscriptions/[0-9a-fA-F-]+/ ]]; then
+          if [[ ! "$IMPORT_RESOURCE_ID" =~ ^/subscriptions/[0-9a-fA-F-]+/resourceGroups/[A-Za-z0-9._-]+/providers/[A-Za-z0-9.]+(/[A-Za-z0-9._-]+)+$ ]]; then
             echo "::error::import_resource_id does not look like a valid Azure resource ID"
             exit 1
           fi
+          echo "::add-mask::$IMPORT_RESOURCE_ID"
           terraform import \
             -var="resource_group_name=${{ secrets.DEV_RG }}" \
             -var="servicebus_namespace_name=${{ vars.DEV_SERVICEBUS_NAMESPACE }}" \

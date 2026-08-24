@@ -783,13 +783,21 @@ gh workflow run tenant_migration.yml \
   -f exclude_upn_contains=<target-tenant-domain>
 ```
 
-This writes every match to the ledger table (never to `links`), and also uploads a **downloadable
-artifact** on the workflow run named `tenant-migration-candidates-<batch-id>` — a JSON file with
-one entry per candidate, pre-filled with their discovered identity and blank `new*` fields:
+This writes every match to the ledger table (never to `links`), and also uploads a **downloadable,
+encrypted artifact** on the workflow run named `tenant-migration-candidates-<batch-id>` -- an
+AES-256-CBC-encrypted JSON file (`candidates-<batch-id>.json.enc`), one entry per candidate,
+pre-filled with their discovered identity and blank `new*` fields. Encrypted because on this
+public repo, artifact downloads only require repo read access -- any signed-in GitHub user, not
+just this org:
 
 ```bash
 gh run download <run-id> -n tenant-migration-candidates-<batch-id>
+openssl enc -d -aes-256-cbc -pbkdf2 -pass env:TENANT_MIGRATION_ARTIFACT_PASSPHRASE \
+  -in candidates-<batch-id>.json.enc -out candidates-<batch-id>.json
 ```
+
+(`TENANT_MIGRATION_ARTIFACT_PASSPHRASE` is the same repo secret the workflow encrypts with --
+get it from whoever manages this repo's secrets, not from the workflow run itself.)
 
 Edit that file: for each person you want to migrate, fill in `newCorporateId` (their OID in the
 target tenant — get this from `az ad user show --id user@target-tenant.example --query id -o tsv`
@@ -818,8 +826,9 @@ gh workflow run tenant_migration.yml \
 ```
 
 This first records your edited target identities in the ledger (moving edited rows to `ready`,
-skipping any row you left blank), then applies them to `links` — dry run by default; review the
-printed before/after diff in the workflow run's logs, then re-run with `-f commit=true`
+skipping any row you left blank), then applies them to `links` — dry run by default; the
+container's own output (the before/after diff) is not echoed to this public workflow log --
+check Log Analytics for the run's `GITHUB_RUN_ID` instead -- then re-run with `-f commit=true`
 (`environment=dev` first, then `environment=prod`). For each `ready` row, it re-fetches the live
 `links` row and checks it still matches what was discovered during `gather`; if something changed
 in between (e.g. someone re-linked, or another operator already touched it), the row is marked
