@@ -64,6 +64,12 @@ Priority-ordered list of security improvements identified across this repository
   subject claim" under this repo's Settings → Actions → OIDC and updating the affected federated
   credentials to match; verified across all four distinct (app, subject) pairings used across the
   repo's workflows (dev/prod × ref-based/environment-based).
+- PR #1171 merged to `main` (2026-08-24): prod's push-triggered `Terraform Apply` ran for the
+  first time, repointing `azurerm_api_connection.servicebus` (destroy + recreate, same resource ID,
+  `Apply complete! Resources: 7 added, 0 changed, 1 destroyed.`) and the app deploy succeeded.
+  Added the deferred `lifecycle { ignore_changes = [parameter_values] }` to
+  `infra/terraform/prod/main.tf` now that the initial value is set, matching dev, so future plans
+  don't see the secure `connectionString` as drifted and force-replace the connection again.
 
 ---
 
