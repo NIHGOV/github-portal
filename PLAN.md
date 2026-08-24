@@ -4,6 +4,30 @@ Priority-ordered list of security improvements identified across this repository
 
 ---
 
+## Fix Dependabot/bun lockfile mismatch blocking all open dependency PRs (August 2026)
+
+- **Root cause of all 11 open Dependabot PRs failing CI**: `.github/dependabot.yml` used
+  `package-ecosystem: npm` for `/` and `/default-assets-package`, but the project migrated to
+  `bun.lock` (frozen-lockfile enforced in `Dockerfile`) months ago. Dependabot kept regenerating/
+  editing npm-format `package-lock.json` files that the Docker build never reads, so `bun install
+--frozen-lockfile` failed every time with "lockfile had changes, but lockfile is frozen" —
+  unrelated to whatever dependency was actually being bumped.
+- Switched both entries in `.github/dependabot.yml` from `package-ecosystem: npm` to
+  `package-ecosystem: bun` (GitHub Dependabot has supported `bun.lock` natively since Bun 1.1.39) so
+  future PRs update `bun.lock` directly and stay in sync with `package.json`.
+- Removed the stale, still-tracked `default-assets-package/package-lock.json` (root's equivalent
+  file was already deleted in the original bun migration; this one was left behind). Verified
+  `default-assets-package/bun.lock` is currently in sync with `package.json` via `bun install
+--frozen-lockfile --dry-run` before removing it.
+- Confirmed `default-assets-package` is not dead code before considering removal — it's the active
+  fallback static-assets package (`middleware/staticSiteAssets.ts`) serving favicon/CSS/JS unless
+  `static-site-assets-package-name` is overridden in `package.json`, which it isn't.
+- The 11 already-open Dependabot PRs (#1073–#1173) were opened under the old npm ecosystem config
+  and still lack a matching `bun.lock` update; they need to be closed so Dependabot recreates them
+  correctly under the new `bun` ecosystem, or manually patched with a regenerated `bun.lock` per PR.
+
+---
+
 ## Log Analytics wiring, Service Bus webhook fix, and log redaction (August 2026)
 
 - **Fixed a real webhook-delivery gap**: the `nihdevgithubportal`/`nihgithubportalevents` Logic
@@ -929,12 +953,12 @@ The Docker build in CI creates an image but never scans it. Both the Azure Linux
 
 **File:** `.github/dependabot.yml`
 
-Dependabot covers `/` and `/default-assets-package` for npm, but the `frontend/` directory has its own `package.json` (referenced in `Dockerfile` as `WORKDIR /build/frontend`) and is not covered.
+Dependabot covers `/` and `/default-assets-package` for bun, but the `frontend/` directory has its own `package.json` (referenced in `Dockerfile` as `WORKDIR /build/frontend`) and is not covered.
 
-- [ ] Add a third npm entry to `dependabot.yml`:
+- [ ] Add a third entry to `dependabot.yml` (check whether `frontend/` uses its own lockfile format — `bun` if it has a `bun.lock`, otherwise `npm`):
 
   ```yaml
-  - package-ecosystem: npm
+  - package-ecosystem: bun
     directory: /frontend
     target-branch: staging
     schedule:
@@ -1023,7 +1047,7 @@ Dependabot and `npm audit` are reactive (known CVEs). [Socket.dev](https://socke
 - HSTS with preload and `includeSubDomains` via `middleware/hsts.ts`
 - `eslint-plugin-security` integrated in `eslint.config.mjs`
 - OIDC-based Azure auth in `container.yml` (no static Azure credentials)
-- Dependabot covering npm (`/`, `/default-assets-package`), GitHub Actions, and Docker
+- Dependabot covering bun (`/`, `/default-assets-package`), GitHub Actions, and Docker
 - CodeQL scanning on push and weekly (`codeql-analysis.yml`)
 - API token validation via Entra in `middleware/api/authentication/`
 - Session production guards (rejects `memory`/`file` providers in production)
