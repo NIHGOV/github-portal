@@ -153,10 +153,15 @@ jobs:
             --resource-group "$RG" \
             --workspace-name "$LOG_ANALYTICS_WORKSPACE" \
             --query primarySharedKey --output tsv 2>/dev/null || echo "")
-          LA_ARGS=()
-          if [ -n "$LA_WORKSPACE_ID" ]; then
-            LA_ARGS=(--log-analytics-workspace "$LA_WORKSPACE_ID" --log-analytics-workspace-key "$LA_WORKSPACE_KEY")
+          # Fatal rather than silently launching without a diagnostics sink: since the raw
+          # container log is never printed publicly (corporate-identity data), Log Analytics is
+          # the only place a failed run's output survives after the container is deleted below.
+          if [ -z "$LA_WORKSPACE_ID" ] || [ -z "$LA_WORKSPACE_KEY" ]; then
+            echo "::error::Could not resolve Log Analytics workspace '$LOG_ANALYTICS_WORKSPACE' -- refusing to launch a container with no diagnostics sink"
+            exit 1
           fi
+          LA_ARGS=(--log-analytics-workspace "$LA_WORKSPACE_ID" --log-analytics-workspace-key "$LA_WORKSPACE_KEY")
+
 
           ACR_NAME="${REGISTRY_SERVER%%.*}"
           IMAGE_TAG="$IMAGE_TAG_INPUT"
