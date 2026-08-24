@@ -22,7 +22,7 @@
         "grunt-exec": "3.0.0",
         "jquery": "^3.7.1",
         "load-grunt-tasks": "^5.1.0",
-        "octicons": "4.4.0",
+        "octicons": "8.5.0",
         "timeago": "1.6.7",
       },
     },
@@ -236,13 +236,15 @@
 
     "nopt": ["nopt@5.0.0", "", { "dependencies": { "abbrev": "1" }, "bin": { "nopt": "bin/nopt.js" } }, "sha512-Tbj67rffqceeLpcRXrT7vKAN8CwfPeIBgM7E6iBkmKLV7bEMwpGgYLGv0jACUsECaa/vuxP0IjEont6umdMgtQ=="],
 
+    "object-assign": ["object-assign@4.1.1", "", {}, "sha512-rJgTQnkUnH1sFw8yT6VSU3zD3sWmu6sZhIseY8VX+GRu3P6F7Fu+JNDoXfklElbLJSnc3FUQHVe4cU5hj+BcUg=="],
+
     "object.defaults": ["object.defaults@1.1.0", "", { "dependencies": { "array-each": "^1.0.1", "array-slice": "^1.0.0", "for-own": "^1.0.0", "isobject": "^3.0.0" } }, "sha1-On+GgzS0B96gbaFtiNXNKeQ1/s8="],
 
     "object.map": ["object.map@1.0.1", "", { "dependencies": { "for-own": "^1.0.0", "make-iterator": "^1.0.0" } }, "sha1-z4Plncj8wK1fQlDh94s7gb2AHTc="],
 
     "object.pick": ["object.pick@1.3.0", "", { "dependencies": { "isobject": "^3.0.1" } }, "sha1-h6EKxMFpS9Lhy/U1kaZhQftd10c="],
 
-    "octicons": ["octicons@4.4.0", "", {}, "sha1-rKO9MvXcHZB6jQ3nRPeODFThlEY="],
+    "octicons": ["octicons@8.5.0", "", { "dependencies": { "object-assign": "^4.1.1" } }, "sha512-l4GCHwBvStuwVfIuqUx/ktFJQJdCqLnd0bi2dvYZzkza6wj9EUksfMUlTqyVMULbPIvRTXxOqn/W07fsMu1bXA=="],
 
     "once": ["once@1.4.0", "", { "dependencies": { "wrappy": "1" } }, "sha1-WDsap3WWHUsROsF9nFC6753Xa9E="],
 
