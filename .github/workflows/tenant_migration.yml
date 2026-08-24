@@ -265,18 +265,11 @@ jobs:
           done
 
           az container logs --resource-group "$RG" --name "$CONTAINER_NAME" > container.log 2>&1 || true
-          echo "--- container logs ---"
-          # Removing logs from public view.
-          sed '/===TENANT_MIGRATION_CANDIDATES_JSON_BEGIN===/,/===TENANT_MIGRATION_CANDIDATES_JSON_END===/c\[REDACTED]' container.log \
-            | sed -E \
-                -e 's/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/[REDACTED]/g' \
-                -e 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/[REDACTED]/g' \
-                -e 's/^([[:space:]]*(before|after):).*/\1 [REDACTED]/' \
-                -e 's/^.* toggled (for link|back to original value for) .*/[REDACTED]/' \
-                -e 's/(marked ready) -> .*/\1 [REDACTED]/' \
-                -e 's/\(live:.*/(redacted)/' \
-                -e 's/(newCorporateId does not look like a GUID:).*/\1 [REDACTED]/' \
-                -e 's/(newCorporateUsername does not look like a valid UPN:).*/\1 [REDACTED]/'
+          # container.log is not echoed here. Line-oriented redaction can't safely handle free-form
+          # corporate-identity values (they can contain literal newlines, defeating per-line
+          # patterns), so the raw log is kept off this public job log entirely. It's still available
+          # to the next step (candidate extraction) and, once applied, via Log Analytics.
+          echo "--- container logs are not echoed to this public workflow log; see Log Analytics ---"
 
           EXIT_CODE=$(az container show --resource-group "$RG" --name "$CONTAINER_NAME" \
             --query "containers[0].instanceView.currentState.exitCode" --output tsv 2>/dev/null || echo "1")
