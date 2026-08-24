@@ -213,7 +213,12 @@ jobs:
               ;;
           esac
 
+          # --output none: az container create's own JSON response echoes back the plain
+          # (non-secure) environment variables it was given -- including any UPN/display-name
+          # filter substrings -- which would otherwise land in this public job log. Errors still
+          # go to stderr regardless of --output.
           az container create \
+            --output none \
             --resource-group "$RG" \
             --name "$CONTAINER_NAME" \
             --location eastus \
@@ -291,7 +296,7 @@ jobs:
           BATCH_ID_INPUT: ${{ inputs.batch_id }}
         run: |
           if ! grep -q '===TENANT_MIGRATION_CANDIDATES_JSON_BEGIN===' container.log; then
-            echo "::error::Could not find the candidates JSON marker in the container logs -- see logs above"
+            echo "::error::Could not find the candidates JSON marker -- see Log Analytics for the container's full output"
             exit 1
           fi
           sed -n '/===TENANT_MIGRATION_CANDIDATES_JSON_BEGIN===/,/===TENANT_MIGRATION_CANDIDATES_JSON_END===/p' container.log \
@@ -301,12 +306,32 @@ jobs:
           # uploaded artifact instead.
           echo "Wrote $(wc -l < "candidates-${BATCH_ID_INPUT}.json") line(s) to candidates-${BATCH_ID_INPUT}.json"
 
+      - name: Encrypt candidates JSON (gather mode)
+        if: inputs.mode == 'gather'
+        env:
+          BATCH_ID_INPUT: ${{ inputs.batch_id }}
+          ARTIFACT_PASSPHRASE: ${{ secrets.TENANT_MIGRATION_ARTIFACT_PASSPHRASE }}
+        run: |
+          # On a public repo, any signed-in GitHub user (not just this org) has read access and can
+          # download workflow run artifacts -- an unencrypted artifact would expose this batch's
+          # corporate-identity candidates the same way printing it to the log would. Decrypt locally
+          # with the same passphrase before editing:
+          #   openssl enc -d -aes-256-cbc -pbkdf2 -pass env:TENANT_MIGRATION_ARTIFACT_PASSPHRASE \
+          #     -in candidates-<batch>.json.enc -out candidates-<batch>.json
+          if [ -z "$ARTIFACT_PASSPHRASE" ]; then
+            echo "::error::TENANT_MIGRATION_ARTIFACT_PASSPHRASE secret is not set -- refusing to upload an unencrypted candidates artifact"
+            exit 1
+          fi
+          openssl enc -aes-256-cbc -pbkdf2 -pass env:ARTIFACT_PASSPHRASE \
+            -in "candidates-${BATCH_ID_INPUT}.json" -out "candidates-${BATCH_ID_INPUT}.json.enc"
+          rm -f "candidates-${BATCH_ID_INPUT}.json"
+
       - name: Upload candidates artifact (gather mode)
         if: inputs.mode == 'gather'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: tenant-migration-candidates-${{ inputs.batch_id }}
-          path: candidates-${{ inputs.batch_id }}.json
+          path: candidates-${{ inputs.batch_id }}.json.enc
           retention-days: 14
 
       - name: Check outcome
