@@ -42,6 +42,13 @@ resource "azurerm_api_connection" "servicebus" {
   parameter_values = {
     connectionString = azurerm_servicebus_queue_authorization_rule.events_send.primary_connection_string
   }
+
+  # Azure never returns this secure value on refresh, so without ignore_changes every subsequent
+  # plan sees it as drifted and force-replaces the connection again. Already applied with the
+  # correct value on this environment -- safe to ignore from here on.
+  lifecycle {
+    ignore_changes = [parameter_values]
+  }
 }
 
 resource "azurerm_user_assigned_identity" "firehose" {
