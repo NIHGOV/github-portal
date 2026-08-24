@@ -50,7 +50,7 @@ export default class PushWebhookProcessor implements WebhookProcessor {
       if (
         organizationIdAsString === organization.id.toString() &&
         queryCache &&
-        queryCache.supportsOrganizationMembership
+        queryCache.supportsRepositories
       ) {
         await queryCache.addOrUpdateRepository(
           organizationIdAsString,

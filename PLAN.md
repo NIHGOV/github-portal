@@ -20,6 +20,14 @@ Priority-ordered list of security improvements identified across this repository
   generic "ignore non-created/transferred user-sender events" filter before ever reaching the task
   list. Added `'push'` to `EVENTS_TO_ALWAYS_HANDLE` so push events bypass that filter.
 - Also documented in `AGENTS.md` to use `bunx` instead of `npx` for one-off package execution.
+- **Follow-up fixes from PR review** (Copilot code review on #1195): `push.ts` was gating the cache
+  call on `queryCache.supportsOrganizationMembership` instead of `supportsRepositories` — those two
+  capabilities are backed by independent providers (`organizationMemberCacheProvider` vs.
+  `repositoryCacheProvider`), so a deployment with repo caching enabled but membership caching disabled
+  would silently skip every push refresh. Fixed to check `supportsRepositories`. Also,
+  `queryCache.addOrUpdateRepository`'s update predicate only compared `updated_at`, so a push with a new
+  `pushed_at` but unchanged `updated_at` was a silent no-op that defeated the whole point of this change;
+  added a `pushed_at` comparison to the update predicate in `business/queryCache.ts`.
 
 ---
 

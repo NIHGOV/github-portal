@@ -314,7 +314,8 @@ export default class QueryCache {
         !repositoryCache.organizationId ||
         !repositoryCache.repositoryDetails ||
         !repositoryCache.repositoryDetails.updated_at ||
-        repositoryCache.repositoryDetails.updated_at !== repositoryDetails.updated_at;
+        repositoryCache.repositoryDetails.updated_at !== repositoryDetails.updated_at ||
+        repositoryCache.repositoryDetails.pushed_at !== repositoryDetails.pushed_at;
       if (update) {
         repositoryCache.cacheUpdated = new Date();
         repositoryCache.organizationId = organizationId;
