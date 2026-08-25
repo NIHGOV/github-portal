@@ -50,6 +50,13 @@ Priority-ordered list of security improvements identified across this repository
   the separate `refreshQueryCache` job process) would require an atomic conditional write at the storage
   layer — a larger change to the shared entity metadata abstraction used by many other callers, out of
   scope here.
+- **Covered repository deletes with the same lock**: `removeRepository` read-modify-wrote the cache
+  independently of `addOrUpdateRepository`'s new lock, so a delete could still interleave with a
+  concurrent create/update for the same repository within a process. `removeRepository` now shares the
+  same per-repository lock. Note this doesn't solve the separate, deeper issue of a delayed/stale push
+  event arriving *after* a delete has already fully completed — that's an event-ordering/tombstoning
+  problem, not a concurrency race, and would need the cache to track deletion state rather than just
+  lock ordering; left as a known limitation.
 
 ---
 

@@ -45,8 +45,8 @@ const debug = Debug.debug('querycache');
 
 export default class QueryCache {
   private _providers: IProviders;
-  // serializes addOrUpdateRepository's read-modify-write per repository so concurrent
-  // firehose threads can't both read a stale value and race each other on the write
+  // serializes addOrUpdateRepository/removeRepository per repository so concurrent firehose
+  // threads can't race a read-modify-write, or a delete interleave with a create/update
   private _repositoryUpdateLocks = new Map<string, Promise<unknown>>();
 
   constructor(providers: IProviders) {
@@ -411,6 +411,17 @@ export default class QueryCache {
     if (!this.supportsRepositories) {
       throw new Error('removeRepository not supported');
     }
+    // shares addOrUpdateRepository's lock so a delete can't interleave with a concurrent
+    // create/update for the same repository and resurrect a just-deleted cache row
+    return this.withRepositoryLock(repositoryId, () =>
+      this.removeRepositoryUnlocked(organizationId, repositoryId)
+    );
+  }
+
+  private async removeRepositoryUnlocked(
+    organizationId: string,
+    repositoryId: string
+  ): Promise<QueryCacheOperation> {
     const repositoryCacheProvider = this._providers.repositoryCacheProvider;
     let cache: RepositoryCacheEntity = null;
     try {
