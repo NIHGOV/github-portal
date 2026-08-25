@@ -41,6 +41,15 @@ Priority-ordered list of security improvements identified across this repository
   so a malformed/partial payload with `pushed_at` missing entirely would still overwrite the cache with
   `undefined`, discarding a previously known-good value. `addOrUpdateRepository` now also preserves the
   cached `pushed_at` whenever the incoming payload's `pushed_at` is falsy.
+- **Closed the remaining read-modify-write race**: the monotonic guard compared against a snapshot read
+  at the start of the call, so two concurrent callers (e.g. multiple firehose threads processing push
+  events for the same repository) could both read the same stale value and race each other on the write,
+  letting an older payload win if it wrote last. Added a per-repository async lock in `QueryCache` so all
+  `addOrUpdateRepository` calls for a given repository within a process now execute strictly serially,
+  eliminating the same-process race the reviewer flagged. A true cross-process guarantee (e.g. against
+  the separate `refreshQueryCache` job process) would require an atomic conditional write at the storage
+  layer — a larger change to the shared entity metadata abstraction used by many other callers, out of
+  scope here.
 
 ---
 

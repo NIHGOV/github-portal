@@ -45,9 +45,25 @@ const debug = Debug.debug('querycache');
 
 export default class QueryCache {
   private _providers: IProviders;
+  // serializes addOrUpdateRepository's read-modify-write per repository so concurrent
+  // firehose threads can't both read a stale value and race each other on the write
+  private _repositoryUpdateLocks = new Map<string, Promise<unknown>>();
 
   constructor(providers: IProviders) {
     this._providers = providers;
+  }
+
+  private async withRepositoryLock<T>(repositoryId: string, work: () => Promise<T>): Promise<T> {
+    const priorWork = this._repositoryUpdateLocks.get(repositoryId) || Promise.resolve();
+    const queuedWork = priorWork.catch(() => undefined).then(work);
+    this._repositoryUpdateLocks.set(repositoryId, queuedWork);
+    try {
+      return await queuedWork;
+    } finally {
+      if (this._repositoryUpdateLocks.get(repositoryId) === queuedWork) {
+        this._repositoryUpdateLocks.delete(repositoryId);
+      }
+    }
   }
 
   get operations(): Operations {
@@ -272,6 +288,16 @@ export default class QueryCache {
     if (!this.supportsRepositories) {
       throw new Error('addOrUpdateRepository not supported');
     }
+    return this.withRepositoryLock(repositoryId, () =>
+      this.addOrUpdateRepositoryUnlocked(organizationId, repositoryId, repositoryDetails)
+    );
+  }
+
+  private async addOrUpdateRepositoryUnlocked(
+    organizationId: string,
+    repositoryId: string,
+    repositoryDetails: any
+  ): Promise<QueryCacheOperation> {
     const repositoryFieldsToCache = [
       'name',
       'private',
