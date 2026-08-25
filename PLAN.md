@@ -54,7 +54,7 @@ Priority-ordered list of security improvements identified across this repository
   independently of `addOrUpdateRepository`'s new lock, so a delete could still interleave with a
   concurrent create/update for the same repository within a process. `removeRepository` now shares the
   same per-repository lock. Note this doesn't solve the separate, deeper issue of a delayed/stale push
-  event arriving *after* a delete has already fully completed — that's an event-ordering/tombstoning
+  event arriving _after_ a delete has already fully completed — that's an event-ordering/tombstoning
   problem, not a concurrency race, and would need the cache to track deletion state rather than just
   lock ordering; left as a known limitation.
 
@@ -775,7 +775,7 @@ The following settings are also required or the app crashes/misbehaves at runtim
 | `AUTHENTICATION_SCHEME`                      | `entra-id`                                                                                                                           | Default `aad` throws on startup since upstream sync                                                                   |
 | `ApplicationInsightsAgent_EXTENSION_VERSION` | `disabled`                                                                                                                           | Codeless agent floods logs and slows cold starts                                                                      |
 | `FRONTEND_MODE`                              | `skip`                                                                                                                               | No `frontend/` directory in repo; default `serve` crashes during route setup                                          |
-| `REDIS_KEY` \_                               | _(Azure Ca_he for Redis primary access key)_                                                                                         | Without it, all Redis commands fail with `NOAUTH Authentication required`                                             |
+| `REDIS_KEY`                                  | _(Azure Cache for Redis primary access key)_                                                                                         | Without it, all Redis commands fail with `NOAUTH Authentication required`                                             |
 | `ENTRA_ID_AUTHENTICATION_TYPE`               | `secret`                                                                                                                             | Default `managed-identity` silently skips passport strategy registration → "Unknown authentication strategy entra-id" |
 | `ENTRA_ID_AUTHENTICATION_CLIENT_ID`          | = `AAD_CLIENT_ID`                                                                                                                    | Used by passport strategy (separate from `ENTRA_ID_CLIENT_ID`)                                                        |
 | `ENTRA_ID_AUTHENTICATION_CLIENT_SECRET`      | = `AAD_CLIENT_SECRET`                                                                                                                |                                                                                                                       |
