@@ -37,6 +37,10 @@ Priority-ordered list of security improvements identified across this repository
   minified bundle from the package root to `dist/d3.min.js`, but `Gruntfile.js`'s `copy:d3` task still
   pointed at the old root path. Fixed the `cwd` and verified with a clean
   `bun install --frozen-lockfile && bun run build`.
+- **Hardened the monotonic guard further**: it only protected against an older-but-present `pushed_at`,
+  so a malformed/partial payload with `pushed_at` missing entirely would still overwrite the cache with
+  `undefined`, discarding a previously known-good value. `addOrUpdateRepository` now also preserves the
+  cached `pushed_at` whenever the incoming payload's `pushed_at` is falsy.
 
 ---
 

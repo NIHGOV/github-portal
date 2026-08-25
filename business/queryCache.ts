@@ -319,8 +319,11 @@ export default class QueryCache {
         cachedDetails.pushed_at !== repositoryDetails.pushed_at;
       if (update) {
         // out-of-order delivery (concurrent firehose threads, or a slow refresh job racing a
-        // webhook) must never move the Recent-sort timestamp backwards
-        if (
+        // webhook) must never move the Recent-sort timestamp backwards, and a payload missing
+        // pushed_at entirely must never blow away a value already known to be good
+        if (cachedDetails?.pushed_at && !clonedDetails['pushed_at']) {
+          clonedDetails['pushed_at'] = cachedDetails.pushed_at;
+        } else if (
           cachedDetails?.pushed_at &&
           clonedDetails['pushed_at'] &&
           new Date(clonedDetails['pushed_at']).getTime() < new Date(cachedDetails.pushed_at).getTime()
