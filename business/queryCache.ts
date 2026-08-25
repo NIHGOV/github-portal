@@ -45,9 +45,25 @@ const debug = Debug.debug('querycache');
 
 export default class QueryCache {
   private _providers: IProviders;
+  // serializes addOrUpdateRepository/removeRepository per repository so concurrent firehose
+  // threads can't race a read-modify-write, or a delete interleave with a create/update
+  private _repositoryUpdateLocks = new Map<string, Promise<unknown>>();
 
   constructor(providers: IProviders) {
     this._providers = providers;
+  }
+
+  private async withRepositoryLock<T>(repositoryId: string, work: () => Promise<T>): Promise<T> {
+    const priorWork = this._repositoryUpdateLocks.get(repositoryId) || Promise.resolve();
+    const queuedWork = priorWork.catch(() => undefined).then(work);
+    this._repositoryUpdateLocks.set(repositoryId, queuedWork);
+    try {
+      return await queuedWork;
+    } finally {
+      if (this._repositoryUpdateLocks.get(repositoryId) === queuedWork) {
+        this._repositoryUpdateLocks.delete(repositoryId);
+      }
+    }
   }
 
   get operations(): Operations {
@@ -272,6 +288,16 @@ export default class QueryCache {
     if (!this.supportsRepositories) {
       throw new Error('addOrUpdateRepository not supported');
     }
+    return this.withRepositoryLock(repositoryId, () =>
+      this.addOrUpdateRepositoryUnlocked(organizationId, repositoryId, repositoryDetails)
+    );
+  }
+
+  private async addOrUpdateRepositoryUnlocked(
+    organizationId: string,
+    repositoryId: string,
+    repositoryDetails: any
+  ): Promise<QueryCacheOperation> {
     const repositoryFieldsToCache = [
       'name',
       'private',
@@ -310,12 +336,26 @@ export default class QueryCache {
       }
     }
     if (repositoryCache) {
+      const cachedDetails = repositoryCache.repositoryDetails;
       const update =
         !repositoryCache.organizationId ||
-        !repositoryCache.repositoryDetails ||
-        !repositoryCache.repositoryDetails.updated_at ||
-        repositoryCache.repositoryDetails.updated_at !== repositoryDetails.updated_at;
+        !cachedDetails ||
+        !cachedDetails.updated_at ||
+        cachedDetails.updated_at !== repositoryDetails.updated_at ||
+        cachedDetails.pushed_at !== repositoryDetails.pushed_at;
       if (update) {
+        // out-of-order delivery (concurrent firehose threads, or a slow refresh job racing a
+        // webhook) must never move the Recent-sort timestamp backwards, and a payload missing
+        // pushed_at entirely must never blow away a value already known to be good
+        if (cachedDetails?.pushed_at && !clonedDetails['pushed_at']) {
+          clonedDetails['pushed_at'] = cachedDetails.pushed_at;
+        } else if (
+          cachedDetails?.pushed_at &&
+          clonedDetails['pushed_at'] &&
+          new Date(clonedDetails['pushed_at']).getTime() < new Date(cachedDetails.pushed_at).getTime()
+        ) {
+          clonedDetails['pushed_at'] = cachedDetails.pushed_at;
+        }
         repositoryCache.cacheUpdated = new Date();
         repositoryCache.organizationId = organizationId;
         repositoryCache.repositoryName = repositoryDetails.name;
@@ -371,6 +411,17 @@ export default class QueryCache {
     if (!this.supportsRepositories) {
       throw new Error('removeRepository not supported');
     }
+    // shares addOrUpdateRepository's lock so a delete can't interleave with a concurrent
+    // create/update for the same repository and resurrect a just-deleted cache row
+    return this.withRepositoryLock(repositoryId, () =>
+      this.removeRepositoryUnlocked(organizationId, repositoryId)
+    );
+  }
+
+  private async removeRepositoryUnlocked(
+    organizationId: string,
+    repositoryId: string
+  ): Promise<QueryCacheOperation> {
     const repositoryCacheProvider = this._providers.repositoryCacheProvider;
     let cache: RepositoryCacheEntity = null;
     try {

@@ -160,7 +160,7 @@ module.exports = function (grunt) {
           {
             expand: true,
             src: 'd3.min.js',
-            cwd: 'node_modules/d3/',
+            cwd: 'node_modules/d3/dist/',
             dest: '<%= buildscriptdir %>',
           },
         ],

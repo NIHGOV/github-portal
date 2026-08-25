@@ -4,6 +4,62 @@ Priority-ordered list of security improvements identified across this repository
 
 ---
 
+## Firehose now refreshes `/repos` "Recent" sort in real time (August 2026)
+
+- **Root cause**: the `/repos` "Recent" sort (`sortByPushed` in `business/repoSearch.ts`) sorts on the
+  `pushed_at` field cached by `queryCache`, which was only ever refreshed by the slow, staggered
+  `jobs/refreshQueryCache.ts` batch job (up to 48 hours per full pass) or by the `repository` webhook
+  event (created/edited/renamed/archived/etc). There was no handler for the GitHub `push` event at all,
+  so a real push never updated the cache until the next batch pass touched that org — explaining
+  inconsistent "N hours ago" staleness across repos.
+- Added `business/webhooks/tasks/push.ts`, a new webhook task that calls
+  `queryCache.addOrUpdateRepository` with the push event's repository payload, and registered it in
+  `business/webhooks/tasks/index.ts`.
+- Discovered a second, more fundamental gap in `jobs/firehose.ts`: push events have no `action` field
+  and are almost always sent with `sender.type === 'User'`, so they were being silently dropped by the
+  generic "ignore non-created/transferred user-sender events" filter before ever reaching the task
+  list. Added `'push'` to `EVENTS_TO_ALWAYS_HANDLE` so push events bypass that filter.
+- Also documented in `AGENTS.md` to use `bunx` instead of `npx` for one-off package execution.
+- **Follow-up fixes from PR review** (Copilot code review on #1195): `push.ts` was gating the cache
+  call on `queryCache.supportsOrganizationMembership` instead of `supportsRepositories` — those two
+  capabilities are backed by independent providers (`organizationMemberCacheProvider` vs.
+  `repositoryCacheProvider`), so a deployment with repo caching enabled but membership caching disabled
+  would silently skip every push refresh. Fixed to check `supportsRepositories`. Also,
+  `queryCache.addOrUpdateRepository`'s update predicate only compared `updated_at`, so a push with a new
+  `pushed_at` but unchanged `updated_at` was a silent no-op that defeated the whole point of this change;
+  added a `pushed_at` comparison to the update predicate in `business/queryCache.ts`.
+- **Second round of PR review follow-ups**: concurrent firehose threads (and the periodic
+  `refreshQueryCache` job racing a webhook) could deliver an older push payload after a newer one, and
+  the `pushed_at` inequality check would happily overwrite the cache with the older timestamp, moving
+  Recent sort backwards. Added a monotonic guard in `addOrUpdateRepository` that preserves the cached
+  `pushed_at` whenever an incoming payload's `pushed_at` is older. Separately, the dependency bump of
+  `c3` to `0.7.20` (pulling in `d3@5.16.0`) broke `default-assets-package`'s Grunt build: d3 5 moved its
+  minified bundle from the package root to `dist/d3.min.js`, but `Gruntfile.js`'s `copy:d3` task still
+  pointed at the old root path. Fixed the `cwd` and verified with a clean
+  `bun install --frozen-lockfile && bun run build`.
+- **Hardened the monotonic guard further**: it only protected against an older-but-present `pushed_at`,
+  so a malformed/partial payload with `pushed_at` missing entirely would still overwrite the cache with
+  `undefined`, discarding a previously known-good value. `addOrUpdateRepository` now also preserves the
+  cached `pushed_at` whenever the incoming payload's `pushed_at` is falsy.
+- **Closed the remaining read-modify-write race**: the monotonic guard compared against a snapshot read
+  at the start of the call, so two concurrent callers (e.g. multiple firehose threads processing push
+  events for the same repository) could both read the same stale value and race each other on the write,
+  letting an older payload win if it wrote last. Added a per-repository async lock in `QueryCache` so all
+  `addOrUpdateRepository` calls for a given repository within a process now execute strictly serially,
+  eliminating the same-process race the reviewer flagged. A true cross-process guarantee (e.g. against
+  the separate `refreshQueryCache` job process) would require an atomic conditional write at the storage
+  layer — a larger change to the shared entity metadata abstraction used by many other callers, out of
+  scope here.
+- **Covered repository deletes with the same lock**: `removeRepository` read-modify-wrote the cache
+  independently of `addOrUpdateRepository`'s new lock, so a delete could still interleave with a
+  concurrent create/update for the same repository within a process. `removeRepository` now shares the
+  same per-repository lock. Note this doesn't solve the separate, deeper issue of a delayed/stale push
+  event arriving _after_ a delete has already fully completed — that's an event-ordering/tombstoning
+  problem, not a concurrency race, and would need the cache to track deletion state rather than just
+  lock ordering; left as a known limitation.
+
+---
+
 ## Fix Dependabot/bun lockfile mismatch blocking all open dependency PRs (August 2026)
 
 - **Root cause of all 11 open Dependabot PRs failing CI**: `.github/dependabot.yml` used
@@ -719,7 +775,7 @@ The following settings are also required or the app crashes/misbehaves at runtim
 | `AUTHENTICATION_SCHEME`                      | `entra-id`                                                                                                                           | Default `aad` throws on startup since upstream sync                                                                   |
 | `ApplicationInsightsAgent_EXTENSION_VERSION` | `disabled`                                                                                                                           | Codeless agent floods logs and slows cold starts                                                                      |
 | `FRONTEND_MODE`                              | `skip`                                                                                                                               | No `frontend/` directory in repo; default `serve` crashes during route setup                                          |
-| `REDIS_KEY` \_                               | _(Azure Ca_he for Redis primary access key)_                                                                                         | Without it, all Redis commands fail with `NOAUTH Authentication required`                                             |
+| `REDIS_KEY`                                  | _(Azure Cache for Redis primary access key)_                                                                                         | Without it, all Redis commands fail with `NOAUTH Authentication required`                                             |
 | `ENTRA_ID_AUTHENTICATION_TYPE`               | `secret`                                                                                                                             | Default `managed-identity` silently skips passport strategy registration → "Unknown authentication strategy entra-id" |
 | `ENTRA_ID_AUTHENTICATION_CLIENT_ID`          | = `AAD_CLIENT_ID`                                                                                                                    | Used by passport strategy (separate from `ENTRA_ID_CLIENT_ID`)                                                        |
 | `ENTRA_ID_AUTHENTICATION_CLIENT_SECRET`      | = `AAD_CLIENT_SECRET`                                                                                                                |                                                                                                                       |
