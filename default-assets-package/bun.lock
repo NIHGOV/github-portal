@@ -12,7 +12,7 @@
       },
       "devDependencies": {
         "bootstrap": "3.4.1",
-        "bootswatch": "3.4.1",
+        "bootswatch": "5.3.8",
         "c3": "0.7.20",
         "grunt": "1.6.3",
         "grunt-contrib-clean": "2.0.1",
@@ -56,7 +56,7 @@
 
     "bootstrap": ["bootstrap@3.4.1", "", {}, "sha512-yN5oZVmRCwe5aKwzRj6736nSmKDX7pLYwsXiCj/EYmo16hODaBiT4En5btW/jhBF/seV+XMx3aYwukYC3A49DA=="],
 
-    "bootswatch": ["bootswatch@3.4.1", "", {}, "sha512-0hL4A8OUiqABgPipGrojf/hyhr5RS257xCNARlbK34HaMfhV5fXvwEooN4/ri9+jgX47J4Wg24ZPmfZ2xD2cKw=="],
+    "bootswatch": ["bootswatch@5.3.8", "", {}, "sha512-88mnH9tv+x6DV+scBxYFOpM4YSDVhyfEgbhqaEfvkHNctKI9qRcACxIP9nmBZ5mSeLXtsgax1VsRkUs1eWjlAQ=="],
 
     "brace-expansion": ["brace-expansion@1.1.18", "", { "dependencies": { "balanced-match": "^1.0.0", "concat-map": "0.0.1" } }, "sha512-Edep/X9fGqVNmzKBVsDYIOtD+z1tuezV70LBjdCst9Tqu76lsnvRiZ6oTic1n+/BIwX6QDGAO94PN4N2SADvtw=="],
 
