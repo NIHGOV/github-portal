@@ -14,6 +14,8 @@ import getCompanySpecificDeployment from '../../middleware/companySpecificDeploy
 import RouteApp from './app.js';
 import RouteApps from './apps.js';
 
+import { auditLinks } from '../../business/operations/linkAudit.js';
+
 import { json2csv } from 'json-2-csv';
 import _ from 'lodash';
 
@@ -135,6 +137,47 @@ router.get('/users-report', async (req: ReposAppRequest, res, next) => {
     res.header('Content-Type', 'text/csv');
     res.attachment('users-report.csv');
     // Send the payload as the response body
+    res.send(payload);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/*
+Asynchronously returns a CSV file comparing the People view's cached link status against a live
+Postgres read, for one or more orgs (query param `orgs`, comma-separated; defaults to all
+configured orgs). See business/operations/linkAudit.ts for what each status means.
+*/
+router.get('/link-audit', async (req: ReposAppRequest, res, next) => {
+  try {
+    const { operations } = getProviders(req);
+    const orgsParam = req.query.orgs;
+    const orgNames =
+      typeof orgsParam === 'string' && orgsParam.trim().length > 0
+        ? orgsParam
+            .split(',')
+            .map((name) => name.trim())
+            .filter(Boolean)
+        : Array.from(operations.organizations.keys());
+
+    const { rows } = await auditLinks(operations.providers, orgNames);
+
+    const header = 'Organization,Login,GitHubId,Status,CorporateId,CorporateUsername';
+    const cleanedObjects: object[] = _.sortBy(
+      rows.map((row) => ({
+        Organization: row.organization,
+        Login: row.login,
+        GitHubId: row.githubId,
+        Status: row.status,
+        CorporateId: row.corporateId || '',
+        CorporateUsername: row.corporateUsername || '',
+      })),
+      ['Organization', 'Login']
+    );
+    const payload = json2csv(cleanedObjects, { keys: header.split(','), emptyFieldValue: '' });
+
+    res.header('Content-Type', 'text/csv');
+    res.attachment('link-audit.csv');
     res.send(payload);
   } catch (err) {
     next(err);

@@ -4,6 +4,27 @@ Priority-ordered list of security improvements identified across this repository
 
 ---
 
+## Link audit report: Org People "linked" cache vs. live Postgres (September 2026)
+
+- **Root cause investigated**: accounts that link via Entra ID MTO (multi-tenant, external-tenant
+  domain) sign-ins can show as linked to themselves (`middleware/business/links.ts`'s
+  `tryAddLinkToRequest` does a live `queryByCorporateId` lookup) while still showing "Not linked" in
+  the Org People view, which instead matches against `operations.getLinks()`'s 30-second Redis-cached
+  bulk snapshot of the `links` table keyed by GitHub `thirdpartyid`. A genuinely persistent (not just
+  briefly stale) mismatch points at a real discrepancy between that cache and the live table.
+- Added `business/operations/linkAudit.ts` (`auditLinks()`): for a set of GitHub orgs, compares each
+  member's cached link (`operations.getLinks()`) against a direct, uncached `linkProvider.getAll()`
+  read, flagging `stale-cache` (row exists live but missing from cache), `orphaned-cache` (opposite),
+  and `linked-no-corporate-username` (linked but shown as an "unknown account").
+- Added `scripts/linkAudit.ts`, a `job.run`-based CLI wrapper (env: `LINK_AUDIT_GITHUB_ORGS`,
+  optional `LINK_AUDIT_FRESH_MEMBERS`), consistent with the `scripts/tenantMigration/` scripts.
+- Exposed the same report as a self-service admin page: `GET /administration/link-audit` (CSV,
+  optional `?orgs=` query param, defaults to all configured orgs) in `routes/administration/index.ts`,
+  already gated by the existing `AuthorizeOnlyCorporateAdministrators` middleware on `/administration`.
+  Added a "Link audit (cache vs. live)" entry to `views/administration/menu.pug`.
+
+---
+
 ## Added Redis `pingInterval` to reduce idle-disconnect noise (September 2026)
 
 Firehose logs were constantly showing `startup cache Redis client error: Socket closed
