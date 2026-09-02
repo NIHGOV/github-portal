@@ -4,6 +4,37 @@ Priority-ordered list of security improvements identified across this repository
 
 ---
 
+## Dependency vulnerability sweep via `bun audit`/`bun outdated` (September 2026)
+
+- **Root** (`package.json`/`bun.lock`): `bun audit fix` resolved 19 of 20 flagged vulnerabilities
+  in-range (`@opentelemetry/core`, `body-parser`, `brace-expansion` x2, `js-yaml`, `nanoid`,
+  `postcss`, `protobufjs`, `tmp`, `vite`). Raised the existing security `overrides` floors for
+  `js-yaml` (`>=4.1.1` → `>=4.3.1`) and `protobufjs` (`>=8.0.2` → `>=8.6.6`) to match, so a future
+  install can't resolve back down into the vulnerable range. One moderate `@opentelemetry/core`
+  advisory remains: blocked by several `@opentelemetry/sdk-*` packages (pulled in transitively via
+  `applicationinsights`, already at its latest `3.16.0`) that pin an exact `@opentelemetry/core`
+  version matching each other for internal consistency -- needs an upstream OpenTelemetry SDK
+  release, not fixable from this repo alone.
+- Also bumped a handful of small patch/minor versions from `bun outdated` that had **no existing
+  open Dependabot PR** (to avoid creating duplicate/conflicting PRs -- see the many open
+  `dependabot/bun/staging/*` PRs for the rest, e.g. `js-yaml`, `morgan`, `nodemailer`, `eslint`,
+  `typescript-eslint`, `cspell`, `lint-staged`, `@types/node`, `typescript`, which are left for
+  those PRs to merge normally): `@octokit/auth-app`, `@octokit/auth-oauth-app`,
+  `@octokit/auth-oauth-user`, `@octokit/graphql`, `@octokit/request`, `@octokit/request-error`,
+  `axios`, `hyparquet`, `json-2-csv`, `globals`. Left `@azure/msal-node` (6.0.0) and
+  `@octokit/types` (18.0.0) alone as major-version bumps needing dedicated review.
+- **`default-assets-package`** (legacy Grunt/Less build tooling): `bun audit fix` resolved 12 of 18
+  vulnerabilities (`brace-expansion`, `braces`, `micromatch`, `minimatch`, `picomatch`, all
+  transitive `grunt`/`grunt-contrib-*` deps). Deliberately skipped `d3-color`'s proposed fix --
+  bun's only "fix" for its ReDoS advisory is a _downgrade_ to 1.0.1, which is riskier than staying
+  vulnerable on a build-time-only chart dependency. `bootstrap` (XSS x2) and `lodash` (x3, blocked
+  by `grunt-legacy-*`'s tilde-pinned ranges) remain -- same known Bootstrap 3→5 Less→Sass migration
+  called out below, already tracked by open Dependabot PRs (#1185/#1180 bootstrap/bootswatch).
+- Verified with `bunx tsc -p tsconfig.json --noEmit` (clean) and `bun run test` (172/172 passing)
+  after all bumps.
+
+---
+
 ## Link audit report: Org People "linked" cache vs. live Postgres (September 2026)
 
 - **Root cause investigated**: accounts that link via Entra ID MTO (multi-tenant, external-tenant
