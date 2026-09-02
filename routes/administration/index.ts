@@ -19,6 +19,21 @@ import { auditLinks } from '../../business/operations/linkAudit.js';
 import { json2csv } from 'json-2-csv';
 import _ from 'lodash';
 
+// Prevents CSV formula injection: Excel/Sheets can execute a cell as a formula if it starts with
+// =, +, -, or @, so string values from external sources (GitHub/AAD profile data) are prefixed with
+// a leading single quote when they start with one of those characters.
+function escapeCsvFormulaInjection(value: unknown): unknown {
+  return typeof value === 'string' && /^\s*[=+\-@]/.test(value) ? `'${value}` : value;
+}
+
+function sanitizeCsvRow<T extends object>(row: T): T {
+  const sanitized = {} as T;
+  for (const [key, value] of Object.entries(row)) {
+    sanitized[key as keyof T] = escapeCsvFormulaInjection(value) as T[keyof T];
+  }
+  return sanitized;
+}
+
 router.use('/*splat', async function (req: ReposAppRequest, res: Response, next: NextFunction) {
   const { corporateAdministrationProfile } = getProviders(req);
   if (corporateAdministrationProfile && corporateAdministrationProfile.urls) {
@@ -128,13 +143,14 @@ router.get('/users-report', async (req: ReposAppRequest, res, next) => {
       'UserLogin,UserId,Organizations,OwnedOrganizations,IsLinked,CorporateId,CorporateMailAddress,CorporateUsername,CorporateDisplayName';
 
     // Sort the users object by user login and convert the values back into an array
-    const cleanedObjects: object[] = _.sortBy(Object.values(users), 'UserLogin');
+    const cleanedObjects: object[] = _.sortBy(Object.values(users), 'UserLogin').map(sanitizeCsvRow);
 
     // Use the json2csv library to convert the cleaned array of user objects into a CSV payload
     const payload = json2csv(cleanedObjects, { keys: header.split(','), emptyFieldValue: '' });
 
     // Set up response headers to return a CSV file
     res.header('Content-Type', 'text/csv');
+    res.header('Cache-Control', 'no-store');
     res.attachment('users-report.csv');
     // Send the payload as the response body
     res.send(payload);
@@ -181,19 +197,22 @@ router.get('/link-audit', async (req: ReposAppRequest, res, next) => {
 
     const header = 'Organization,Login,GitHubId,Status,CorporateId,CorporateUsername';
     const cleanedObjects: object[] = _.sortBy(
-      rows.map((row) => ({
-        Organization: row.organization,
-        Login: row.login,
-        GitHubId: row.githubId,
-        Status: row.status,
-        CorporateId: row.corporateId || '',
-        CorporateUsername: row.corporateUsername || '',
-      })),
+      rows.map((row) =>
+        sanitizeCsvRow({
+          Organization: row.organization,
+          Login: row.login,
+          GitHubId: row.githubId,
+          Status: row.status,
+          CorporateId: row.corporateId || '',
+          CorporateUsername: row.corporateUsername || '',
+        })
+      ),
       ['Organization', 'Login']
     );
     const payload = json2csv(cleanedObjects, { keys: header.split(','), emptyFieldValue: '' });
 
     res.header('Content-Type', 'text/csv');
+    res.header('Cache-Control', 'no-store');
     res.attachment('link-audit.csv');
     res.send(payload);
   } catch (err) {

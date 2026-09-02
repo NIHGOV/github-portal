@@ -69,6 +69,14 @@ Priority-ordered list of security improvements identified across this repository
   `operations.getOrganizationsIncludingInvisible()`. Also, `scripts/linkAudit.ts` silently ran (and
   reported "no discrepancies") when `LINK_AUDIT_GITHUB_ORGS` parsed to zero org names (e.g. just
   commas/whitespace); now throws instead.
+- **Third round of PR review follow-ups (#1207)**: both admin CSV routes (`/users-report` and
+  `/link-audit`) wrote string fields sourced from GitHub/AAD profile data (logins, display names,
+  mail addresses) straight into the CSV with no CSV formula-injection mitigation — a value starting
+  with `=`, `+`, `-`, or `@` can be executed as a formula by Excel/Sheets when opened. Added a shared
+  `sanitizeCsvRow()`/`escapeCsvFormulaInjection()` helper that prefixes such string values with a
+  leading single quote before handing rows to `json2csv`. Also added a `Cache-Control: no-store`
+  header to both routes, since their CSVs contain corporate identifiers and shouldn't be cached by
+  browsers or intermediate proxies.
 
 ---
 
