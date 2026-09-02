@@ -34,6 +34,9 @@ async function linkAudit(providers: IProviders): Promise<void> {
     .split(',')
     .map((name) => name.trim())
     .filter(Boolean);
+  if (orgNames.length === 0) {
+    throw new Error('LINK_AUDIT_GITHUB_ORGS did not contain any organization names');
+  }
   const forceFreshMembers = process.env.LINK_AUDIT_FRESH_MEMBERS !== '0';
   const showCorporateIds = process.env.LINK_AUDIT_SHOW_CORPORATE_IDS === '1';
 

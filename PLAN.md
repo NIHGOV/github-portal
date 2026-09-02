@@ -61,6 +61,14 @@ Priority-ordered list of security improvements identified across this repository
   job environment. (The reviewer's claim that `json2csv()` from `json-2-csv@5.6.0` returns a Promise
   was checked against the installed package and found incorrect — `Json2Csv(...).convert()` is fully
   synchronous and returns a `string`; no change needed there.)
+- **Second round of PR review follow-ups (#1207)**: `?orgs=` only handled a single string value, so
+  repeated params (`?orgs=a&orgs=b`) were silently ignored in favor of the default org set; the
+  default set itself (`operations.organizations.keys()`) also excluded `Invisible`-flagged orgs,
+  contradicting the route's "defaults to all configured orgs" doc comment. Now parses `orgsParam` as
+  either a string or array, and the default falls back to
+  `operations.getOrganizationsIncludingInvisible()`. Also, `scripts/linkAudit.ts` silently ran (and
+  reported "no discrepancies") when `LINK_AUDIT_GITHUB_ORGS` parsed to zero org names (e.g. just
+  commas/whitespace); now throws instead.
 
 ---
 
