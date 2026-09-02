@@ -4,6 +4,97 @@ Priority-ordered list of security improvements identified across this repository
 
 ---
 
+## Dependency vulnerability sweep via `bun audit`/`bun outdated` (September 2026)
+
+- **Root** (`package.json`/`bun.lock`): `bun audit fix` resolved 19 of 20 flagged vulnerabilities
+  in-range (`@opentelemetry/core`, `body-parser`, `brace-expansion` x2, `js-yaml`, `nanoid`,
+  `postcss`, `protobufjs`, `tmp`, `vite`). Raised the existing security `overrides` floors for
+  `js-yaml` (`>=4.1.1` → `>=4.3.1`) and `protobufjs` (`>=8.0.2` → `>=8.6.6`) to match, so a future
+  install can't resolve back down into the vulnerable range. One moderate `@opentelemetry/core`
+  advisory remains: blocked by several `@opentelemetry/sdk-*` packages (pulled in transitively via
+  `applicationinsights`, already at its latest `3.16.0`) that pin an exact `@opentelemetry/core`
+  version matching each other for internal consistency -- needs an upstream OpenTelemetry SDK
+  release, not fixable from this repo alone.
+- Also bumped a handful of small patch/minor versions from `bun outdated` that had **no existing
+  open Dependabot PR** (to avoid creating duplicate/conflicting PRs -- see the many open
+  `dependabot/bun/staging/*` PRs for the rest, e.g. `js-yaml`, `morgan`, `nodemailer`, `eslint`,
+  `typescript-eslint`, `cspell`, `lint-staged`, `@types/node`, `typescript`, which are left for
+  those PRs to merge normally): `@octokit/auth-app`, `@octokit/auth-oauth-app`,
+  `@octokit/auth-oauth-user`, `@octokit/graphql`, `@octokit/request`, `@octokit/request-error`,
+  `axios`, `hyparquet`, `json-2-csv`, `globals`. Left `@azure/msal-node` (6.0.0) and
+  `@octokit/types` (18.0.0) alone as major-version bumps needing dedicated review.
+- **`default-assets-package`** (legacy Grunt/Less build tooling): `bun audit fix` resolved 12 of 18
+  vulnerabilities (`brace-expansion`, `braces`, `micromatch`, `minimatch`, `picomatch`, all
+  transitive `grunt`/`grunt-contrib-*` deps). Deliberately skipped `d3-color`'s proposed fix --
+  bun's only "fix" for its ReDoS advisory is a _downgrade_ to 1.0.1, which is riskier than staying
+  vulnerable on a build-time-only chart dependency. `bootstrap` (XSS x2) and `lodash` (x3, blocked
+  by `grunt-legacy-*`'s tilde-pinned ranges) remain -- same known Bootstrap 3→5 Less→Sass migration
+  called out below, already tracked by open Dependabot PRs (#1185/#1180 bootstrap/bootswatch).
+- Verified with `bunx tsc -p tsconfig.json --noEmit` (clean) and `bun run test` (172/172 passing)
+  after all bumps.
+
+---
+
+## Link audit report: Org People "linked" cache vs. live Postgres (September 2026)
+
+- **Root cause investigated**: accounts that link via Entra ID MTO (multi-tenant, external-tenant
+  domain) sign-ins can show as linked to themselves (`middleware/business/links.ts`'s
+  `tryAddLinkToRequest` does a live `queryByCorporateId` lookup) while still showing "Not linked" in
+  the Org People view, which instead matches against `operations.getLinks()`'s 30-second Redis-cached
+  bulk snapshot of the `links` table keyed by GitHub `thirdpartyid`. A genuinely persistent (not just
+  briefly stale) mismatch points at a real discrepancy between that cache and the live table.
+- Added `business/operations/linkAudit.ts` (`auditLinks()`): for a set of GitHub orgs, compares each
+  member's cached link (`operations.getLinks()`) against a direct, uncached `linkProvider.getAll()`
+  read, flagging `stale-cache` (row exists live but missing from cache), `orphaned-cache` (opposite),
+  and `linked-no-corporate-username` (linked but shown as an "unknown account").
+- Added `scripts/linkAudit.ts`, a `job.run`-based CLI wrapper (env: `LINK_AUDIT_GITHUB_ORGS`,
+  optional `LINK_AUDIT_FRESH_MEMBERS`), consistent with the `scripts/tenantMigration/` scripts.
+- Exposed the same report as a self-service admin page: `GET /administration/link-audit` (CSV,
+  optional `?orgs=` query param, defaults to all configured orgs) in `routes/administration/index.ts`,
+  already gated by the existing `AuthorizeOnlyCorporateAdministrators` middleware on `/administration`.
+  Added a "Link audit (cache vs. live)" entry to `views/administration/menu.pug`.
+- **PR review follow-ups (#1207)**: an unknown org name in `?orgs=` was previously left to bubble up
+  from `operations.getOrganization()` as a generic error page; now validated upfront and rejected with
+  a clear `CreateError.InvalidParameters` (400) listing the bad name(s). Also gated
+  `scripts/linkAudit.ts`'s console output of `corporateId`/`corporateUsername` behind a new
+  `LINK_AUDIT_SHOW_CORPORATE_IDS` env flag (off by default) since this CLI may run in a shared/logged
+  job environment. (The reviewer's claim that `json2csv()` from `json-2-csv@5.6.0` returns a Promise
+  was checked against the installed package and found incorrect — `Json2Csv(...).convert()` is fully
+  synchronous and returns a `string`; no change needed there.)
+- **Second round of PR review follow-ups (#1207)**: `?orgs=` only handled a single string value, so
+  repeated params (`?orgs=a&orgs=b`) were silently ignored in favor of the default org set; the
+  default set itself (`operations.organizations.keys()`) also excluded `Invisible`-flagged orgs,
+  contradicting the route's "defaults to all configured orgs" doc comment. Now parses `orgsParam` as
+  either a string or array, and the default falls back to
+  `operations.getOrganizationsIncludingInvisible()`. Also, `scripts/linkAudit.ts` silently ran (and
+  reported "no discrepancies") when `LINK_AUDIT_GITHUB_ORGS` parsed to zero org names (e.g. just
+  commas/whitespace); now throws instead.
+- **Third round of PR review follow-ups (#1207)**: both admin CSV routes (`/users-report` and
+  `/link-audit`) wrote string fields sourced from GitHub/AAD profile data (logins, display names,
+  mail addresses) straight into the CSV with no CSV formula-injection mitigation — a value starting
+  with `=`, `+`, `-`, or `@` can be executed as a formula by Excel/Sheets when opened. Added a shared
+  `sanitizeCsvRow()`/`escapeCsvFormulaInjection()` helper that prefixes such string values with a
+  leading single quote before handing rows to `json2csv`. Also added a `Cache-Control: no-store`
+  header to both routes, since their CSVs contain corporate identifiers and shouldn't be cached by
+  browsers or intermediate proxies.
+
+---
+
+## Added Redis `pingInterval` to reduce idle-disconnect noise (September 2026)
+
+Firehose logs were constantly showing `startup cache Redis client error: Socket closed
+unexpectedly`. Not a regression of the August 2026 crash-loop fix — that fix's `.on('error', ...)`
+listener was working as intended (logging instead of crashing), but the firehose container only
+touches Redis when a Service Bus message arrives, so the connection sits idle between events and
+gets closed by Azure Cache for Redis's idle-connection timeout, triggering the error + a reconnect
+each time. `middleware/initialize.ts` already had an unused, dead-code duplicate `connectRedis()`
+with a `pingInterval: 5 * 60 * 1000` (per Azure's idle-timeout best practices), but nothing calls
+it — both cache and session clients go through the shared `connectRedis()` in `middleware/redis.ts`,
+which had no `pingInterval`. Added the same 5-minute `pingInterval` there to keep idle connections
+alive and cut down on the disconnect/reconnect noise.
+
+---
+
 ## Firehose now refreshes `/repos` "Recent" sort in real time (August 2026)
 
 - **Root cause**: the `/repos` "Recent" sort (`sortByPushed` in `business/repoSearch.ts`) sorts on the

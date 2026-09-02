@@ -7,15 +7,32 @@ import { NextFunction, Response, Router } from 'express';
 const router: Router = Router();
 
 import { ReposAppRequest } from '../../interfaces/index.js';
-import { getProviders } from '../../lib/transitional.js';
+import { CreateError, getProviders } from '../../lib/transitional.js';
 
 import getCompanySpecificDeployment from '../../middleware/companySpecificDeployment.js';
 
 import RouteApp from './app.js';
 import RouteApps from './apps.js';
 
+import { auditLinks } from '../../business/operations/linkAudit.js';
+
 import { json2csv } from 'json-2-csv';
 import _ from 'lodash';
+
+// Prevents CSV formula injection: Excel/Sheets can execute a cell as a formula if it starts with
+// =, +, -, or @, so string values from external sources (GitHub/AAD profile data) are prefixed with
+// a leading single quote when they start with one of those characters.
+function escapeCsvFormulaInjection(value: unknown): unknown {
+  return typeof value === 'string' && /^\s*[=+\-@]/.test(value) ? `'${value}` : value;
+}
+
+function sanitizeCsvRow<T extends object>(row: T): T {
+  const sanitized = {} as T;
+  for (const [key, value] of Object.entries(row)) {
+    sanitized[key as keyof T] = escapeCsvFormulaInjection(value) as T[keyof T];
+  }
+  return sanitized;
+}
 
 router.use('/*splat', async function (req: ReposAppRequest, res: Response, next: NextFunction) {
   const { corporateAdministrationProfile } = getProviders(req);
@@ -126,15 +143,77 @@ router.get('/users-report', async (req: ReposAppRequest, res, next) => {
       'UserLogin,UserId,Organizations,OwnedOrganizations,IsLinked,CorporateId,CorporateMailAddress,CorporateUsername,CorporateDisplayName';
 
     // Sort the users object by user login and convert the values back into an array
-    const cleanedObjects: object[] = _.sortBy(Object.values(users), 'UserLogin');
+    const cleanedObjects: object[] = _.sortBy(Object.values(users), 'UserLogin').map(sanitizeCsvRow);
 
     // Use the json2csv library to convert the cleaned array of user objects into a CSV payload
     const payload = json2csv(cleanedObjects, { keys: header.split(','), emptyFieldValue: '' });
 
     // Set up response headers to return a CSV file
     res.header('Content-Type', 'text/csv');
+    res.header('Cache-Control', 'no-store');
     res.attachment('users-report.csv');
     // Send the payload as the response body
+    res.send(payload);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/*
+Asynchronously returns a CSV file comparing the People view's cached link status against a live
+Postgres read, for one or more orgs (query param `orgs`, comma-separated; defaults to all
+configured orgs). See business/operations/linkAudit.ts for what each status means.
+*/
+router.get('/link-audit', async (req: ReposAppRequest, res, next) => {
+  try {
+    const { operations } = getProviders(req);
+    const orgsParam = req.query.orgs;
+    const orgsParamValues = Array.isArray(orgsParam) ? orgsParam : orgsParam !== undefined ? [orgsParam] : [];
+    const requestedOrgNames = orgsParamValues
+      .flatMap((value) => (typeof value === 'string' ? value.split(',') : []))
+      .map((name) => name.trim())
+      .filter(Boolean);
+    // Default set must include Invisible orgs too, unlike operations.organizations.
+    const orgNames =
+      requestedOrgNames.length > 0
+        ? requestedOrgNames
+        : operations.getOrganizationsIncludingInvisible().map((org) => org.name);
+
+    const unknownOrgNames = orgNames.filter((orgName) => {
+      try {
+        operations.getOrganization(orgName);
+        return false;
+      } catch {
+        return true;
+      }
+    });
+    if (unknownOrgNames.length > 0) {
+      return next(
+        CreateError.InvalidParameters(`Unknown organization name(s): ${unknownOrgNames.join(', ')}`)
+      );
+    }
+
+    const { rows } = await auditLinks(operations.providers, orgNames);
+
+    const header = 'Organization,Login,GitHubId,Status,CorporateId,CorporateUsername';
+    const cleanedObjects: object[] = _.sortBy(
+      rows.map((row) =>
+        sanitizeCsvRow({
+          Organization: row.organization,
+          Login: row.login,
+          GitHubId: row.githubId,
+          Status: row.status,
+          CorporateId: row.corporateId || '',
+          CorporateUsername: row.corporateUsername || '',
+        })
+      ),
+      ['Organization', 'Login']
+    );
+    const payload = json2csv(cleanedObjects, { keys: header.split(','), emptyFieldValue: '' });
+
+    res.header('Content-Type', 'text/csv');
+    res.header('Cache-Control', 'no-store');
+    res.attachment('link-audit.csv');
     res.send(payload);
   } catch (err) {
     next(err);
