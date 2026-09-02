@@ -4,6 +4,21 @@ Priority-ordered list of security improvements identified across this repository
 
 ---
 
+## Added Redis `pingInterval` to reduce idle-disconnect noise (September 2026)
+
+Firehose logs were constantly showing `startup cache Redis client error: Socket closed
+unexpectedly`. Not a regression of the August 2026 crash-loop fix — that fix's `.on('error', ...)`
+listener was working as intended (logging instead of crashing), but the firehose container only
+touches Redis when a Service Bus message arrives, so the connection sits idle between events and
+gets closed by Azure Cache for Redis's idle-connection timeout, triggering the error + a reconnect
+each time. `middleware/initialize.ts` already had an unused, dead-code duplicate `connectRedis()`
+with a `pingInterval: 5 * 60 * 1000` (per Azure's idle-timeout best practices), but nothing calls
+it — both cache and session clients go through the shared `connectRedis()` in `middleware/redis.ts`,
+which had no `pingInterval`. Added the same 5-minute `pingInterval` there to keep idle connections
+alive and cut down on the disconnect/reconnect noise.
+
+---
+
 ## Firehose now refreshes `/repos` "Recent" sort in real time (August 2026)
 
 - **Root cause**: the `/repos` "Recent" sort (`sortByPushed` in `business/repoSearch.ts`) sorts on the
