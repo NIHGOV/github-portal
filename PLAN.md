@@ -53,6 +53,14 @@ Priority-ordered list of security improvements identified across this repository
   optional `?orgs=` query param, defaults to all configured orgs) in `routes/administration/index.ts`,
   already gated by the existing `AuthorizeOnlyCorporateAdministrators` middleware on `/administration`.
   Added a "Link audit (cache vs. live)" entry to `views/administration/menu.pug`.
+- **PR review follow-ups (#1207)**: an unknown org name in `?orgs=` was previously left to bubble up
+  from `operations.getOrganization()` as a generic error page; now validated upfront and rejected with
+  a clear `CreateError.InvalidParameters` (400) listing the bad name(s). Also gated
+  `scripts/linkAudit.ts`'s console output of `corporateId`/`corporateUsername` behind a new
+  `LINK_AUDIT_SHOW_CORPORATE_IDS` env flag (off by default) since this CLI may run in a shared/logged
+  job environment. (The reviewer's claim that `json2csv()` from `json-2-csv@5.6.0` returns a Promise
+  was checked against the installed package and found incorrect — `Json2Csv(...).convert()` is fully
+  synchronous and returns a `string`; no change needed there.)
 
 ---
 

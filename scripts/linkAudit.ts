@@ -19,6 +19,9 @@
 // Optional env var:
 //   LINK_AUDIT_FRESH_MEMBERS   set to '0' to allow the normal org-member cache (faster, may itself
 //                              be stale); defaults to forcing a live GitHub member list per org
+//   LINK_AUDIT_SHOW_CORPORATE_IDS   set to '1' to include corporateId/corporateUsername in the
+//                                   console output; omitted by default since this may run in a
+//                                   shared/logged job environment
 
 import job from '../job.js';
 import { IProviders } from '../interfaces/index.js';
@@ -32,6 +35,7 @@ async function linkAudit(providers: IProviders): Promise<void> {
     .map((name) => name.trim())
     .filter(Boolean);
   const forceFreshMembers = process.env.LINK_AUDIT_FRESH_MEMBERS !== '0';
+  const showCorporateIds = process.env.LINK_AUDIT_SHOW_CORPORATE_IDS === '1';
 
   console.log('Fetching cached links snapshot (operations.getLinks(), what the People view uses)...');
   console.log('Fetching live links from Postgres (linkProvider.getAll(), bypasses the Redis cache)...');
@@ -55,8 +59,8 @@ async function linkAudit(providers: IProviders): Promise<void> {
   for (const row of rows) {
     console.log(
       `[${row.status}] org=${row.organization} login=${row.login} githubId=${row.githubId}` +
-        (row.corporateId ? ` corporateId=${row.corporateId}` : '') +
-        (row.corporateUsername ? ` corporateUsername=${row.corporateUsername}` : '')
+        (showCorporateIds && row.corporateId ? ` corporateId=${row.corporateId}` : '') +
+        (showCorporateIds && row.corporateUsername ? ` corporateUsername=${row.corporateUsername}` : '')
     );
   }
   console.log('');

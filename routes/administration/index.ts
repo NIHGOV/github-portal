@@ -7,7 +7,7 @@ import { NextFunction, Response, Router } from 'express';
 const router: Router = Router();
 
 import { ReposAppRequest } from '../../interfaces/index.js';
-import { getProviders } from '../../lib/transitional.js';
+import { CreateError, getProviders } from '../../lib/transitional.js';
 
 import getCompanySpecificDeployment from '../../middleware/companySpecificDeployment.js';
 
@@ -159,6 +159,20 @@ router.get('/link-audit', async (req: ReposAppRequest, res, next) => {
             .map((name) => name.trim())
             .filter(Boolean)
         : Array.from(operations.organizations.keys());
+
+    const unknownOrgNames = orgNames.filter((orgName) => {
+      try {
+        operations.getOrganization(orgName);
+        return false;
+      } catch {
+        return true;
+      }
+    });
+    if (unknownOrgNames.length > 0) {
+      return next(
+        CreateError.InvalidParameters(`Unknown organization name(s): ${unknownOrgNames.join(', ')}`)
+      );
+    }
 
     const { rows } = await auditLinks(operations.providers, orgNames);
 
