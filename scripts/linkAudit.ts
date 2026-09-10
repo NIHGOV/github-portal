@@ -85,6 +85,11 @@ async function linkAudit(providers: IProviders): Promise<void> {
       '"unknown account" rather than a recognized corporate identity in the People view.'
   );
   console.log(
+    'cache-identity-mismatch: both cache and live have a corporateUsername but disagree on corporateId/' +
+      'corporateUsername/corporateTenantId -- e.g. a relink or tenant change the cache has not picked up ' +
+      'yet. Reported values are the live (Postgres) ones; the cache is what the People view currently shows.'
+  );
+  console.log(
     '[no recorded tenant]: the link predates tenant tracking (or the field was never populated), so its ' +
       "originating Entra tenant can't be confirmed -- logged as a breaking issue (trackException) rather " +
       'than routine cache lag (trackEvent).'

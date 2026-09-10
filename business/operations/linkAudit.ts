@@ -9,7 +9,8 @@
 
 import { NoCacheNoBackground, type ICorporateLink, type IProviders } from '../../interfaces/index.js';
 
-export type LinkAuditRowStatus = 'stale-cache' | 'orphaned-cache' | 'linked-no-corporate-username';
+export type LinkAuditRowStatus =
+  'stale-cache' | 'orphaned-cache' | 'linked-no-corporate-username' | 'cache-identity-mismatch';
 
 export interface ILinkAuditRow {
   organization: string;
@@ -31,6 +32,11 @@ export interface ILinkAuditResult {
 export interface ILinkAuditOptions {
   // Forces a live GitHub org member list per org instead of the normal member cache. Defaults to true.
   forceFreshMembers?: boolean;
+  // Pre-fetched cached links snapshot to compare against, in place of a fresh operations.getLinks()
+  // call. Callers that want this to match a specific process's People-view responses exactly
+  // (which read through an additional 5-minute local cache -- see api/client/leakyLocalCache.ts's
+  // getLinksLightCache()) should fetch it that same way and pass it here.
+  cachedLinksOverride?: ICorporateLink[];
 }
 
 export async function auditLinks(
@@ -41,7 +47,7 @@ export async function auditLinks(
   const forceFreshMembers = options?.forceFreshMembers !== false;
   const { operations, linkProvider } = providers;
 
-  const cachedLinks = await operations.getLinks();
+  const cachedLinks = options?.cachedLinksOverride ?? (await operations.getLinks());
   const cachedByThirdPartyId = toMapByThirdPartyId(cachedLinks);
 
   const freshLinks = await linkProvider.getAll();
@@ -89,6 +95,25 @@ export async function auditLinks(
           status: 'linked-no-corporate-username',
           corporateId: cached.corporateId,
           corporateTenantId: cached.corporateTenantId,
+        };
+      } else if (
+        cached &&
+        fresh &&
+        (cached.corporateId !== fresh.corporateId ||
+          cached.corporateUsername !== fresh.corporateUsername ||
+          cached.corporateTenantId !== fresh.corporateTenantId)
+      ) {
+        // Both exist and have a corporateUsername, but disagree on identity -- e.g. a relink or a
+        // tenant change that the cache hasn't picked up yet. Report the live (Postgres) values,
+        // since those are what's actually true; the cached ones are what the view currently shows.
+        row = {
+          organization: orgName,
+          login: member.login,
+          githubId,
+          status: 'cache-identity-mismatch',
+          corporateId: fresh.corporateId,
+          corporateUsername: fresh.corporateUsername,
+          corporateTenantId: fresh.corporateTenantId,
         };
       }
       if (row) {

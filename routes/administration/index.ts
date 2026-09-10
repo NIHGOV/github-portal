@@ -15,6 +15,7 @@ import RouteApp from './app.js';
 import RouteApps from './apps.js';
 
 import { auditLinks } from '../../business/operations/linkAudit.js';
+import { getLinksLightCache } from '../../api/client/leakyLocalCache.js';
 
 import { json2csv } from 'json-2-csv';
 import _ from 'lodash';
@@ -193,7 +194,8 @@ router.get('/link-audit', async (req: ReposAppRequest, res, next) => {
       );
     }
 
-    const { rows } = await auditLinks(operations.providers, orgNames);
+    const cachedLinksOverride = await getLinksLightCache(operations);
+    const { rows } = await auditLinks(operations.providers, orgNames, { cachedLinksOverride });
 
     const header = 'Organization,Login,GitHubId,Status,CorporateId,CorporateUsername,CorporateTenantId';
     const cleanedObjects: object[] = _.sortBy(

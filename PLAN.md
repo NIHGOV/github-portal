@@ -43,6 +43,22 @@ does not exist` the moment this code ships without the column already present.
   the default 10-minute cache.
 - This is forward-looking only -- links created before this change have no `corporateTenantId`
   until they're re-linked, so expect `trackException` noise on old data until it ages out.
+- **`cache-identity-mismatch` status**: the original cache-vs-live comparison only checked for a
+  link present/absent on one side, or a blank `corporateUsername` -- it missed the case where
+  both sides have a link with a _truthy_ `corporateUsername` that simply disagrees with the live
+  row on `corporateId`/`corporateUsername`/`corporateTenantId` (e.g. a relink or tenant change the
+  cache hasn't picked up yet). Added a dedicated status for that; reported values are the live
+  (Postgres) ones, since the cached ones are just what the view currently shows.
+- **Admin route now matches the People API's actual cache layer**: `operations.getLinks()` is not
+  the only cache in front of Postgres -- `api/client/organization/people.ts` and
+  `api/client/peopleSearch.ts` read through `getLinksLightCache()`
+  (`api/client/leakyLocalCache.ts`), an additional 5-minute **per-process** local cache wrapping
+  it. `auditLinks()` could therefore see a fresher Redis snapshot than what a given app instance's
+  People API responses are actually still serving, and silently miss a real discrepancy. Added an
+  optional `cachedLinksOverride` to `auditLinks()`; `/administration/link-audit` now fetches via
+  `getLinksLightCache()` so its report matches that process's actual People-view responses, while
+  the CLI (`scripts/linkAudit.ts`, a fresh one-off process every run, so the local cache is always
+  empty anyway) keeps calling `operations.getLinks()` directly.
 - Verified with `bunx tsc -p tsconfig.json --noEmit` (clean) and `bun run test` (172/172 passing).
 
 ---
