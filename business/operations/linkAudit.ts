@@ -8,6 +8,7 @@
 // scripts/linkAudit.ts (CLI/job) and the /administration/link-audit report route.
 
 import { NoCacheNoBackground, type ICorporateLink, type IProviders } from '../../interfaces/index.js';
+import type { OrganizationMember } from '../organizationMember.js';
 
 export type LinkAuditRowStatus =
   'stale-cache' | 'orphaned-cache' | 'linked-no-corporate-username' | 'cache-identity-mismatch';
@@ -37,6 +38,11 @@ export interface ILinkAuditOptions {
   // (which read through an additional 5-minute local cache -- see api/client/leakyLocalCache.ts's
   // getLinksLightCache()) should fetch it that same way and pass it here.
   cachedLinksOverride?: ICorporateLink[];
+  // Per-org member list source to use instead of a plain organization.getMembers() call, e.g.
+  // api/client/organization/people.ts's getOrganizationMembersLightCache() so this matches the
+  // exact snapshot the People API is currently serving for that org. Ignored when forceFreshMembers
+  // is true (that always fetches live, uncached, for both this and the People API).
+  getMembersOverride?: (orgName: string) => Promise<OrganizationMember[]>;
 }
 
 export async function auditLinks(
@@ -57,7 +63,9 @@ export async function auditLinks(
 
   for (const orgName of orgNames) {
     const organization = operations.getOrganization(orgName);
-    const members = await organization.getMembers(forceFreshMembers ? NoCacheNoBackground : undefined);
+    const members = forceFreshMembers
+      ? await organization.getMembers(NoCacheNoBackground)
+      : await (options?.getMembersOverride?.(orgName) ?? organization.getMembers());
 
     for (const member of members) {
       const githubId = String(member.id);
@@ -99,9 +107,11 @@ export async function auditLinks(
       } else if (
         cached &&
         fresh &&
-        (cached.corporateId !== fresh.corporateId ||
-          cached.corporateUsername !== fresh.corporateUsername ||
-          cached.corporateTenantId !== fresh.corporateTenantId)
+        (normalizeForComparison(cached.corporateId) !== normalizeForComparison(fresh.corporateId) ||
+          normalizeForComparison(cached.corporateUsername) !==
+            normalizeForComparison(fresh.corporateUsername) ||
+          normalizeForComparison(cached.corporateTenantId) !==
+            normalizeForComparison(fresh.corporateTenantId))
       ) {
         // Both exist and have a corporateUsername, but disagree on identity -- e.g. a relink or a
         // tenant change that the cache hasn't picked up yet. Report the live (Postgres) values,
@@ -165,4 +175,11 @@ function toMapByThirdPartyId(links: ICorporateLink[]): Map<string, ICorporateLin
     }
   }
   return map;
+}
+
+// A field absent on a cached link (rehydrated as `undefined`, e.g. for links created before it
+// existed) and the same field genuinely `null` on a fresh Postgres row both mean "no value" --
+// without this, every such link would be reported as a cache-identity-mismatch forever.
+function normalizeForComparison(value: string | null | undefined): string {
+  return value || '';
 }

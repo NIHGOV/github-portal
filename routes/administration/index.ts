@@ -16,6 +16,7 @@ import RouteApps from './apps.js';
 
 import { auditLinks } from '../../business/operations/linkAudit.js';
 import { getLinksLightCache } from '../../api/client/leakyLocalCache.js';
+import { getOrganizationMembersLightCache } from '../../api/client/organization/people.js';
 
 import { json2csv } from 'json-2-csv';
 import _ from 'lodash';
@@ -204,6 +205,7 @@ router.get('/link-audit', async (req: ReposAppRequest, res, next) => {
     const { rows } = await auditLinks(operations.providers, orgNames, {
       cachedLinksOverride,
       forceFreshMembers,
+      getMembersOverride: (orgName) => getOrganizationMembersLightCache(operations, orgName),
     });
 
     const header = 'Organization,Login,GitHubId,Status,CorporateId,CorporateUsername,CorporateTenantId';

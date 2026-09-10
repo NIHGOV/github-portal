@@ -71,6 +71,22 @@ tenant could never be validated or reported on after the fact -- only inferred.
   timeout. Defaults to the normal cached member list now; pass `?fresh=1` to opt into the slower,
   more thorough live comparison. The CLI keeps its own force-fresh-by-default behavior, since an
   operator running it deliberately is a different risk profile than one click on a web page.
+- **Removed `corporateTenantId` from `corporateLinkToJson()`**: that serializer feeds the general
+  people/team/account API responses, not just the admin audit -- exposing the originating Entra
+  tenant there would leak cross-tenant identity metadata to any caller authorized to view a linked
+  account. The audit route builds its own row projection directly and never needed this change.
+- **Normalized `undefined`/`null` before comparing identity fields**: a cached link rehydrated from
+  before tenant tracking existed has `corporateTenantId === undefined`, while a fresh Postgres row
+  with a `NULL` column returns `null` -- every such link was being reported as a
+  `cache-identity-mismatch` (and, worse, flagged as a breaking `trackException`) even though both
+  sides mean "no tenant recorded." Added a small normalizer used for all three compared fields.
+- **Admin route also matches the People API's org-member cache**: even with the cached member list
+  (previous fix), `organization.getMembers()` still isn't necessarily the same snapshot the People
+  API is serving in that same process -- `api/client/organization/people.ts` wraps org membership
+  in its own separate 5-minute local cache (`leakyLocalCacheOrganizationMembers`, previously
+  module-private). Exported it as `getOrganizationMembersLightCache()`; added a `getMembersOverride`
+  option to `auditLinks()`, and the admin route now passes that helper through so its member
+  enumeration matches exactly what the People API is currently returning for the same org.
 - Verified with `bunx tsc -p tsconfig.json --noEmit` (clean) and `bun run test` (172/172 passing).
 
 ---
