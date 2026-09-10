@@ -100,6 +100,12 @@ tenant could never be validated or reported on after the fact -- only inferred.
 - **`CorporateTableLink`'s `corporateTenantId` getter is now typed `string | undefined`** to match
   the field's actual optionality, instead of an explicit `string` return type that hid missing
   values from callers.
+- **Consistent `undefined`, not `null`, for absent `corporateTenantId` everywhere**: it's typed
+  optional (`string | undefined`) on `ICorporateLink`, but `createGitHubLinkObject()` was setting it
+  to `null` when absent, and all three link providers' getters/setters (Postgres, memory, table)
+  only handled `string`, leaking raw `null` from storage/DB rows and requiring callers to check for
+  both `null` and `undefined`. Getters now normalize `null` to `undefined`; setters accept
+  `string | undefined` and write `null` to storage when absent.
 - Verified with `bunx tsc -p tsconfig.json --noEmit` (clean) and `bun run test` (172/172 passing).
 
 ---

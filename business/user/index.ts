@@ -570,7 +570,7 @@ export class IndividualContext {
       corporateUsername: corporateIdentity.username,
       corporateDisplayName: corporateIdentity.displayName,
       corporateMailAddress: corporateIdentity.username ?? null,
-      corporateTenantId: corporateIdentity.tenantId ?? null,
+      corporateTenantId: corporateIdentity.tenantId,
       isServiceAccount: false,
       serviceAccountMail: undefined,
     };
