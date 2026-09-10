@@ -117,7 +117,7 @@ export async function auditLinks(
         };
       }
       if (row) {
-        recordRowTelemetry(providers, row);
+        recordRowTelemetry(providers, row, fresh);
         rows.push(row);
       }
     }
@@ -126,10 +126,11 @@ export async function auditLinks(
   return { rows, cachedLinkCount: cachedLinks.length, freshLinkCount: freshLinks.length };
 }
 
-// A discrepancy on a link with no recorded corporate tenant ID can't be validated at all (we have
-// no way to confirm which Entra tenant it belongs to), so it's logged as a breaking issue rather
-// than routine cache lag.
-function recordRowTelemetry(providers: IProviders, row: ILinkAuditRow): void {
+// A discrepancy can only be validated when a live (Postgres) row exists and has a recorded
+// tenant -- that's the actual source of truth. `orphaned-cache` has no live row at all, which
+// isn't ambiguous (just cache lag), and the reported `corporateTenantId` on a row can reflect the
+// cached side, which can disagree with the live side on this field just like any other.
+function recordRowTelemetry(providers: IProviders, row: ILinkAuditRow, liveLink?: ICorporateLink): void {
   const insights = providers.genericInsights;
   if (!insights) {
     return;
@@ -143,7 +144,8 @@ function recordRowTelemetry(providers: IProviders, row: ILinkAuditRow): void {
     corporateUsername: row.corporateUsername || '',
     corporateTenantId: row.corporateTenantId || '',
   };
-  if (!row.corporateTenantId) {
+  const canBeValidated = !liveLink || !!liveLink.corporateTenantId;
+  if (!canBeValidated) {
     insights.trackException({
       exception: new Error(
         `Link audit: ${row.status} for ${row.login} (org ${row.organization}) has no recorded corporate tenant ID and cannot be validated`

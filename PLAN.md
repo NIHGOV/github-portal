@@ -29,7 +29,7 @@ tenant could never be validated or reported on after the fact -- only inferred.
   **admin** Postgres credentials first. The app's runtime Postgres role is intentionally DML-only
   (`scripts/postgres/setup.ts`), so `PostgresLinkProvider` deliberately does _not_ try to run this
   DDL itself at startup -- every link `SELECT` would otherwise 500 with `column "corporatetenantid"
-does not exist` the moment this code ships without the column already present.
+  does not exist` the moment this code ships without the column already present.
 - `business/operations/linkAudit.ts` (`auditLinks()`, used by `scripts/linkAudit.ts` and
   `/administration/link-audit`): each discrepancy row now includes `corporateTenantId`, and each
   discrepancy is logged to `genericInsights` -- `trackException` (a breaking issue: no tenant ID
@@ -59,6 +59,18 @@ does not exist` the moment this code ships without the column already present.
   `getLinksLightCache()` so its report matches that process's actual People-view responses, while
   the CLI (`scripts/linkAudit.ts`, a fresh one-off process every run, so the local cache is always
   empty anyway) keeps calling `operations.getLinks()` directly.
+- **Telemetry severity fixed to key off the live tenant, not the reported one**: `recordRowTelemetry`
+  was classifying `trackException` vs `trackEvent` off `row.corporateTenantId`, which reflects the
+  cached side for some statuses -- so a stale cache with no tenant but a validate-able live record
+  (or vice versa) could be misclassified in either direction. It now takes the live link
+  explicitly and checks its tenant instead; `orphaned-cache` (no live row at all) never gets the
+  breaking classification, since there's nothing ambiguous about a plain cache-hasn't-caught-up-yet case.
+- **Admin route defaults to cached org membership**: `/administration/link-audit` previously
+  inherited `auditLinks()`'s CLI-oriented default of forcing a live GitHub member fetch per org,
+  which on a single request across every configured org risked rate-limit exhaustion or a request
+  timeout. Defaults to the normal cached member list now; pass `?fresh=1` to opt into the slower,
+  more thorough live comparison. The CLI keeps its own force-fresh-by-default behavior, since an
+  operator running it deliberately is a different risk profile than one click on a web page.
 - Verified with `bunx tsc -p tsconfig.json --noEmit` (clean) and `bun run test` (172/172 passing).
 
 ---

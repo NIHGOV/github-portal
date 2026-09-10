@@ -163,7 +163,9 @@ router.get('/users-report', async (req: ReposAppRequest, res, next) => {
 /*
 Asynchronously returns a CSV file comparing the People view's cached link status against a live
 Postgres read, for one or more orgs (query param `orgs`, comma-separated; defaults to all
-configured orgs). See business/operations/linkAudit.ts for what each status means.
+configured orgs). By default uses the normal (cached) GitHub org member list; pass `?fresh=1` to
+force a live member fetch per org instead (slower, and can consume real GitHub API rate-limit
+budget across many orgs). See business/operations/linkAudit.ts for what each status means.
 */
 router.get('/link-audit', async (req: ReposAppRequest, res, next) => {
   try {
@@ -195,7 +197,14 @@ router.get('/link-audit', async (req: ReposAppRequest, res, next) => {
     }
 
     const cachedLinksOverride = await getLinksLightCache(operations);
-    const { rows } = await auditLinks(operations.providers, orgNames, { cachedLinksOverride });
+    // Defaults to the normal (cached) org member list -- forcing a live GitHub member fetch for
+    // every configured org on a single synchronous request risks rate-limit exhaustion/timeouts.
+    // Opt into the more thorough (but slower) live comparison with ?fresh=1.
+    const forceFreshMembers = req.query.fresh === '1';
+    const { rows } = await auditLinks(operations.providers, orgNames, {
+      cachedLinksOverride,
+      forceFreshMembers,
+    });
 
     const header = 'Organization,Login,GitHubId,Status,CorporateId,CorporateUsername,CorporateTenantId';
     const cleanedObjects: object[] = _.sortBy(
