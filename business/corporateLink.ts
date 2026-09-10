@@ -13,6 +13,7 @@ export const CorporatePropertyNames = [
   'corporateUsername',
   'corporateDisplayName',
   'corporateMailAddress',
+  'corporateTenantId',
 
   'thirdPartyId',
   'thirdPartyUsername',
@@ -26,6 +27,7 @@ export function corporateLinkToJson(link: ICorporateLink): ICorporateLink {
       corporateId: link.corporateId,
       corporateMailAddress: link.corporateMailAddress,
       corporateUsername: link.corporateUsername,
+      corporateTenantId: link.corporateTenantId,
       serviceAccountMail: link.serviceAccountMail,
       isServiceAccount: link.isServiceAccount,
       thirdPartyAvatar: link.thirdPartyAvatar,

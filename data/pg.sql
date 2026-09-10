@@ -63,8 +63,6 @@ CREATE INDEX IF NOT EXISTS events_repoid ON events (repositoryid);
 ALTER TABLE events ADD COLUMN IF NOT EXISTS isowncontribution boolean;
 ALTER TABLE events ADD COLUMN IF NOT EXISTS checked timestamptz;
 
-ALTER TABLE links ADD COLUMN IF NOT EXISTS corporatetenantid text;
-
 CREATE INDEX IF NOT EXISTS events_c_isowncontribution ON events (isowncontribution);
 CREATE INDEX IF NOT EXISTS events_checked ON events (checked);
 CREATE INDEX IF NOT EXISTS events_c_cid_checked ON events (usercorporateid);
@@ -181,6 +179,11 @@ CREATE TABLE IF NOT EXISTS links (
   created timestamp without time zone,
   PRIMARY KEY(thirdpartytype, thirdpartyid)
 );
+
+-- Idempotent for databases created before tenant tracking was added; the column is already
+-- present above for fresh installs. Must come after CREATE TABLE -- this file is applied as a
+-- single transaction, and running this any earlier would abort on a fresh database.
+ALTER TABLE links ADD COLUMN IF NOT EXISTS corporatetenantid text;
 
 CREATE UNIQUE INDEX IF NOT EXISTS link_id ON links (linkid);
 

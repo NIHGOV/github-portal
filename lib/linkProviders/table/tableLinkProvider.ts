@@ -78,6 +78,7 @@ const linkInterfacePropertyMapping: ITableLinkProperties = {
   corporateUsername: 'aadupn',
   corporateDisplayName: 'aadname',
   corporateMailAddress: 'corporateMailAddress', // NOTE: this was not part of the original table entity
+  corporateTenantId: 'corporateTenantId', // NOTE: this was not part of the original table entity
 
   thirdPartyId: 'ghid',
   thirdPartyUsername: 'ghu',
@@ -94,6 +95,7 @@ const coreColumns = [
   'aadupn',
   'aadname',
   'corporateMailAddress',
+  'corporateTenantId',
   'serviceAccount',
   'serviceAccountMail',
   'linkid',

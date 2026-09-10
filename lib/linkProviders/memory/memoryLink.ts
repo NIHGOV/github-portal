@@ -60,6 +60,14 @@ export class CorporateMemoryLink implements ICorporateLinkExtended {
     return this._entity[this._provider.propertyMapping.corporateMailAddress];
   }
 
+  get corporateTenantId() {
+    return this._entity[this._provider.propertyMapping.corporateTenantId];
+  }
+
+  set corporateTenantId(value: string) {
+    _updateColumn(this, this._provider.propertyMapping.corporateTenantId, value);
+  }
+
   get corporateUsername(): string {
     return this._entity[this._provider.propertyMapping.corporateUsername];
   }

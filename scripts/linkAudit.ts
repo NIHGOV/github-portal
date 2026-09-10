@@ -11,7 +11,9 @@
 // cross-tenant/MTO corporate identities), plus members who are linked but have no corporateUsername
 // (shown as "unknown account" rather than a fully recognized corporate identity).
 //
-// Nothing is written anywhere; this only reads via operations.getLinks() and linkProvider.getAll().
+// Link/cache data is read-only -- this only reads via operations.getLinks() and
+// linkProvider.getAll(). It does, however, emit discrepancy telemetry (genericInsights
+// trackException/trackEvent calls in auditLinks()) for each mismatch found.
 // Also available as a self-service report at /administration/link-audit (see routes/administration).
 //
 // Required env var:
