@@ -7,7 +7,7 @@
 // reads (operations.getLinks()) and a direct Postgres read (linkProvider.getAll()), used by both
 // scripts/linkAudit.ts (CLI/job) and the /administration/link-audit report route.
 
-import type { ICorporateLink, IProviders } from '../../interfaces/index.js';
+import { NoCacheNoBackground, type ICorporateLink, type IProviders } from '../../interfaces/index.js';
 
 export type LinkAuditRowStatus = 'stale-cache' | 'orphaned-cache' | 'linked-no-corporate-username';
 
@@ -51,9 +51,7 @@ export async function auditLinks(
 
   for (const orgName of orgNames) {
     const organization = operations.getOrganization(orgName);
-    const members = await organization.getMembers(
-      forceFreshMembers ? { maxAgeSeconds: 0, backgroundRefresh: false } : undefined
-    );
+    const members = await organization.getMembers(forceFreshMembers ? NoCacheNoBackground : undefined);
 
     for (const member of members) {
       const githubId = String(member.id);

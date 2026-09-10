@@ -183,6 +183,10 @@ CREATE TABLE IF NOT EXISTS links (
 -- Idempotent for databases created before tenant tracking was added; the column is already
 -- present above for fresh installs. Must come after CREATE TABLE -- this file is applied as a
 -- single transaction, and running this any earlier would abort on a fresh database.
+-- Also applied automatically by PostgresLinkProvider.initialize() on every app startup (this
+-- file is only ever run manually/interactively via scripts/postgres/setup.ts, so an already
+-- deployed database is never touched by it), so this line is redundant with that self-healing
+-- migration but kept here so a fresh dev database bootstrapped from this file matches too.
 ALTER TABLE links ADD COLUMN IF NOT EXISTS corporatetenantid text;
 
 CREATE UNIQUE INDEX IF NOT EXISTS link_id ON links (linkid);

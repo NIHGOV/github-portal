@@ -255,6 +255,7 @@ export class TableLinkProvider implements ILinkProvider {
         'aadoid',
         'aadupn',
         'aadname',
+        'corporateTenantId',
         'ghu',
         'ghid',
         'ghavatar',
