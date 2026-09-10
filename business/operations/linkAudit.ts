@@ -79,14 +79,16 @@ export async function auditLinks(
           corporateUsername: cached.corporateUsername,
           corporateTenantId: cached.corporateTenantId,
         };
-      } else if (fresh && !fresh.corporateUsername) {
+      } else if (cached && fresh && !cached.corporateUsername) {
+        // Status reflects what the People view actually renders, which reads the cached link --
+        // not `fresh`, which can disagree with cache in either direction on this field alone.
         row = {
           organization: orgName,
           login: member.login,
           githubId,
           status: 'linked-no-corporate-username',
-          corporateId: fresh.corporateId,
-          corporateTenantId: fresh.corporateTenantId,
+          corporateId: cached.corporateId,
+          corporateTenantId: cached.corporateTenantId,
         };
       }
       if (row) {

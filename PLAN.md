@@ -19,18 +19,28 @@ tenant could never be validated or reported on after the fact -- only inferred.
 - `middleware/business/authentication.ts`: `setIdentity()` now copies `user.azure.tenantId` through.
 - `interfaces/link.ts`: `ICorporateLinkProperties`/`ICorporateLink` gained optional `corporateTenantId`.
 - New `corporatetenantid` column on `links` (`data/pg.sql`: added to the `CREATE TABLE` for fresh
-  installs, plus an idempotent `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` for existing databases,
-  matching the existing `events` table precedent; also added a `corporate_tenant_id` index).
-  Wired through `lib/linkProviders/postgres/{postgresLinkProvider,postgresLink}.ts` (column
-  mapping, `SELECT`/`INSERT` column lists, and a getter/setter on `CorporateLinkPostgres`). Left
-  the memory/table link providers untouched -- the field is optional on `ICorporateLink` and
-  neither of those classes formally implements it, so nothing there needed to change.
+  installs, plus an `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` and a `corporate_tenant_id` index
+  for existing databases). Wired through all three link providers -- Postgres (column mapping,
+  `SELECT`/`INSERT` lists, `CorporateLinkPostgres` getter/setter), and memory/table (added to the
+  shared `CorporatePropertyNames` list and each provider's property mapping/getter/setter/column
+  projection -- both were silently dropping the field via their generic create-link copy loop).
+- **⚠️ Required manual step before deploying to any environment with a pre-existing `links`
+  table:** apply `data/pg.sql`'s `corporatetenantid` column and `corporate_tenant_id` index with
+  **admin** Postgres credentials first. The app's runtime Postgres role is intentionally DML-only
+  (`scripts/postgres/setup.ts`), so `PostgresLinkProvider` deliberately does _not_ try to run this
+  DDL itself at startup -- every link `SELECT` would otherwise 500 with `column "corporatetenantid"
+does not exist` the moment this code ships without the column already present.
 - `business/operations/linkAudit.ts` (`auditLinks()`, used by `scripts/linkAudit.ts` and
   `/administration/link-audit`): each discrepancy row now includes `corporateTenantId`, and each
   discrepancy is logged to `genericInsights` -- `trackException` (a breaking issue: no tenant ID
   recorded means the link's origin can't be validated at all) when `corporateTenantId` is missing,
   or `trackEvent('LinkAuditDiscrepancy', ...)` (informational: a known, expected discrepancy like
-  routine cache lag) when it's present.
+  routine cache lag) when it's present. The `linked-no-corporate-username` status is judged off the
+  _cached_ link (what the People view actually renders), not the live one, which can disagree with
+  cache on this field alone. Forcing a live member list per org uses the existing
+  `NoCacheNoBackground` sentinel (`maxAgeSeconds: -1`) -- `0` doesn't work, since the collection
+  layer's `cacheOptions.maxAgeSeconds || 600` treats a falsy `0` as "not specified" and substitutes
+  the default 10-minute cache.
 - This is forward-looking only -- links created before this change have no `corporateTenantId`
   until they're re-linked, so expect `trackException` noise on old data until it ages out.
 - Verified with `bunx tsc -p tsconfig.json --noEmit` (clean) and `bun run test` (172/172 passing).

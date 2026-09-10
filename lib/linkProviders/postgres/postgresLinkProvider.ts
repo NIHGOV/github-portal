@@ -122,14 +122,11 @@ export class PostgresLinkProvider implements ILinkProvider {
 
   async initialize(): Promise<ILinkProvider> {
     const self = this;
-    // Self-healing migration: nothing in the deploy/startup path runs data/pg.sql against an
-    // already-provisioned database, so this table may predate tenant tracking. Idempotent and
-    // safe to run on every startup (mirrors scripts/tenantMigration/ledger.ts's ensureSchema()).
-    await PostgresPoolQueryAsync(
-      this._pool,
-      `ALTER TABLE ${self._tableName} ADD COLUMN IF NOT EXISTS corporatetenantid text`,
-      []
-    );
+    // NOTE: no self-healing DDL here -- the app's runtime Postgres role is intentionally
+    // DML-only (see scripts/postgres/setup.ts), so it cannot run ALTER TABLE even to add a
+    // column that already exists. The `corporatetenantid` column and its index (data/pg.sql)
+    // must be applied out-of-band, with admin credentials, before deploying this provider
+    // version to any environment with a pre-existing `links` table -- see PLAN.md.
     const rows = await PostgresPoolQueryAsync(
       this._pool,
       `
