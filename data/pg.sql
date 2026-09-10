@@ -63,6 +63,8 @@ CREATE INDEX IF NOT EXISTS events_repoid ON events (repositoryid);
 ALTER TABLE events ADD COLUMN IF NOT EXISTS isowncontribution boolean;
 ALTER TABLE events ADD COLUMN IF NOT EXISTS checked timestamptz;
 
+ALTER TABLE links ADD COLUMN IF NOT EXISTS corporatetenantid text;
+
 CREATE INDEX IF NOT EXISTS events_c_isowncontribution ON events (isowncontribution);
 CREATE INDEX IF NOT EXISTS events_checked ON events (checked);
 CREATE INDEX IF NOT EXISTS events_c_cid_checked ON events (usercorporateid);
@@ -173,6 +175,7 @@ CREATE TABLE IF NOT EXISTS links (
   corporateusername text,
   corporatename text,
   corporatemail text,
+  corporatetenantid text,
   serviceaccount boolean DEFAULT false,
   serviceaccountmail text,
   created timestamp without time zone,
@@ -192,6 +195,7 @@ CREATE INDEX IF NOT EXISTS corporate_lowercase_thirdparty_username ON links (thi
 
 CREATE INDEX IF NOT EXISTS corporate_id ON links (corporateid);
 CREATE INDEX IF NOT EXISTS corporate_lowercase_username ON links (lower(corporateusername));
+CREATE INDEX IF NOT EXISTS corporate_tenant_id ON links (corporatetenantid);
 
 -- Ledger for scripts/tenantMigration/* (see PLAN.md > "Corporate Identity Tenant Migration
 -- Ledger"). Also created on demand by those scripts via ensureSchema(); listed here so a fresh

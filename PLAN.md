@@ -4,6 +4,39 @@ Priority-ordered list of security improvements identified across this repository
 
 ---
 
+## Capture and persist the sign-in tenant ID on links (September 2026)
+
+Investigating why some Entra ID MTO (multi-tenant, external-domain) accounts don't show as linked
+in the Org People view surfaced that the sign-in tenant ID was being read from the Entra token but
+then silently dropped -- `middleware/business/authentication.ts`'s `setIdentity()` built
+`corporateIdentity` from `user.azure.{oid, username, displayName}` only, never copying
+`user.azure.tenantId`. Nothing downstream (the `links` table, the `linkAccounts()` telemetry
+events) ever recorded which tenant a corporate identity actually authenticated from, so a link's
+tenant could never be validated or reported on after the fact -- only inferred.
+
+- `business/user/index.ts`: `ICorporateIdentity` gained `tenantId?: string`; `createGitHubLinkObject()`
+  now copies it into a new `corporateTenantId` field on the link object.
+- `middleware/business/authentication.ts`: `setIdentity()` now copies `user.azure.tenantId` through.
+- `interfaces/link.ts`: `ICorporateLinkProperties`/`ICorporateLink` gained optional `corporateTenantId`.
+- New `corporatetenantid` column on `links` (`data/pg.sql`: added to the `CREATE TABLE` for fresh
+  installs, plus an idempotent `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` for existing databases,
+  matching the existing `events` table precedent; also added a `corporate_tenant_id` index).
+  Wired through `lib/linkProviders/postgres/{postgresLinkProvider,postgresLink}.ts` (column
+  mapping, `SELECT`/`INSERT` column lists, and a getter/setter on `CorporateLinkPostgres`). Left
+  the memory/table link providers untouched -- the field is optional on `ICorporateLink` and
+  neither of those classes formally implements it, so nothing there needed to change.
+- `business/operations/linkAudit.ts` (`auditLinks()`, used by `scripts/linkAudit.ts` and
+  `/administration/link-audit`): each discrepancy row now includes `corporateTenantId`, and each
+  discrepancy is logged to `genericInsights` -- `trackException` (a breaking issue: no tenant ID
+  recorded means the link's origin can't be validated at all) when `corporateTenantId` is missing,
+  or `trackEvent('LinkAuditDiscrepancy', ...)` (informational: a known, expected discrepancy like
+  routine cache lag) when it's present.
+- This is forward-looking only -- links created before this change have no `corporateTenantId`
+  until they're re-linked, so expect `trackException` noise on old data until it ages out.
+- Verified with `bunx tsc -p tsconfig.json --noEmit` (clean) and `bun run test` (172/172 passing).
+
+---
+
 ## Dependency vulnerability sweep via `bun audit`/`bun outdated` (September 2026)
 
 - **Root** (`package.json`/`bun.lock`): `bun audit fix` resolved 19 of 20 flagged vulnerabilities

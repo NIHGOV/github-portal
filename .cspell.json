@@ -336,6 +336,7 @@
     "corporatemail",
     "corporatename",
     "corporateprod",
+    "corporatetenantid",
     "corporateusername",
     "countif",
     "countuse",

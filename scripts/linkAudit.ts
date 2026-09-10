@@ -63,7 +63,9 @@ async function linkAudit(providers: IProviders): Promise<void> {
     console.log(
       `[${row.status}] org=${row.organization} login=${row.login} githubId=${row.githubId}` +
         (showCorporateIds && row.corporateId ? ` corporateId=${row.corporateId}` : '') +
-        (showCorporateIds && row.corporateUsername ? ` corporateUsername=${row.corporateUsername}` : '')
+        (showCorporateIds && row.corporateUsername ? ` corporateUsername=${row.corporateUsername}` : '') +
+        (showCorporateIds && row.corporateTenantId ? ` corporateTenantId=${row.corporateTenantId}` : '') +
+        (!row.corporateTenantId ? ' [no recorded tenant -- cannot be validated]' : '')
     );
   }
   console.log('');
@@ -79,6 +81,11 @@ async function linkAudit(providers: IProviders): Promise<void> {
   console.log(
     'linked-no-corporate-username: a real, current `links` row with no corporateUsername -- shows as ' +
       '"unknown account" rather than a recognized corporate identity in the People view.'
+  );
+  console.log(
+    '[no recorded tenant]: the link predates tenant tracking (or the field was never populated), so its ' +
+      "originating Entra tenant can't be confirmed -- logged as a breaking issue (trackException) rather " +
+      'than routine cache lag (trackEvent).'
   );
 }
 

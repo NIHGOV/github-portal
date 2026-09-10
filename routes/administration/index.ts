@@ -195,7 +195,7 @@ router.get('/link-audit', async (req: ReposAppRequest, res, next) => {
 
     const { rows } = await auditLinks(operations.providers, orgNames);
 
-    const header = 'Organization,Login,GitHubId,Status,CorporateId,CorporateUsername';
+    const header = 'Organization,Login,GitHubId,Status,CorporateId,CorporateUsername,CorporateTenantId';
     const cleanedObjects: object[] = _.sortBy(
       rows.map((row) =>
         sanitizeCsvRow({
@@ -205,6 +205,7 @@ router.get('/link-audit', async (req: ReposAppRequest, res, next) => {
           Status: row.status,
           CorporateId: row.corporateId || '',
           CorporateUsername: row.corporateUsername || '',
+          CorporateTenantId: row.corporateTenantId || '',
         })
       ),
       ['Organization', 'Login']

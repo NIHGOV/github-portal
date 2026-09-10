@@ -46,6 +46,7 @@ export interface ICorporateIdentity {
   id: string;
   username: string;
   displayName?: string;
+  tenantId?: string;
 }
 
 // - - - web
@@ -569,6 +570,7 @@ export class IndividualContext {
       corporateUsername: corporateIdentity.username,
       corporateDisplayName: corporateIdentity.displayName,
       corporateMailAddress: corporateIdentity.username ?? null,
+      corporateTenantId: corporateIdentity.tenantId ?? null,
       isServiceAccount: false,
       serviceAccountMail: undefined,
     };

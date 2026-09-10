@@ -18,6 +18,8 @@ export interface ILinkAuditRow {
   status: LinkAuditRowStatus;
   corporateId?: string;
   corporateUsername?: string;
+  // Absent for links created before tenant tracking was added -- see recordRowTelemetry below.
+  corporateTenantId?: string;
 }
 
 export interface ILinkAuditResult {
@@ -58,37 +60,74 @@ export async function auditLinks(
       const cached = cachedByThirdPartyId.get(githubId);
       const fresh = freshByThirdPartyId.get(githubId);
 
+      let row: ILinkAuditRow = null;
       if (fresh && !cached) {
-        rows.push({
+        row = {
           organization: orgName,
           login: member.login,
           githubId,
           status: 'stale-cache',
           corporateId: fresh.corporateId,
           corporateUsername: fresh.corporateUsername,
-        });
+          corporateTenantId: fresh.corporateTenantId,
+        };
       } else if (cached && !fresh) {
-        rows.push({
+        row = {
           organization: orgName,
           login: member.login,
           githubId,
           status: 'orphaned-cache',
           corporateId: cached.corporateId,
           corporateUsername: cached.corporateUsername,
-        });
+          corporateTenantId: cached.corporateTenantId,
+        };
       } else if (fresh && !fresh.corporateUsername) {
-        rows.push({
+        row = {
           organization: orgName,
           login: member.login,
           githubId,
           status: 'linked-no-corporate-username',
           corporateId: fresh.corporateId,
-        });
+          corporateTenantId: fresh.corporateTenantId,
+        };
+      }
+      if (row) {
+        recordRowTelemetry(providers, row);
+        rows.push(row);
       }
     }
   }
 
   return { rows, cachedLinkCount: cachedLinks.length, freshLinkCount: freshLinks.length };
+}
+
+// A discrepancy on a link with no recorded corporate tenant ID can't be validated at all (we have
+// no way to confirm which Entra tenant it belongs to), so it's logged as a breaking issue rather
+// than routine cache lag.
+function recordRowTelemetry(providers: IProviders, row: ILinkAuditRow): void {
+  const insights = providers.genericInsights;
+  if (!insights) {
+    return;
+  }
+  const properties = {
+    organization: row.organization,
+    login: row.login,
+    githubId: row.githubId,
+    status: row.status,
+    corporateId: row.corporateId || '',
+    corporateUsername: row.corporateUsername || '',
+    corporateTenantId: row.corporateTenantId || '',
+  };
+  if (!row.corporateTenantId) {
+    insights.trackException({
+      exception: new Error(
+        `Link audit: ${row.status} for ${row.login} (org ${row.organization}) has no recorded corporate tenant ID and cannot be validated`
+      ),
+      properties,
+    });
+  } else {
+    insights.trackEvent({ name: 'LinkAuditDiscrepancy', properties });
+  }
 }
 
 function toMapByThirdPartyId(links: ICorporateLink[]): Map<string, ICorporateLink> {

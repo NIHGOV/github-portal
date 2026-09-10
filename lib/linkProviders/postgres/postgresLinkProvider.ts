@@ -57,6 +57,7 @@ const linkInterfacePropertyMapping: IPostgresLinkProperties = {
   corporateUsername: 'corporateusername',
   corporateDisplayName: 'corporatename',
   corporateMailAddress: 'corporatemail',
+  corporateTenantId: 'corporatetenantid',
 
   isServiceAccount: 'serviceaccount',
   serviceAccountMail: 'serviceaccountmail',
@@ -75,6 +76,7 @@ const coreColumns = [
   'corporateusername',
   'corporatename',
   'corporatemail',
+  'corporatetenantid',
   'serviceaccount',
   'serviceaccountmail',
   'created',
@@ -245,11 +247,11 @@ export class PostgresLinkProvider implements ILinkProvider {
           linkid,
           thirdpartytype,
           thirdpartyid, thirdpartyusername, thirdpartyavatar,
-          corporateid, corporateusername, corporatename,
+          corporateid, corporateusername, corporatename, corporatetenantid,
           serviceaccount, serviceaccountmail,
           created)
         VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
         )
       `,
         [
@@ -261,6 +263,7 @@ export class PostgresLinkProvider implements ILinkProvider {
           link.corporateId,
           link.corporateUsername,
           link.corporateDisplayName,
+          link.corporateTenantId || null,
           link.isServiceAccount,
           link.serviceAccountMail,
           created,
