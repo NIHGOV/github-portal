@@ -20,8 +20,16 @@ export interface ILinkAuditRow {
   status: LinkAuditRowStatus;
   corporateId?: string;
   corporateUsername?: string;
-  // Absent for links created before tenant tracking was added -- see recordRowTelemetry below.
+  // Absent for links created before tenant tracking was added, or reflecting the cached side for
+  // some statuses -- not a reliable signal of whether the link can be validated; use
+  // canBeValidated for that instead.
   corporateTenantId?: string;
+  // Whether the live (Postgres) row has a recorded tenant, i.e. whether this discrepancy's origin
+  // can actually be confirmed. Always true for `orphaned-cache`, which has no live row to lack a
+  // tenant on -- that's just cache lag, not an ambiguous case. This is what recordRowTelemetry
+  // bases its trackException-vs-trackEvent severity on; consumers should use this field directly
+  // rather than inferring from corporateTenantId.
+  canBeValidated: boolean;
 }
 
 export interface ILinkAuditResult {
@@ -82,6 +90,7 @@ export async function auditLinks(
           corporateId: fresh.corporateId,
           corporateUsername: fresh.corporateUsername,
           corporateTenantId: fresh.corporateTenantId,
+          canBeValidated: !!fresh.corporateTenantId,
         };
       } else if (cached && !fresh) {
         row = {
@@ -92,6 +101,7 @@ export async function auditLinks(
           corporateId: cached.corporateId,
           corporateUsername: cached.corporateUsername,
           corporateTenantId: cached.corporateTenantId,
+          canBeValidated: true,
         };
       } else if (cached && fresh && !cached.corporateUsername) {
         // Status reflects what the People view actually renders, which reads the cached link --
@@ -103,6 +113,7 @@ export async function auditLinks(
           status: 'linked-no-corporate-username',
           corporateId: cached.corporateId,
           corporateTenantId: cached.corporateTenantId,
+          canBeValidated: !!fresh.corporateTenantId,
         };
       } else if (
         cached &&
@@ -124,10 +135,11 @@ export async function auditLinks(
           corporateId: fresh.corporateId,
           corporateUsername: fresh.corporateUsername,
           corporateTenantId: fresh.corporateTenantId,
+          canBeValidated: !!fresh.corporateTenantId,
         };
       }
       if (row) {
-        recordRowTelemetry(providers, row, fresh);
+        recordRowTelemetry(providers, row);
         rows.push(row);
       }
     }
@@ -138,9 +150,8 @@ export async function auditLinks(
 
 // A discrepancy can only be validated when a live (Postgres) row exists and has a recorded
 // tenant -- that's the actual source of truth. `orphaned-cache` has no live row at all, which
-// isn't ambiguous (just cache lag), and the reported `corporateTenantId` on a row can reflect the
-// cached side, which can disagree with the live side on this field just like any other.
-function recordRowTelemetry(providers: IProviders, row: ILinkAuditRow, liveLink?: ICorporateLink): void {
+// isn't ambiguous (just cache lag). See ILinkAuditRow.canBeValidated for how this is computed.
+function recordRowTelemetry(providers: IProviders, row: ILinkAuditRow): void {
   const insights = providers.genericInsights;
   if (!insights) {
     return;
@@ -154,8 +165,7 @@ function recordRowTelemetry(providers: IProviders, row: ILinkAuditRow, liveLink?
     corporateUsername: row.corporateUsername || '',
     corporateTenantId: row.corporateTenantId || '',
   };
-  const canBeValidated = !liveLink || !!liveLink.corporateTenantId;
-  if (!canBeValidated) {
+  if (!row.canBeValidated) {
     insights.trackException({
       exception: new Error(
         `Link audit: ${row.status} for ${row.login} (org ${row.organization}) has no recorded corporate tenant ID and cannot be validated`

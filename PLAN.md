@@ -87,6 +87,19 @@ tenant could never be validated or reported on after the fact -- only inferred.
   module-private). Exported it as `getOrganizationMembersLightCache()`; added a `getMembersOverride`
   option to `auditLinks()`, and the admin route now passes that helper through so its member
   enumeration matches exactly what the People API is currently returning for the same org.
+- **`canBeValidated` is now a first-class row field**: the CLI's console text and legend were
+  independently guessing whether a discrepancy could be validated by checking `row.corporateTenantId`
+  truthiness, which reflects the cached side for some statuses and could disagree with what
+  `recordRowTelemetry()` actually classified. Added `ILinkAuditRow.canBeValidated`, computed once per
+  row from the live link (same rule `recordRowTelemetry()` uses), and pointed both the CLI output and
+  the CSV (`/administration/link-audit`, new `CanBeValidated` column) at that single source of truth.
+- **Postgres provider now checks for the tenant column at startup**: a read-only
+  `information_schema.columns` check in `initialize()` (no elevated privileges needed) throws an
+  actionable error immediately if `corporatetenantid` is missing, instead of only failing later,
+  confusingly, on the first real link query.
+- **`CorporateTableLink`'s `corporateTenantId` getter is now typed `string | undefined`** to match
+  the field's actual optionality, instead of an explicit `string` return type that hid missing
+  values from callers.
 - Verified with `bunx tsc -p tsconfig.json --noEmit` (clean) and `bun run test` (172/172 passing).
 
 ---

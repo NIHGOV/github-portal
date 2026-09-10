@@ -64,7 +64,7 @@ export class CorporateTableLink implements ICorporateLinkExtended {
     _updateColumn(this, this._provider.propertyMapping.corporateMailAddress, value);
   }
 
-  get corporateTenantId(): string {
+  get corporateTenantId(): string | undefined {
     return this._entity[this._provider.propertyMapping.corporateTenantId];
   }
 

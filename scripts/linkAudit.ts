@@ -67,7 +67,7 @@ async function linkAudit(providers: IProviders): Promise<void> {
         (showCorporateIds && row.corporateId ? ` corporateId=${row.corporateId}` : '') +
         (showCorporateIds && row.corporateUsername ? ` corporateUsername=${row.corporateUsername}` : '') +
         (showCorporateIds && row.corporateTenantId ? ` corporateTenantId=${row.corporateTenantId}` : '') +
-        (!row.corporateTenantId ? ' [no recorded tenant -- cannot be validated]' : '')
+        (!row.canBeValidated ? ' [live row has no recorded tenant -- cannot be validated]' : '')
     );
   }
   console.log('');
@@ -90,9 +90,11 @@ async function linkAudit(providers: IProviders): Promise<void> {
       'yet. Reported values are the live (Postgres) ones; the cache is what the People view currently shows.'
   );
   console.log(
-    '[no recorded tenant]: the link predates tenant tracking (or the field was never populated), so its ' +
-      "originating Entra tenant can't be confirmed -- logged as a breaking issue (trackException) rather " +
-      'than routine cache lag (trackEvent).'
+    '[live row has no recorded tenant]: the live (Postgres) link predates tenant tracking or the field ' +
+      "was never populated, so its originating Entra tenant can't be confirmed -- logged as a breaking " +
+      'issue (trackException) rather than routine cache lag (trackEvent). Note the corporateTenantId shown ' +
+      'above (when LINK_AUDIT_SHOW_CORPORATE_IDS=1) can come from the cached side for some statuses, so it ' +
+      'may differ from this classification -- canBeValidated always reflects the live row.'
   );
 }
 

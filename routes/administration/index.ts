@@ -208,7 +208,8 @@ router.get('/link-audit', async (req: ReposAppRequest, res, next) => {
       getMembersOverride: (orgName) => getOrganizationMembersLightCache(operations, orgName),
     });
 
-    const header = 'Organization,Login,GitHubId,Status,CorporateId,CorporateUsername,CorporateTenantId';
+    const header =
+      'Organization,Login,GitHubId,Status,CorporateId,CorporateUsername,CorporateTenantId,CanBeValidated';
     const cleanedObjects: object[] = _.sortBy(
       rows.map((row) =>
         sanitizeCsvRow({
@@ -219,6 +220,7 @@ router.get('/link-audit', async (req: ReposAppRequest, res, next) => {
           CorporateId: row.corporateId || '',
           CorporateUsername: row.corporateUsername || '',
           CorporateTenantId: row.corporateTenantId || '',
+          CanBeValidated: row.canBeValidated,
         })
       ),
       ['Organization', 'Login']

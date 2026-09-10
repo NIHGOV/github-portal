@@ -127,6 +127,23 @@ export class PostgresLinkProvider implements ILinkProvider {
     // column that already exists. The `corporatetenantid` column and its index (data/pg.sql)
     // must be applied out-of-band, with admin credentials, before deploying this provider
     // version to any environment with a pre-existing `links` table -- see PLAN.md.
+    // Preflight (read-only, no elevated privileges needed): fail fast at startup with an
+    // actionable error instead of a confusing "column does not exist" on the first link query.
+    const columnCheck = await PostgresPoolQueryAsync(
+      this._pool,
+      `
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_name = $1 AND column_name = 'corporatetenantid'`,
+      [self._tableName]
+    );
+    if (columnCheck.length === 0) {
+      throw new Error(
+        `Postgres table "${self._tableName}" is missing the "corporatetenantid" column required by this ` +
+          'version of PostgresLinkProvider. Apply the migration in data/pg.sql with admin Postgres ' +
+          'credentials before deploying this code -- see PLAN.md.'
+      );
+    }
     const rows = await PostgresPoolQueryAsync(
       this._pool,
       `
