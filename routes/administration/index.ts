@@ -178,10 +178,13 @@ router.get('/link-audit', async (req: ReposAppRequest, res, next) => {
       .map((name) => name.trim())
       .filter(Boolean);
     // Default set must include Invisible orgs too, unlike operations.organizations.
-    const orgNames =
-      requestedOrgNames.length > 0
-        ? requestedOrgNames
-        : operations.getOrganizationsIncludingInvisible().map((org) => org.name);
+    const orgNames = Array.from(
+      new Set(
+        requestedOrgNames.length > 0
+          ? requestedOrgNames
+          : operations.getOrganizationsIncludingInvisible().map((org) => org.name)
+      )
+    );
 
     const unknownOrgNames = orgNames.filter((orgName) => {
       try {

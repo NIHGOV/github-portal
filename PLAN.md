@@ -106,6 +106,13 @@ tenant could never be validated or reported on after the fact -- only inferred.
   only handled `string`, leaking raw `null` from storage/DB rows and requiring callers to check for
   both `null` and `undefined`. Getters now normalize `null` to `undefined`; setters accept
   `string | undefined` and write `null` to storage when absent.
+- **`getOrganizationMembersLightCache()` no longer treats an empty/falsy cached value as a miss**:
+  changed its `if (value)` check to an explicit `if (value !== undefined)`, so a genuinely-empty
+  (or otherwise falsy) cached member list is served from cache instead of being re-fetched on every
+  call within the 5-minute window.
+- **`/administration/link-audit` de-duplicates the resolved org list**: `?orgs=a,a` (or repeated
+  query params) would scan the same org multiple times, wasting GitHub/DB work and duplicating CSV
+  rows. Wrapped the resolved org names in a `Set` before validating/scanning.
 - Verified with `bunx tsc -p tsconfig.json --noEmit` (clean) and `bun run test` (172/172 passing).
 
 ---

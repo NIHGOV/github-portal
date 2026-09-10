@@ -56,7 +56,7 @@ export async function getOrganizationMembersLightCache(
   org: string
 ): Promise<OrganizationMember[]> {
   const value = leakyLocalCacheOrganizationMembers.get(org);
-  if (value) {
+  if (value !== undefined) {
     return value;
   }
   const organization = operations.getOrganization(org);
