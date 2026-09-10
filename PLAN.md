@@ -113,6 +113,13 @@ tenant could never be validated or reported on after the fact -- only inferred.
 - **`/administration/link-audit` de-duplicates the resolved org list**: `?orgs=a,a` (or repeated
   query params) would scan the same org multiple times, wasting GitHub/DB work and duplicating CSV
   rows. Wrapped the resolved org names in a `Set` before validating/scanning.
+- **Startup column preflight now handles schema-qualified/quoted table names**: the first version
+  checked `information_schema.columns.table_name = $1` against the raw configured table name (e.g.
+  `REPOS_POSTGRES_LINKS_TABLE_NAME`), which only matches a bare, unqualified name -- a value like
+  `custom_schema.links` would never match, incorrectly blocking startup even with the column present.
+  Switched to `SELECT corporatetenantid FROM ${tableName} LIMIT 0` in a try/catch, checking for
+  Postgres error code `42703` (undefined_column) -- the same raw interpolation the rest of this
+  provider already uses to address the table, so it's correct for any name format.
 - Verified with `bunx tsc -p tsconfig.json --noEmit` (clean) and `bun run test` (172/172 passing).
 
 ---
