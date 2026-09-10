@@ -13,6 +13,7 @@ export const CorporatePropertyNames = [
   'corporateUsername',
   'corporateDisplayName',
   'corporateMailAddress',
+  'corporateTenantId',
 
   'thirdPartyId',
   'thirdPartyUsername',
@@ -26,6 +27,10 @@ export function corporateLinkToJson(link: ICorporateLink): ICorporateLink {
       corporateId: link.corporateId,
       corporateMailAddress: link.corporateMailAddress,
       corporateUsername: link.corporateUsername,
+      // corporateTenantId intentionally excluded -- this serializer feeds the general people/team/
+      // account API responses, not just the admin link-audit report, and the originating Entra
+      // tenant is cross-tenant identity metadata that shouldn't be exposed to every caller
+      // authorized to view a linked account. The audit route builds its own row projection instead.
       serviceAccountMail: link.serviceAccountMail,
       isServiceAccount: link.isServiceAccount,
       thirdPartyAvatar: link.thirdPartyAvatar,

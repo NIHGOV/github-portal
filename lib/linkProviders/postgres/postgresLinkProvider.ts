@@ -57,6 +57,7 @@ const linkInterfacePropertyMapping: IPostgresLinkProperties = {
   corporateUsername: 'corporateusername',
   corporateDisplayName: 'corporatename',
   corporateMailAddress: 'corporatemail',
+  corporateTenantId: 'corporatetenantid',
 
   isServiceAccount: 'serviceaccount',
   serviceAccountMail: 'serviceaccountmail',
@@ -75,6 +76,7 @@ const coreColumns = [
   'corporateusername',
   'corporatename',
   'corporatemail',
+  'corporatetenantid',
   'serviceaccount',
   'serviceaccountmail',
   'created',
@@ -120,6 +122,33 @@ export class PostgresLinkProvider implements ILinkProvider {
 
   async initialize(): Promise<ILinkProvider> {
     const self = this;
+    // NOTE: no self-healing DDL here -- the app's runtime Postgres role is intentionally
+    // DML-only (see scripts/postgres/setup.ts), so it cannot run ALTER TABLE even to add a
+    // column that already exists. The `corporatetenantid` column and its index (data/pg.sql)
+    // must be applied out-of-band, with admin credentials, before deploying this provider
+    // version to any environment with a pre-existing `links` table -- see PLAN.md.
+    // Preflight (read-only, no elevated privileges needed): fail fast at startup with an
+    // actionable error instead of a confusing "column does not exist" on the first link query.
+    // Uses the same raw `${self._tableName}` interpolation as the rest of this provider (rather
+    // than an information_schema.columns lookup keyed on a bare table_name) so this works
+    // correctly even if the configured table name is schema-qualified or quoted.
+    try {
+      await PostgresPoolQueryAsync(
+        this._pool,
+        `SELECT corporatetenantid FROM ${self._tableName} LIMIT 0`,
+        []
+      );
+    } catch (columnCheckError) {
+      if (columnCheckError?.code === '42703' /* undefined_column */) {
+        throw new Error(
+          `Postgres table "${self._tableName}" is missing the "corporatetenantid" column required by this ` +
+            'version of PostgresLinkProvider. Apply the migration in data/pg.sql with admin Postgres ' +
+            'credentials before deploying this code -- see PLAN.md.',
+          { cause: columnCheckError }
+        );
+      }
+      throw columnCheckError;
+    }
     const rows = await PostgresPoolQueryAsync(
       this._pool,
       `
@@ -245,11 +274,11 @@ export class PostgresLinkProvider implements ILinkProvider {
           linkid,
           thirdpartytype,
           thirdpartyid, thirdpartyusername, thirdpartyavatar,
-          corporateid, corporateusername, corporatename,
+          corporateid, corporateusername, corporatename, corporatetenantid,
           serviceaccount, serviceaccountmail,
           created)
         VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
         )
       `,
         [
@@ -261,6 +290,7 @@ export class PostgresLinkProvider implements ILinkProvider {
           link.corporateId,
           link.corporateUsername,
           link.corporateDisplayName,
+          link.corporateTenantId || null,
           link.isServiceAccount,
           link.serviceAccountMail,
           created,

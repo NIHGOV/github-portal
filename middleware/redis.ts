@@ -23,7 +23,13 @@ export async function connectRedis(
   if (useTls) {
     socket.tls = true;
   }
-  const redisOptions: any = { socket };
+  const redisOptions: any = {
+    socket,
+    // Ping periodically so idle connections (e.g. the low-traffic firehose container) aren't
+    // silently closed by Azure Cache for Redis's idle-connection timeout.
+    // https://learn.microsoft.com/en-us/azure/azure-cache-for-redis/cache-best-practices-connection#idle-timeout
+    pingInterval: 5 * 60 * 1000,
+  };
   if (config.redis.key) {
     redisOptions.password = config.redis.key;
   }

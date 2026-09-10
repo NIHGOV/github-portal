@@ -5,6 +5,10 @@ dist
 .npmrc
 .npmrc.arg
 
+# bun.lock is JSONC-like, so some editors/tools misdetect it and reformat every entry onto
+# multiple lines; bun owns this file's formatting, not Prettier.
+bun.lock
+
 # Ignore upstream files
 .github/dotcom-workflows/
 .deploy/geneva/

@@ -44,14 +44,25 @@ async function getTeamMembers(options?: PeopleSearchOptions) {
 
 async function getPeopleForOrganization(operations: Operations, org: string, options?: PeopleSearchOptions) {
   const teamMembers = await getTeamMembers(options);
+  const organizationMembers = await getOrganizationMembersLightCache(operations, org);
+  return { organizationMembers, teamMembers };
+}
+
+// Exported so other server-side consumers of this same in-process 5-minute snapshot (e.g. the
+// /administration/link-audit report) can match exactly what this endpoint is currently serving,
+// instead of bypassing this cache and risking a different member set within the same process.
+export async function getOrganizationMembersLightCache(
+  operations: Operations,
+  org: string
+): Promise<OrganizationMember[]> {
   const value = leakyLocalCacheOrganizationMembers.get(org);
-  if (value) {
-    return { organizationMembers: value, teamMembers };
+  if (value !== undefined) {
+    return value;
   }
   const organization = operations.getOrganization(org);
   const organizationMembers = await organization.getMembers();
   leakyLocalCacheOrganizationMembers.set(org, organizationMembers);
-  return { organizationMembers, teamMembers };
+  return organizationMembers;
 }
 
 type PeopleSearchOptions = {

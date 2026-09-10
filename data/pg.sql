@@ -173,11 +173,21 @@ CREATE TABLE IF NOT EXISTS links (
   corporateusername text,
   corporatename text,
   corporatemail text,
+  corporatetenantid text,
   serviceaccount boolean DEFAULT false,
   serviceaccountmail text,
   created timestamp without time zone,
   PRIMARY KEY(thirdpartytype, thirdpartyid)
 );
+
+-- REQUIRED MANUAL STEP before deploying a version of the app that reads/writes
+-- corporatetenantid to any environment with a pre-existing `links` table: the app's runtime
+-- Postgres role is DML-only (see scripts/postgres/setup.ts) and cannot run this itself, so an
+-- admin must apply this (and the corporate_tenant_id index below) out-of-band first -- see
+-- PLAN.md. Idempotent; already present above for fresh installs. Must come after CREATE TABLE --
+-- this file is applied as a single transaction, and running this any earlier would abort on a
+-- fresh database.
+ALTER TABLE links ADD COLUMN IF NOT EXISTS corporatetenantid text;
 
 CREATE UNIQUE INDEX IF NOT EXISTS link_id ON links (linkid);
 
@@ -192,6 +202,7 @@ CREATE INDEX IF NOT EXISTS corporate_lowercase_thirdparty_username ON links (thi
 
 CREATE INDEX IF NOT EXISTS corporate_id ON links (corporateid);
 CREATE INDEX IF NOT EXISTS corporate_lowercase_username ON links (lower(corporateusername));
+CREATE INDEX IF NOT EXISTS corporate_tenant_id ON links (corporatetenantid);
 
 -- Ledger for scripts/tenantMigration/* (see PLAN.md > "Corporate Identity Tenant Migration
 -- Ledger"). Also created on demand by those scripts via ensureSchema(); listed here so a fresh

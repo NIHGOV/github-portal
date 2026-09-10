@@ -4,6 +4,217 @@ Priority-ordered list of security improvements identified across this repository
 
 ---
 
+## Capture and persist the sign-in tenant ID on links (September 2026)
+
+Investigating why some Entra ID MTO (multi-tenant, external-domain) accounts don't show as linked
+in the Org People view surfaced that the sign-in tenant ID was being read from the Entra token but
+then silently dropped -- `middleware/business/authentication.ts`'s `setIdentity()` built
+`corporateIdentity` from `user.azure.{oid, username, displayName}` only, never copying
+`user.azure.tenantId`. Nothing downstream (the `links` table, the `linkAccounts()` telemetry
+events) ever recorded which tenant a corporate identity actually authenticated from, so a link's
+tenant could never be validated or reported on after the fact -- only inferred.
+
+- `business/user/index.ts`: `ICorporateIdentity` gained `tenantId?: string`; `createGitHubLinkObject()`
+  now copies it into a new `corporateTenantId` field on the link object.
+- `middleware/business/authentication.ts`: `setIdentity()` now copies `user.azure.tenantId` through.
+- `interfaces/link.ts`: `ICorporateLinkProperties`/`ICorporateLink` gained optional `corporateTenantId`.
+- New `corporatetenantid` column on `links` (`data/pg.sql`: added to the `CREATE TABLE` for fresh
+  installs, plus an `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` and a `corporate_tenant_id` index
+  for existing databases). Wired through all three link providers -- Postgres (column mapping,
+  `SELECT`/`INSERT` lists, `CorporateLinkPostgres` getter/setter), and memory/table (added to the
+  shared `CorporatePropertyNames` list and each provider's property mapping/getter/setter/column
+  projection -- both were silently dropping the field via their generic create-link copy loop).
+- **⚠️ Required manual step before deploying to any environment with a pre-existing `links`
+  table:** apply `data/pg.sql`'s `corporatetenantid` column and `corporate_tenant_id` index with
+  **admin** Postgres credentials first. The app's runtime Postgres role is intentionally DML-only
+  (`scripts/postgres/setup.ts`), so `PostgresLinkProvider` deliberately does _not_ try to run this
+  DDL itself at startup -- every link `SELECT` would otherwise 500 with `column "corporatetenantid"
+  does not exist` the moment this code ships without the column already present.
+- `business/operations/linkAudit.ts` (`auditLinks()`, used by `scripts/linkAudit.ts` and
+  `/administration/link-audit`): each discrepancy row now includes `corporateTenantId`, and each
+  discrepancy is logged to `genericInsights` -- `trackException` (a breaking issue: no tenant ID
+  recorded means the link's origin can't be validated at all) when `corporateTenantId` is missing,
+  or `trackEvent('LinkAuditDiscrepancy', ...)` (informational: a known, expected discrepancy like
+  routine cache lag) when it's present. The `linked-no-corporate-username` status is judged off the
+  _cached_ link (what the People view actually renders), not the live one, which can disagree with
+  cache on this field alone. Forcing a live member list per org uses the existing
+  `NoCacheNoBackground` sentinel (`maxAgeSeconds: -1`) -- `0` doesn't work, since the collection
+  layer's `cacheOptions.maxAgeSeconds || 600` treats a falsy `0` as "not specified" and substitutes
+  the default 10-minute cache.
+- This is forward-looking only -- links created before this change have no `corporateTenantId`
+  until they're re-linked, so expect `trackException` noise on old data until it ages out.
+- **`cache-identity-mismatch` status**: the original cache-vs-live comparison only checked for a
+  link present/absent on one side, or a blank `corporateUsername` -- it missed the case where
+  both sides have a link with a _truthy_ `corporateUsername` that simply disagrees with the live
+  row on `corporateId`/`corporateUsername`/`corporateTenantId` (e.g. a relink or tenant change the
+  cache hasn't picked up yet). Added a dedicated status for that; reported values are the live
+  (Postgres) ones, since the cached ones are just what the view currently shows.
+- **Admin route now matches the People API's actual cache layer**: `operations.getLinks()` is not
+  the only cache in front of Postgres -- `api/client/organization/people.ts` and
+  `api/client/peopleSearch.ts` read through `getLinksLightCache()`
+  (`api/client/leakyLocalCache.ts`), an additional 5-minute **per-process** local cache wrapping
+  it. `auditLinks()` could therefore see a fresher Redis snapshot than what a given app instance's
+  People API responses are actually still serving, and silently miss a real discrepancy. Added an
+  optional `cachedLinksOverride` to `auditLinks()`; `/administration/link-audit` now fetches via
+  `getLinksLightCache()` so its report matches that process's actual People-view responses, while
+  the CLI (`scripts/linkAudit.ts`, a fresh one-off process every run, so the local cache is always
+  empty anyway) keeps calling `operations.getLinks()` directly.
+- **Telemetry severity fixed to key off the live tenant, not the reported one**: `recordRowTelemetry`
+  was classifying `trackException` vs `trackEvent` off `row.corporateTenantId`, which reflects the
+  cached side for some statuses -- so a stale cache with no tenant but a validate-able live record
+  (or vice versa) could be misclassified in either direction. It now takes the live link
+  explicitly and checks its tenant instead; `orphaned-cache` (no live row at all) never gets the
+  breaking classification, since there's nothing ambiguous about a plain cache-hasn't-caught-up-yet case.
+- **Admin route defaults to cached org membership**: `/administration/link-audit` previously
+  inherited `auditLinks()`'s CLI-oriented default of forcing a live GitHub member fetch per org,
+  which on a single request across every configured org risked rate-limit exhaustion or a request
+  timeout. Defaults to the normal cached member list now; pass `?fresh=1` to opt into the slower,
+  more thorough live comparison. The CLI keeps its own force-fresh-by-default behavior, since an
+  operator running it deliberately is a different risk profile than one click on a web page.
+- **Removed `corporateTenantId` from `corporateLinkToJson()`**: that serializer feeds the general
+  people/team/account API responses, not just the admin audit -- exposing the originating Entra
+  tenant there would leak cross-tenant identity metadata to any caller authorized to view a linked
+  account. The audit route builds its own row projection directly and never needed this change.
+- **Normalized `undefined`/`null` before comparing identity fields**: a cached link rehydrated from
+  before tenant tracking existed has `corporateTenantId === undefined`, while a fresh Postgres row
+  with a `NULL` column returns `null` -- every such link was being reported as a
+  `cache-identity-mismatch` (and, worse, flagged as a breaking `trackException`) even though both
+  sides mean "no tenant recorded." Added a small normalizer used for all three compared fields.
+- **Admin route also matches the People API's org-member cache**: even with the cached member list
+  (previous fix), `organization.getMembers()` still isn't necessarily the same snapshot the People
+  API is serving in that same process -- `api/client/organization/people.ts` wraps org membership
+  in its own separate 5-minute local cache (`leakyLocalCacheOrganizationMembers`, previously
+  module-private). Exported it as `getOrganizationMembersLightCache()`; added a `getMembersOverride`
+  option to `auditLinks()`, and the admin route now passes that helper through so its member
+  enumeration matches exactly what the People API is currently returning for the same org.
+- **`canBeValidated` is now a first-class row field**: the CLI's console text and legend were
+  independently guessing whether a discrepancy could be validated by checking `row.corporateTenantId`
+  truthiness, which reflects the cached side for some statuses and could disagree with what
+  `recordRowTelemetry()` actually classified. Added `ILinkAuditRow.canBeValidated`, computed once per
+  row from the live link (same rule `recordRowTelemetry()` uses), and pointed both the CLI output and
+  the CSV (`/administration/link-audit`, new `CanBeValidated` column) at that single source of truth.
+- **Postgres provider now checks for the tenant column at startup**: a read-only
+  `information_schema.columns` check in `initialize()` (no elevated privileges needed) throws an
+  actionable error immediately if `corporatetenantid` is missing, instead of only failing later,
+  confusingly, on the first real link query.
+- **`CorporateTableLink`'s `corporateTenantId` getter is now typed `string | undefined`** to match
+  the field's actual optionality, instead of an explicit `string` return type that hid missing
+  values from callers.
+- **Consistent `undefined`, not `null`, for absent `corporateTenantId` everywhere**: it's typed
+  optional (`string | undefined`) on `ICorporateLink`, but `createGitHubLinkObject()` was setting it
+  to `null` when absent, and all three link providers' getters/setters (Postgres, memory, table)
+  only handled `string`, leaking raw `null` from storage/DB rows and requiring callers to check for
+  both `null` and `undefined`. Getters now normalize `null` to `undefined`; setters accept
+  `string | undefined` and write `null` to storage when absent.
+- **`getOrganizationMembersLightCache()` no longer treats an empty/falsy cached value as a miss**:
+  changed its `if (value)` check to an explicit `if (value !== undefined)`, so a genuinely-empty
+  (or otherwise falsy) cached member list is served from cache instead of being re-fetched on every
+  call within the 5-minute window.
+- **`/administration/link-audit` de-duplicates the resolved org list**: `?orgs=a,a` (or repeated
+  query params) would scan the same org multiple times, wasting GitHub/DB work and duplicating CSV
+  rows. Wrapped the resolved org names in a `Set` before validating/scanning.
+- **Startup column preflight now handles schema-qualified/quoted table names**: the first version
+  checked `information_schema.columns.table_name = $1` against the raw configured table name (e.g.
+  `REPOS_POSTGRES_LINKS_TABLE_NAME`), which only matches a bare, unqualified name -- a value like
+  `custom_schema.links` would never match, incorrectly blocking startup even with the column present.
+  Switched to `SELECT corporatetenantid FROM ${tableName} LIMIT 0` in a try/catch, checking for
+  Postgres error code `42703` (undefined_column) -- the same raw interpolation the rest of this
+  provider already uses to address the table, so it's correct for any name format.
+- Verified with `bunx tsc -p tsconfig.json --noEmit` (clean) and `bun run test` (172/172 passing).
+
+---
+
+## Dependency vulnerability sweep via `bun audit`/`bun outdated` (September 2026)
+
+- **Root** (`package.json`/`bun.lock`): `bun audit fix` resolved 19 of 20 flagged vulnerabilities
+  in-range (`@opentelemetry/core`, `body-parser`, `brace-expansion` x2, `js-yaml`, `nanoid`,
+  `postcss`, `protobufjs`, `tmp`, `vite`). Raised the existing security `overrides` floors for
+  `js-yaml` (`>=4.1.1` → `>=4.3.1`) and `protobufjs` (`>=8.0.2` → `>=8.6.6`) to match, so a future
+  install can't resolve back down into the vulnerable range. One moderate `@opentelemetry/core`
+  advisory remains: blocked by several `@opentelemetry/sdk-*` packages (pulled in transitively via
+  `applicationinsights`, already at its latest `3.16.0`) that pin an exact `@opentelemetry/core`
+  version matching each other for internal consistency -- needs an upstream OpenTelemetry SDK
+  release, not fixable from this repo alone.
+- Also bumped a handful of small patch/minor versions from `bun outdated` that had **no existing
+  open Dependabot PR** (to avoid creating duplicate/conflicting PRs -- see the many open
+  `dependabot/bun/staging/*` PRs for the rest, e.g. `js-yaml`, `morgan`, `nodemailer`, `eslint`,
+  `typescript-eslint`, `cspell`, `lint-staged`, `@types/node`, `typescript`, which are left for
+  those PRs to merge normally): `@octokit/auth-app`, `@octokit/auth-oauth-app`,
+  `@octokit/auth-oauth-user`, `@octokit/graphql`, `@octokit/request`, `@octokit/request-error`,
+  `axios`, `hyparquet`, `json-2-csv`, `globals`. Left `@azure/msal-node` (6.0.0) and
+  `@octokit/types` (18.0.0) alone as major-version bumps needing dedicated review.
+- **`default-assets-package`** (legacy Grunt/Less build tooling): `bun audit fix` resolved 12 of 18
+  vulnerabilities (`brace-expansion`, `braces`, `micromatch`, `minimatch`, `picomatch`, all
+  transitive `grunt`/`grunt-contrib-*` deps). Deliberately skipped `d3-color`'s proposed fix --
+  bun's only "fix" for its ReDoS advisory is a _downgrade_ to 1.0.1, which is riskier than staying
+  vulnerable on a build-time-only chart dependency. `bootstrap` (XSS x2) and `lodash` (x3, blocked
+  by `grunt-legacy-*`'s tilde-pinned ranges) remain -- same known Bootstrap 3→5 Less→Sass migration
+  called out below, already tracked by open Dependabot PRs (#1185/#1180 bootstrap/bootswatch).
+- Verified with `bunx tsc -p tsconfig.json --noEmit` (clean) and `bun run test` (172/172 passing)
+  after all bumps.
+
+---
+
+## Link audit report: Org People "linked" cache vs. live Postgres (September 2026)
+
+- **Root cause investigated**: accounts that link via Entra ID MTO (multi-tenant, external-tenant
+  domain) sign-ins can show as linked to themselves (`middleware/business/links.ts`'s
+  `tryAddLinkToRequest` does a live `queryByCorporateId` lookup) while still showing "Not linked" in
+  the Org People view, which instead matches against `operations.getLinks()`'s 30-second Redis-cached
+  bulk snapshot of the `links` table keyed by GitHub `thirdpartyid`. A genuinely persistent (not just
+  briefly stale) mismatch points at a real discrepancy between that cache and the live table.
+- Added `business/operations/linkAudit.ts` (`auditLinks()`): for a set of GitHub orgs, compares each
+  member's cached link (`operations.getLinks()`) against a direct, uncached `linkProvider.getAll()`
+  read, flagging `stale-cache` (row exists live but missing from cache), `orphaned-cache` (opposite),
+  and `linked-no-corporate-username` (linked but shown as an "unknown account").
+- Added `scripts/linkAudit.ts`, a `job.run`-based CLI wrapper (env: `LINK_AUDIT_GITHUB_ORGS`,
+  optional `LINK_AUDIT_FRESH_MEMBERS`), consistent with the `scripts/tenantMigration/` scripts.
+- Exposed the same report as a self-service admin page: `GET /administration/link-audit` (CSV,
+  optional `?orgs=` query param, defaults to all configured orgs) in `routes/administration/index.ts`,
+  already gated by the existing `AuthorizeOnlyCorporateAdministrators` middleware on `/administration`.
+  Added a "Link audit (cache vs. live)" entry to `views/administration/menu.pug`.
+- **PR review follow-ups (#1207)**: an unknown org name in `?orgs=` was previously left to bubble up
+  from `operations.getOrganization()` as a generic error page; now validated upfront and rejected with
+  a clear `CreateError.InvalidParameters` (400) listing the bad name(s). Also gated
+  `scripts/linkAudit.ts`'s console output of `corporateId`/`corporateUsername` behind a new
+  `LINK_AUDIT_SHOW_CORPORATE_IDS` env flag (off by default) since this CLI may run in a shared/logged
+  job environment. (The reviewer's claim that `json2csv()` from `json-2-csv@5.6.0` returns a Promise
+  was checked against the installed package and found incorrect — `Json2Csv(...).convert()` is fully
+  synchronous and returns a `string`; no change needed there.)
+- **Second round of PR review follow-ups (#1207)**: `?orgs=` only handled a single string value, so
+  repeated params (`?orgs=a&orgs=b`) were silently ignored in favor of the default org set; the
+  default set itself (`operations.organizations.keys()`) also excluded `Invisible`-flagged orgs,
+  contradicting the route's "defaults to all configured orgs" doc comment. Now parses `orgsParam` as
+  either a string or array, and the default falls back to
+  `operations.getOrganizationsIncludingInvisible()`. Also, `scripts/linkAudit.ts` silently ran (and
+  reported "no discrepancies") when `LINK_AUDIT_GITHUB_ORGS` parsed to zero org names (e.g. just
+  commas/whitespace); now throws instead.
+- **Third round of PR review follow-ups (#1207)**: both admin CSV routes (`/users-report` and
+  `/link-audit`) wrote string fields sourced from GitHub/AAD profile data (logins, display names,
+  mail addresses) straight into the CSV with no CSV formula-injection mitigation — a value starting
+  with `=`, `+`, `-`, or `@` can be executed as a formula by Excel/Sheets when opened. Added a shared
+  `sanitizeCsvRow()`/`escapeCsvFormulaInjection()` helper that prefixes such string values with a
+  leading single quote before handing rows to `json2csv`. Also added a `Cache-Control: no-store`
+  header to both routes, since their CSVs contain corporate identifiers and shouldn't be cached by
+  browsers or intermediate proxies.
+
+---
+
+## Added Redis `pingInterval` to reduce idle-disconnect noise (September 2026)
+
+Firehose logs were constantly showing `startup cache Redis client error: Socket closed
+unexpectedly`. Not a regression of the August 2026 crash-loop fix — that fix's `.on('error', ...)`
+listener was working as intended (logging instead of crashing), but the firehose container only
+touches Redis when a Service Bus message arrives, so the connection sits idle between events and
+gets closed by Azure Cache for Redis's idle-connection timeout, triggering the error + a reconnect
+each time. `middleware/initialize.ts` already had an unused, dead-code duplicate `connectRedis()`
+with a `pingInterval: 5 * 60 * 1000` (per Azure's idle-timeout best practices), but nothing calls
+it — both cache and session clients go through the shared `connectRedis()` in `middleware/redis.ts`,
+which had no `pingInterval`. Added the same 5-minute `pingInterval` there to keep idle connections
+alive and cut down on the disconnect/reconnect noise.
+
+---
+
 ## Firehose now refreshes `/repos` "Recent" sort in real time (August 2026)
 
 - **Root cause**: the `/repos` "Recent" sort (`sortByPushed` in `business/repoSearch.ts`) sorts on the
