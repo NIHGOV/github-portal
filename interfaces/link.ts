@@ -11,6 +11,9 @@ export interface ICorporateLinkProperties {
   corporateUsername: any;
   corporateDisplayName: any;
   corporateMailAddress: any;
+  // The Entra tenant ID the corporate identity authenticated from, captured at link time so a
+  // link's originating tenant can be validated/reported on later without a Graph lookup.
+  corporateTenantId?: any;
 
   thirdPartyId: any;
   thirdPartyUsername: any;
@@ -25,6 +28,7 @@ export interface ICorporateLink extends ICorporateLinkProperties {
   corporateUsername: string;
   corporateDisplayName: string;
   corporateMailAddress: string;
+  corporateTenantId?: string;
 
   thirdPartyId: string;
   thirdPartyUsername: string;

@@ -218,6 +218,7 @@ export async function setIdentity(req: ReposAppRequest, res: Response, next: Nex
       id: user.azure.oid,
       username: user.azure.username,
       displayName: user.azure.displayName,
+      tenantId: user.azure.tenantId,
     };
   }
   debug(s);
